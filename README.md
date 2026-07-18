@@ -141,6 +141,10 @@ key reported by `supabase status` as the two `dart-define` values. Never copy th
 reported `service_role` key into Flutter or source control. Local verification
 messages are available through the local mail viewer reported by the CLI.
 
+Local Auth and Flutter require at least eight characters for new and replacement
+passwords. Passwords are submitted exactly as entered; they are not trimmed,
+lowercased, or subject to additional composition rules.
+
 `db reset --local` recreates the local database and removes uncommitted local data.
 Never run a destructive reset against a linked remote project. Applying reviewed
 migrations remotely requires separate, explicit authorization.
@@ -161,7 +165,8 @@ or password recovery:
 1. Open **Authentication > URL Configuration** and add
    `com.ferbatech.listandsplit://auth-callback` to **Redirect URLs**.
 2. Open **Authentication > Providers > Email**, enable email/password sign-in and
-   **Confirm email**, then save.
+   **Confirm email**, set the minimum password length to `8`, leave required
+   character composition disabled, then save.
 3. Keep other providers and anonymous sign-ins disabled for the initial release.
 4. Use a test account to verify that both confirmation and password-recovery links
    return to the mobile callback and that the app reaches the expected gated flow.

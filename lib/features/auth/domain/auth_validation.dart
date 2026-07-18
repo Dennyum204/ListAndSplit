@@ -7,6 +7,8 @@ enum AuthValidationIssue {
 }
 
 abstract final class AuthValidation {
+  static const minimumPasswordLength = 8;
+
   static final _emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
   static String normalizeEmail(String value) => value.trim().toLowerCase();
@@ -22,7 +24,9 @@ abstract final class AuthValidation {
 
   static AuthValidationIssue? password(String value) {
     if (value.isEmpty) return AuthValidationIssue.passwordRequired;
-    if (value.length < 6) return AuthValidationIssue.passwordTooShort;
+    if (value.length < minimumPasswordLength) {
+      return AuthValidationIssue.passwordTooShort;
+    }
     return null;
   }
 

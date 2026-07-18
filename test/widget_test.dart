@@ -77,6 +77,53 @@ void main() {
     await auth.close();
   });
 
+  testWidgets('sign-up enforces eight characters and preserves the password',
+      (tester) async {
+    final auth = FakeAuthRepository();
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(),
+    );
+
+    await tester.tap(find.text('Create account'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('signUpEmail')),
+      'person@example.com',
+    );
+    await tester.enterText(
+      find.byKey(const Key('signUpPassword')),
+      '1234567',
+    );
+    await tester.enterText(
+      find.byKey(const Key('signUpPasswordConfirmation')),
+      '1234567',
+    );
+    await tester.tap(find.text('Create account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Use at least 8 characters.'), findsOneWidget);
+    expect(auth.signUpCalls, 0);
+
+    const exactPassword = ' MiXeD7 ';
+    await tester.enterText(
+      find.byKey(const Key('signUpPassword')),
+      exactPassword,
+    );
+    await tester.enterText(
+      find.byKey(const Key('signUpPasswordConfirmation')),
+      exactPassword,
+    );
+    await tester.tap(find.text('Create account'));
+    await tester.pumpAndSettle();
+
+    expect(auth.signUpCalls, 1);
+    expect(auth.lastPassword, exactPassword);
+    expect(find.text('Verify your email'), findsOneWidget);
+    await auth.close();
+  });
+
   testWidgets('auth errors do not leak between signed-out screens',
       (tester) async {
     final auth = FakeAuthRepository()

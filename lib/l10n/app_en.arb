@@ -138,7 +138,7 @@
   "@passwordRecoveryTitle": {
     "description": "Password recovery screen title."
   },
-  "passwordRecoveryDescription": "Set a new password with at least 6 characters.",
+  "passwordRecoveryDescription": "Set a new password with at least 8 characters.",
   "@passwordRecoveryDescription": {
     "description": "Password recovery instructions."
   },
@@ -202,7 +202,7 @@
   "@passwordRequiredError": {
     "description": "Required password validation error."
   },
-  "passwordTooShortError": "Use at least 6 characters.",
+  "passwordTooShortError": "Use at least 8 characters.",
   "@passwordTooShortError": {
     "description": "Short password validation error."
   },

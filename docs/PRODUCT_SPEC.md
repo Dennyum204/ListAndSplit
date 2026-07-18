@@ -33,6 +33,9 @@ are the evidence of implementation status.
   application.
 - The identity flow includes sign-up, sign-in, sign-out, resend verification,
   forgotten-password request, and password recovery with a new password.
+- New and replacement passwords require at least eight characters. Passwords and
+  confirmations are compared exactly as entered; the client does not trim,
+  lowercase, or impose composition rules.
 - Authentication failures use generic wording where a more specific response
   would disclose whether an account exists.
 - After verification, a user completes profile onboarding by choosing a username

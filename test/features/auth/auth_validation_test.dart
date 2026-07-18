@@ -22,17 +22,25 @@ void main() {
       );
     });
 
-    test('uses the configured six-character minimum for new passwords', () {
+    test('requires eight characters for new passwords', () {
       expect(
-        AuthValidation.password('12345'),
+        AuthValidation.password('1234567'),
         AuthValidationIssue.passwordTooShort,
       );
-      expect(AuthValidation.password('123456'), isNull);
+      expect(AuthValidation.password('12345678'), isNull);
     });
 
-    test('requires matching password confirmation', () {
+    test('requires exact matching password confirmation', () {
       expect(
-        AuthValidation.passwordConfirmation('secret', 'different'),
+        AuthValidation.passwordConfirmation('Abcd1234', 'Abcd1234'),
+        isNull,
+      );
+      expect(
+        AuthValidation.passwordConfirmation('Abcd1234', 'abcd1234'),
+        AuthValidationIssue.passwordsDoNotMatch,
+      );
+      expect(
+        AuthValidation.passwordConfirmation('Abcd1234', 'Abcd1234 '),
         AuthValidationIssue.passwordsDoNotMatch,
       );
     });

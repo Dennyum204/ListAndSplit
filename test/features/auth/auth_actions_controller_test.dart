@@ -50,12 +50,13 @@ void main() {
     expect(
       await controller.signUp(
         email: ' Person@Example.COM ',
-        password: 'secret',
-        passwordConfirmation: 'secret',
+        password: 'Secret12',
+        passwordConfirmation: 'Secret12',
       ),
       isTrue,
     );
     expect(repository.lastEmail, 'person@example.com');
+    expect(repository.lastPassword, 'Secret12');
     expect(pendingEmail, 'person@example.com');
     expect(controller.state.message, AuthActionMessage.checkInboxToVerify);
   });
@@ -66,15 +67,15 @@ void main() {
 
     final first = controller.signUp(
       email: 'person@example.com',
-      password: 'secret',
-      passwordConfirmation: 'secret',
+      password: 'secret12',
+      passwordConfirmation: 'secret12',
     );
     expect(controller.state.isSubmitting, isTrue);
 
     final second = await controller.signUp(
       email: 'person@example.com',
-      password: 'secret',
-      passwordConfirmation: 'secret',
+      password: 'secret12',
+      passwordConfirmation: 'secret12',
     );
     expect(second, isFalse);
     expect(repository.signUpCalls, 1);
@@ -156,7 +157,7 @@ void main() {
       () async {
     expect(
       await controller.updatePassword(
-        password: 'short',
+        password: '1234567',
         passwordConfirmation: 'wrong',
       ),
       isFalse,
@@ -165,12 +166,13 @@ void main() {
 
     expect(
       await controller.updatePassword(
-        password: 'new-password',
-        passwordConfirmation: 'new-password',
+        password: 'Reset123',
+        passwordConfirmation: 'Reset123',
       ),
       isTrue,
     );
     expect(repository.updatePasswordCalls, 1);
+    expect(repository.lastPassword, 'Reset123');
     expect(recoveryCompleted, isTrue);
     expect(controller.state.message, AuthActionMessage.passwordUpdated);
   });
