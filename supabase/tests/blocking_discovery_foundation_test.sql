@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(75);
+select plan(85);
 
 select has_table(
   'public',
@@ -80,9 +80,71 @@ select is(
     from pg_catalog.pg_policies
     where schemaname = 'public'
       and tablename = 'user_blocks'
+      and policyname = 'user_blocks_reject_direct_client_access'
   ),
-  0::bigint,
-  'user_blocks has no direct client policies because application access is RPC-only'
+  1::bigint,
+  'user_blocks has one explicit direct-client rejection policy'
+);
+
+select is(
+  (
+    select cmd
+    from pg_catalog.pg_policies
+    where schemaname = 'public'
+      and tablename = 'user_blocks'
+      and policyname = 'user_blocks_reject_direct_client_access'
+  ),
+  'ALL',
+  'the rejection policy applies to every direct table operation'
+);
+
+select is(
+  (
+    select pg_catalog.array_agg(policy_role order by policy_role)
+    from pg_catalog.pg_policies
+    cross join lateral pg_catalog.unnest(roles) as policy_role
+    where schemaname = 'public'
+      and tablename = 'user_blocks'
+      and policyname = 'user_blocks_reject_direct_client_access'
+  ),
+  array['anon', 'authenticated']::name[],
+  'the rejection policy targets anon and authenticated'
+);
+
+select is(
+  (
+    select qual
+    from pg_catalog.pg_policies
+    where schemaname = 'public'
+      and tablename = 'user_blocks'
+      and policyname = 'user_blocks_reject_direct_client_access'
+  ),
+  'false',
+  'the rejection policy USING expression denies existing rows'
+);
+
+select is(
+  (
+    select with_check
+    from pg_catalog.pg_policies
+    where schemaname = 'public'
+      and tablename = 'user_blocks'
+      and policyname = 'user_blocks_reject_direct_client_access'
+  ),
+  'false',
+  'the rejection policy WITH CHECK expression denies new row values'
+);
+
+select is(
+  (
+    select permissive
+    from pg_catalog.pg_policies
+    where schemaname = 'public'
+      and tablename = 'user_blocks'
+      and policyname = 'user_blocks_reject_direct_client_access'
+  ),
+  'RESTRICTIVE',
+  'the rejection policy remains deny-all if permissive policies are added later'
 );
 
 select ok(
@@ -258,6 +320,43 @@ select throws_like(
 set local role anon;
 
 select throws_like(
+  $$select * from public.user_blocks$$,
+  '%permission denied%user_blocks%',
+  'anonymous clients cannot read block rows directly'
+);
+
+select throws_like(
+  $$
+    insert into public.user_blocks (blocker_id, blocked_id)
+    values (
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    )
+  $$,
+  '%permission denied%user_blocks%',
+  'anonymous clients cannot insert block rows directly'
+);
+
+select throws_like(
+  $$
+    update public.user_blocks
+    set created_at = created_at
+    where blocker_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  $$,
+  '%permission denied%user_blocks%',
+  'anonymous clients cannot update block rows directly'
+);
+
+select throws_like(
+  $$
+    delete from public.user_blocks
+    where blocker_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  $$,
+  '%permission denied%user_blocks%',
+  'anonymous clients cannot delete block rows directly'
+);
+
+select throws_like(
   $$select * from public.find_profile_by_username('beta_user')$$,
   '%permission denied%function%find_profile_by_username%',
   'anon cannot invoke discovery'
@@ -426,6 +525,16 @@ select throws_like(
   $$,
   '%permission denied%user_blocks%',
   'authenticated clients cannot spoof a blocker through direct insert'
+);
+
+select throws_like(
+  $$
+    update public.user_blocks
+    set created_at = created_at
+    where blocker_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  $$,
+  '%permission denied%user_blocks%',
+  'authenticated clients cannot update block rows directly'
 );
 
 select lives_ok(
