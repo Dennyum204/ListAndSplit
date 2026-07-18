@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/community/domain/community_profile.dart';
+import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/community/presentation/community_search_controller.dart';
 import 'package:list_and_split/features/community/presentation/community_ui.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
@@ -41,13 +42,28 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
         children: [
           Align(
             alignment: AlignmentDirectional.centerEnd,
-            child: TextButton.icon(
-              key: const Key('manageBlockedUsersButton'),
-              onPressed: state.isBusy
-                  ? null
-                  : () => context.go(AppRoutes.blockedUsers),
-              icon: const Icon(Icons.block_rounded),
-              label: Text(localizations.manageBlockedUsersButton),
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                TextButton.icon(
+                  key: const Key('manageFriendshipsButton'),
+                  onPressed: state.isBusy
+                      ? null
+                      : () => context.go(AppRoutes.friendships),
+                  icon: const Icon(Icons.people_alt_outlined),
+                  label: Text(localizations.manageFriendshipsButton),
+                ),
+                TextButton.icon(
+                  key: const Key('manageBlockedUsersButton'),
+                  onPressed: state.isBusy
+                      ? null
+                      : () => context.go(AppRoutes.blockedUsers),
+                  icon: const Icon(Icons.block_rounded),
+                  label: Text(localizations.manageBlockedUsersButton),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 8),
@@ -93,8 +109,22 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             const SizedBox(height: 24),
             _DiscoveryResultCard(
               profile: state.result!,
-              isBlocking: state.isBlocking,
+              relationship: state.relationship,
+              activeAction: state.activeAction,
+              isBusy: state.isBusy,
               onBlock: _confirmBlock,
+              onSend: () => ref
+                  .read(communitySearchControllerProvider.notifier)
+                  .sendFriendRequest(),
+              onCancel: () => ref
+                  .read(communitySearchControllerProvider.notifier)
+                  .cancelFriendRequest(),
+              onAccept: () => ref
+                  .read(communitySearchControllerProvider.notifier)
+                  .acceptFriendRequest(),
+              onDecline: () => ref
+                  .read(communitySearchControllerProvider.notifier)
+                  .declineFriendRequest(),
             ),
           ],
         ],
@@ -137,13 +167,25 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 class _DiscoveryResultCard extends StatelessWidget {
   const _DiscoveryResultCard({
     required this.profile,
-    required this.isBlocking,
+    required this.relationship,
+    required this.activeAction,
+    required this.isBusy,
     required this.onBlock,
+    required this.onSend,
+    required this.onCancel,
+    required this.onAccept,
+    required this.onDecline,
   });
 
   final DiscoveredProfile profile;
-  final bool isBlocking;
+  final FriendshipSummary? relationship;
+  final CommunitySearchAction? activeAction;
+  final bool isBusy;
   final VoidCallback onBlock;
+  final VoidCallback onSend;
+  final VoidCallback onCancel;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
 
   @override
   Widget build(BuildContext context) {
@@ -169,20 +211,118 @@ class _DiscoveryResultCard extends StatelessWidget {
                   ),
             ),
             const SizedBox(height: 16),
-            FilledButton.tonalIcon(
-              key: const Key('blockSearchResultButton'),
-              onPressed: isBlocking ? null : onBlock,
-              icon: isBlocking
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.block_rounded),
-              label: Text(localizations.communityBlockButton),
+            Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ..._relationshipActions(context, localizations),
+                FilledButton.tonalIcon(
+                  key: const Key('blockSearchResultButton'),
+                  onPressed: isBusy ? null : onBlock,
+                  icon: activeAction == null && isBusy
+                      ? SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            semanticsLabel:
+                                localizations.friendshipActionInProgressLabel,
+                          ),
+                        )
+                      : const Icon(Icons.block_rounded),
+                  label: Text(localizations.communityBlockButton),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  List<Widget> _relationshipActions(
+    BuildContext context,
+    AppLocalizations localizations,
+  ) {
+    return switch (relationship?.status) {
+      FriendshipStatus.canSend => [
+          FilledButton.icon(
+            key: const Key('sendFriendRequestButton'),
+            onPressed: isBusy ? null : onSend,
+            icon: _actionIcon(
+              CommunitySearchAction.send,
+              Icons.person_add_alt_1_rounded,
+              localizations.friendshipActionInProgressLabel,
+            ),
+            label: Text(localizations.friendRequestSendButton),
+          ),
+        ],
+      FriendshipStatus.outgoingPending => [
+          FilledButton.tonalIcon(
+            key: const Key('cancelFriendRequestButton'),
+            onPressed: isBusy ? null : onCancel,
+            icon: _actionIcon(
+              CommunitySearchAction.cancel,
+              Icons.close_rounded,
+              localizations.friendshipActionInProgressLabel,
+            ),
+            label: Text(localizations.friendRequestCancelButton),
+          ),
+        ],
+      FriendshipStatus.incomingPending => [
+          FilledButton.icon(
+            key: const Key('acceptFriendRequestButton'),
+            onPressed: isBusy ? null : onAccept,
+            icon: _actionIcon(
+              CommunitySearchAction.accept,
+              Icons.check_rounded,
+              localizations.friendshipActionInProgressLabel,
+            ),
+            label: Text(localizations.friendRequestAcceptButton),
+          ),
+          OutlinedButton.icon(
+            key: const Key('declineFriendRequestButton'),
+            onPressed: isBusy ? null : onDecline,
+            icon: _actionIcon(
+              CommunitySearchAction.decline,
+              Icons.close_rounded,
+              localizations.friendshipActionInProgressLabel,
+            ),
+            label: Text(localizations.friendRequestDeclineButton),
+          ),
+        ],
+      FriendshipStatus.friends => [
+          Chip(
+            avatar: const Icon(Icons.people_alt_rounded, size: 18),
+            label: Text(localizations.friendshipStatusFriends),
+          ),
+        ],
+      FriendshipStatus.unavailable || null => [
+          Text(
+            localizations.friendshipUnavailableMessage,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ],
+    };
+  }
+
+  Widget _actionIcon(
+    CommunitySearchAction action,
+    IconData icon,
+    String progressLabel,
+  ) {
+    if (activeAction == action) {
+      return SizedBox.square(
+        dimension: 18,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          semanticsLabel: progressLabel,
+        ),
+      );
+    }
+    return Icon(icon);
   }
 }

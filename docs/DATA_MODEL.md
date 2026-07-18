@@ -2,14 +2,11 @@
 
 ## Status and authority
 
-This document describes the conceptual model and accepted invariants. It does not,
-by itself, define final SQL names, columns, enums, indexes, or API contracts;
-Git-committed migrations are the physical schema source of truth. The initial
-profile contract below is sufficiently resolved for its reviewed migration. Later
-aggregates remain conceptual until their open decisions are accepted.
-
-The names below are illustrative so relationships and invariants can be discussed
-without prematurely freezing the physical schema.
+This document describes the conceptual model and accepted invariants.
+Git-committed migrations remain the physical schema source of truth. The profile
+and versioned-relationship sections below record sufficiently resolved physical
+contracts for their reviewed migrations; names in later sections remain
+illustrative until their open decisions are accepted.
 
 ## Global modeling rules
 
@@ -42,7 +39,7 @@ Profile --owns--> Template --< Template Group --< Template Item
 Profile --owns--> Personal Category --< category placement >-- Template
 
 Profile --receives--> Notification
-Profile --receives--> List Invitation / Sent Template / Friend Request
+Profile --receives--> List Invitation / Sent Template
 ```
 
 ## Identity and social graph
@@ -93,7 +90,7 @@ The creation time is database-managed; no unlimited block event/history record i
 introduced.
 
 Any active row in either direction creates symmetric separation for exact
-discovery, future friend requests and contact, and future public profile/template/
+discovery, friend requests and contact, and future public profile/template/
 feed visibility. Only the blocker can privately list or remove their outgoing
 row. Blocking and unblocking are idempotent. Removing A's A-to-B row does not
 remove B's B-to-A row, restore a relationship, or make discovery available while
@@ -101,37 +98,89 @@ the reciprocal row remains.
 
 The blocker may receive the target's ID, username, and display name through the
 private outgoing-block management projection. Incoming-only and unrelated blocks
-are never disclosed. Account deletion/retention and shared-resource effects remain
-open, so the block model does not select cascading profile deletion or active-list
-membership behavior.
+are never disclosed. An active block in either direction makes the separate
+relationship-summary RPC return no row and no target profile fields. Account
+deletion/retention and shared-resource effects remain open, so the block model does
+not select cascading profile deletion or active-list membership behavior.
 
-### Friend request
+### Versioned friend request and friendship relationship
 
-A friend request is directional: one authenticated user requests friendship with
-another. It supports at least pending, accepted, and declined outcomes because the
-recipient must explicitly Accept or Decline.
+A friend request is directional while friendship is unordered and mutual. Both
+concepts share one persistent current row per unordered pair; there are no separate
+request and friendship tables and no detailed relationship event log.
 
-Accepted lifecycle invariants for the future implementation:
+The accepted physical record contains:
 
-- A user cannot request themselves.
-- Duplicate request sends are idempotent.
-- Crossed pending requests atomically become a friendship.
-- The sender may cancel; only the recipient may decline.
-- Requests do not automatically expire in the initial design.
-- Acceptance creates the mutual friendship atomically and idempotently.
-- A block in either direction prevents request creation. Creating a block later
-  atomically cancels pending requests in both directions and ends the friendship.
-- The person who declines or ends a friendship controls reopening by initiating
-  the next request.
-- All transitions are versioned, atomic, and safe under stale or duplicate input.
+- `profile_low_id` and `profile_high_id`, both non-cascading references to
+  `public.profiles`, as a composite primary key; fully onboarded participation is
+  an RPC precondition rather than a foreign-key property;
+- a named ordering constraint requiring `profile_low_id < profile_high_id`;
+- check-constrained text `state` with exactly `pending`, `friends`, `cancelled`,
+  `declined`, and `ended`;
+- `requester_id`, constrained to one of the two participants and retaining the
+  most recent requester after transition for authorization and idempotency;
+- nullable `reopen_by_id`, constrained to a participant, required exactly for
+  declined and ended states, and null for every other state;
+- a positive `bigint` version starting at one;
+- database-managed `created_at`; and
+- database-managed `state_changed_at`.
 
-### Friendship
+The low/high normalization makes pair identity deterministic. The primary-key
+order supports low-participant lookup; a justified reverse-participant index
+supports listing rows where the caller is `profile_high_id`. Requester and
+reopening-controller values need no redundant foreign keys because their named
+constraints prove that they equal a participant. Account deletion and retention
+remain unresolved, so participant foreign keys do not cascade.
 
-A friendship is an unordered, mutual relationship between two profiles. Neither
-side is a follower. Each unordered pair will have one versioned current
-relationship state rather than contradictory independent states or an unlimited
-event log. Active directional blocks remain separate from this state. Ending a
-friendship and the effects of relationship/block changes on existing shared lists
+Accepted transition invariants are:
+
+- No row becomes pending with the caller as requester.
+- A duplicate send by the same pending requester is unchanged.
+- A send by the opposite participant while pending atomically becomes friends.
+- Only the pending recipient accepts or declines; only the requester cancels.
+- Either current friend may end the friendship.
+- Cancelled rows may be reopened by either participant. Declined and ended rows
+  may be reopened only by their recorded reopening controller.
+- Blocking a pending pair changes the state to cancelled; blocking friends changes
+  it to ended with the blocker as reopening controller. Blocking a dormant pair
+  creates no misleading relationship transition, and unblocking never restores a
+  request or friendship.
+- A block in either direction rejects sends and other active transitions. Block
+  creation and its relationship transition are one protected atomic operation.
+- Every real transition increments the version exactly once and updates
+  `state_changed_at`. Duplicate no-ops change neither value.
+- Mutations after initial send require the caller's expected version. Send accepts
+  a nullable expected version: null is valid only for first, duplicate-pending, or
+  crossed-pending sends, while reopening a cancelled, declined, or ended row
+  requires its exact current version. Once a send reopens a dormant row to pending,
+  a duplicate retry or opposite crossed send may use that immediately prior dormant
+  version as well as the current pending version; older values remain stale. Stale
+  or ineligible actions fail safely without overwriting a newer state.
+- All operations normalize and lock the same pair in one deterministic order so
+  concurrent first sends, crossed sends, blocks, and transitions cannot produce
+  duplicate or contradictory rows.
+
+The table is RPC-only: RLS is enabled; table privileges are revoked from `PUBLIC`,
+`anon`, `authenticated`, and `service_role`; and one restrictive `FOR ALL` policy
+targets `anon` and `authenticated` with `USING (false)` and `WITH CHECK (false)`.
+Narrow authenticated functions return caller-relative results rather than physical
+rows.
+A caller may receive only the other participant's profile ID, username, display
+name, one of `can-send`, `incoming-pending`, `outgoing-pending`, `friends`, or
+`unavailable`, and nullable version/state-change values where an eligible action
+or active-list ordering requires them. Privacy-safe `unavailable` results expose
+neither version nor state-change metadata; an eligible dormant reopener receives
+the version required for the next send. `unavailable` applies to dormant
+declined/ended reopening privacy; an active either-direction block suppresses the
+entire summary/profile row.
+Raw declined/ended state and `reopen_by_id` are not disclosed to the other
+participant; email/Auth metadata, incoming block identity, unrelated rows, and
+unnecessary internal timestamps are never returned.
+
+Requests do not expire in the initial design. Persistent notifications, Realtime,
+push delivery, public profiles, the final navigation shell, shared lists, detailed
+audit history, and relationship-row account deletion/retention are outside this
+slice. The effects of relationship or block changes on existing shared resources
 remain unresolved.
 
 ## Active-list aggregate
@@ -283,10 +332,12 @@ display/reference data, creation time, and read state. Notification types includ
 - informational item assignment; and
 - informational note mention.
 
-Action state belongs to the underlying request/invitation/send record; a
-notification references it. Accept/Decline must remain safe under duplicate taps,
-retries, and a stale notification. Retention, archive/delete behavior, badge
-semantics, and payload localization are open.
+Friend-request action state belongs to the versioned relationship row; invitation
+and sent-template action state belongs to those underlying records. A notification
+references the authoritative record and, for a relationship action, its expected
+version. Accept/Decline must remain safe under duplicate taps, retries, and a stale
+notification. Retention, archive/delete behavior, badge semantics, and payload
+localization are open.
 
 Push tokens and delivery attempts are future infrastructure for FCM/APNs and are
 outside the initial identity/profile schema. Device token ownership, rotation,
@@ -294,7 +345,7 @@ invalidation, and privacy rules must be designed before push implementation.
 
 ## Future safety records
 
-Directional blocking and exact block-aware username discovery precede friend
+Directional blocking and exact block-aware username discovery preceded friend
 requests in Phase 1. Reporting remains required before public content is
 considered mature. Reporting records, moderation roles, evidence retention,
 appeals, and block effects on existing shared resources are intentionally not
@@ -310,8 +361,7 @@ anonymous denial unless public read is explicitly intended.
 | --- | --- |
 | Profiles | Direct access remains authenticated owner-only select and approved-field update; exact cross-user discovery uses only the approved block-aware minimal projection |
 | Active blocks | RPC-only application access; the caller can create/remove/list only outgoing blocks, while incoming and unrelated rows remain private |
-| Friend requests | Requester and recipient only; only recipient changes Accept/Decline state |
-| Friendships | The two members only, except deliberately exposed public relationship data if later approved |
+| Friend relationships | RPC-only current-state access for the two participants through caller-relative summaries/lists and version-checked transitions; no direct table access or raw dormant-state disclosure |
 | Active lists and memberships | Current authorized members; invitees see only invitation-safe list data |
 | Items, assignments, notes, mentions | Authorized list members, with mutations limited by the final role model |
 | Invitations | Recipient and authorized inviters/list administrators |
@@ -330,11 +380,9 @@ explicit grants, protected search paths, and adversarial policy/function tests.
 ## Physical-model decisions still required
 
 - Identifier types, timestamp/audit conventions, soft delete, and archival for
-  later aggregates beyond the accepted profile record.
+  later aggregates beyond the accepted profile and relationship records.
 - Support/administrator correction and audit rules for immutable usernames.
 - Avatar Storage, validation, replacement, retention, and deletion lifecycle.
-- Exact relationship-state values, version-transition storage, and any limited
-  relationship audit retention beyond the accepted one-current-state model.
 - Block effects on existing shared resources and later account deletion/retention.
 - List role model and membership lifecycle.
 - Quantity/unit types and ordering strategy.

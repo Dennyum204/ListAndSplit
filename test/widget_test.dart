@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,7 +12,10 @@ import 'package:list_and_split/features/auth/domain/auth_repository.dart';
 import 'package:list_and_split/features/auth/domain/auth_session.dart';
 import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
 import 'package:list_and_split/features/community/domain/community_profile.dart';
+import 'package:list_and_split/features/community/domain/friendship_repository.dart';
+import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/community/presentation/community_providers.dart';
+import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 
 import 'helpers/fakes.dart';
@@ -464,8 +469,11 @@ void main() {
     expect(find.text('Beta User'), findsOneWidget);
     expect(find.text('@beta_user'), findsOneWidget);
     expect(find.textContaining('profile-2'), findsNothing);
-    expect(find.text('Add friend'), findsNothing);
+    expect(find.text('Send request'), findsOneWidget);
 
+    await tester.ensureVisible(
+      find.byKey(const Key('blockSearchResultButton')),
+    );
     await tester.tap(find.byKey(const Key('blockSearchResultButton')));
     await tester.pumpAndSettle();
     expect(find.text('Block @beta_user?'), findsOneWidget);
@@ -474,6 +482,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(community.blockCalls, 0);
 
+    await tester.ensureVisible(
+      find.byKey(const Key('blockSearchResultButton')),
+    );
     await tester.tap(find.byKey(const Key('blockSearchResultButton')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('confirmBlockButton')));
@@ -483,6 +494,323 @@ void main() {
     expect(community.lastBlockedProfileId, 'profile-2');
     expect(find.byKey(const Key('communitySearchResult')), findsNothing);
     expect(find.textContaining('Profile blocked'), findsOneWidget);
+    await auth.close();
+  });
+
+  testWidgets('exact discovery sends a caller-relative friend request',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final community = FakeCommunityRepository()
+      ..searchResult = const DiscoveredProfile(
+        id: 'profile-2',
+        username: 'beta_user',
+        displayName: 'Beta User',
+      );
+    final friendships = FakeFriendshipRepository()
+      ..summaryResult = const FriendshipSummary(
+        id: 'profile-2',
+        username: 'beta_user',
+        displayName: 'Beta User',
+        status: FriendshipStatus.canSend,
+        version: null,
+        stateChangedAt: null,
+      );
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      community: community,
+      friendships: friendships,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('communityUsername')),
+      'beta_user',
+    );
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('sendFriendRequestButton')),
+    );
+    await tester.tap(find.byKey(const Key('sendFriendRequestButton')));
+    await tester.pumpAndSettle();
+
+    expect(friendships.mutationCalls, hasLength(1));
+    expect(friendships.mutationCalls.single.operation, 'send');
+    expect(friendships.mutationCalls.single.profileId, 'profile-2');
+    expect(friendships.mutationCalls.single.expectedVersion, isNull);
+    expect(find.text('Friend request sent.'), findsOneWidget);
+    await auth.close();
+  });
+
+  testWidgets('friendship management groups actions and confirms removal',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final community = FakeCommunityRepository();
+    final friendships = FakeFriendshipRepository()
+      ..activeRelationships = [
+        FriendshipSummary(
+          id: 'friend-1',
+          username: 'friend_user',
+          displayName: 'Friend User',
+          status: FriendshipStatus.friends,
+          version: 4,
+          stateChangedAt: DateTime.utc(2026, 7, 18),
+        ),
+        FriendshipSummary(
+          id: 'incoming-1',
+          username: 'incoming_user',
+          displayName: 'Incoming User',
+          status: FriendshipStatus.incomingPending,
+          version: 2,
+          stateChangedAt: DateTime.utc(2026, 7, 18),
+        ),
+        FriendshipSummary(
+          id: 'sent-1',
+          username: 'sent_user',
+          displayName: 'Sent User',
+          status: FriendshipStatus.outgoingPending,
+          version: 3,
+          stateChangedAt: DateTime.utc(2026, 7, 18),
+        ),
+      ];
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      community: community,
+      friendships: friendships,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('manageFriendshipsButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Friends'), findsOneWidget);
+    expect(find.text('Incoming requests'), findsOneWidget);
+    expect(find.text('Sent requests'), findsOneWidget);
+    expect(find.text('Friend User'), findsOneWidget);
+    await tester
+        .ensureVisible(find.byKey(const Key('acceptFriend-incoming-1')));
+    expect(find.byKey(const Key('acceptFriend-incoming-1')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('cancelFriend-sent-1')));
+    expect(find.byKey(const Key('cancelFriend-sent-1')), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const Key('removeFriend-friend-1')));
+    await tester.tap(find.byKey(const Key('removeFriend-friend-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove @friend_user?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(friendships.mutationCalls, isEmpty);
+
+    await tester.tap(find.byKey(const Key('removeFriend-friend-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmRemoveFriendButton')));
+    await tester.pumpAndSettle();
+    expect(friendships.mutationCalls.single.operation, 'end');
+    expect(friendships.mutationCalls.single.expectedVersion, 4);
+    expect(find.text('Friend removed.'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const Key('blockFriend-friend-1')));
+    await tester.tap(find.byKey(const Key('blockFriend-friend-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Block @friend_user?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(community.blockCalls, 0);
+
+    await tester.tap(find.byKey(const Key('blockFriend-friend-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('confirmFriendshipBlockButton')),
+    );
+    await tester.pumpAndSettle();
+    expect(community.blockCalls, 1);
+    expect(community.lastBlockedProfileId, 'friend-1');
+    expect(find.textContaining('Profile blocked'), findsOneWidget);
+    await auth.close();
+  });
+
+  testWidgets('friendship management shows loading, empty, and manual refresh',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final friendships = FakeFriendshipRepository()
+      ..friendshipListCompleter = Completer<List<FriendshipSummary>>();
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      friendships: friendships,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('manageFriendshipsButton')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.bySemanticsLabel('Loading friendships'), findsOneWidget);
+
+    friendships.friendshipListCompleter!.complete([]);
+    await tester.pumpAndSettle();
+    expect(find.text('No active friendships or requests'), findsOneWidget);
+
+    friendships
+      ..friendshipListCompleter = null
+      ..activeRelationships = [
+        FriendshipSummary(
+          id: 'friend-2',
+          username: 'refresh_user',
+          displayName: 'Refresh User',
+          status: FriendshipStatus.friends,
+          version: 2,
+          stateChangedAt: DateTime.utc(2026, 7, 18),
+        ),
+      ];
+    await tester.tap(find.byKey(const Key('refreshFriendshipsButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Refresh User'), findsOneWidget);
+    expect(friendships.friendshipListCalls, 2);
+    await auth.close();
+  });
+
+  testWidgets('friendship management load failure is retryable',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final friendships = FakeFriendshipRepository()
+      ..listFailure = StateError('private backend details');
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      friendships: friendships,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('manageFriendshipsButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('retryFriendshipsButton')), findsOneWidget);
+    expect(find.text('Something went wrong. Please try again.'), findsWidgets);
+    expect(find.textContaining('private backend'), findsNothing);
+
+    friendships.listFailure = null;
+    await tester.tap(find.byKey(const Key('retryFriendshipsButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No active friendships or requests'), findsOneWidget);
+    expect(friendships.friendshipListCalls, 2);
+    await auth.close();
+  });
+
+  testWidgets('discovered unavailable relationship stays privacy-safe',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final community = FakeCommunityRepository()
+      ..searchResult = const DiscoveredProfile(
+        id: 'profile-2',
+        username: 'beta_user',
+        displayName: 'Beta User',
+      );
+    final friendships = FakeFriendshipRepository()
+      ..summaryResult = const FriendshipSummary(
+        id: 'profile-2',
+        username: 'beta_user',
+        displayName: 'Beta User',
+        status: FriendshipStatus.unavailable,
+        version: null,
+        stateChangedAt: null,
+      );
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      community: community,
+      friendships: friendships,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('communityUsername')),
+      'beta_user',
+    );
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Friend requests aren’t available for this profile.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('sendFriendRequestButton')), findsNothing);
+    expect(find.byKey(const Key('cancelFriendRequestButton')), findsNothing);
+    expect(find.byKey(const Key('acceptFriendRequestButton')), findsNothing);
+    expect(find.byKey(const Key('declineFriendRequestButton')), findsNothing);
+    expect(find.textContaining('declined'), findsNothing);
+    expect(find.textContaining('ended'), findsNothing);
+    expect(find.textContaining('reopen'), findsNothing);
+    await auth.close();
+  });
+
+  testWidgets('summary unavailability clears the discovered profile card',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final community = FakeCommunityRepository()
+      ..searchResult = const DiscoveredProfile(
+        id: 'profile-2',
+        username: 'beta_user',
+        displayName: 'Beta User',
+      );
+    final friendships = FakeFriendshipRepository()
+      ..summaryFailure =
+          const FriendshipFailure(FriendshipFailureCode.unavailable);
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      community: community,
+      friendships: friendships,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('communityUsername')),
+      'beta_user',
+    );
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('No matching profile was found or is available.'),
+      findsOneWidget,
+    );
+    expect(find.text('Beta User'), findsNothing);
+    expect(find.byKey(const Key('sendFriendRequestButton')), findsNothing);
     await auth.close();
   });
 
@@ -662,7 +990,17 @@ Future<void> _pumpConfiguredApp(
   required FakeAuthRepository auth,
   required FakeProfileRepository profile,
   FakeCommunityRepository? community,
+  FakeFriendshipRepository? friendships,
 }) async {
+  final defaultFriendships = FakeFriendshipRepository()
+    ..summaryResult = const FriendshipSummary(
+      id: 'profile-2',
+      username: 'beta_user',
+      displayName: 'Beta User',
+      status: FriendshipStatus.canSend,
+      version: null,
+      stateChangedAt: null,
+    );
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -673,6 +1011,9 @@ Future<void> _pumpConfiguredApp(
         profileRepositoryProvider.overrideWithValue(profile),
         communityRepositoryProvider.overrideWithValue(
           community ?? FakeCommunityRepository(),
+        ),
+        friendshipRepositoryProvider.overrideWithValue(
+          friendships ?? defaultFriendships,
         ),
       ],
       child: const ListAndSplitApp(),

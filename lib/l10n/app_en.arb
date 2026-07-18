@@ -25,7 +25,7 @@
       }
     }
   },
-  "foundationAuthenticatedDescription": "Your verified profile is ready. Exact username discovery and blocking are available; collaborative lists arrive in a later phase.",
+  "foundationAuthenticatedDescription": "Your verified profile is ready. Friend requests, friendship management, exact username discovery, and blocking are available; collaborative lists arrive in a later phase.",
   "@foundationAuthenticatedDescription": {
     "description": "Honest post-onboarding status copy."
   },
@@ -185,6 +185,107 @@
   "communitySearchButton": "Search",
   "@communitySearchButton": {
     "description": "Exact username search submit button."
+  },
+  "manageFriendshipsButton": "Manage friendships",
+  "@manageFriendshipsButton": {
+    "description": "Button opening friendship and friend-request management."
+  },
+  "friendRequestSendButton": "Send request",
+  "@friendRequestSendButton": {
+    "description": "Button sending a friend request."
+  },
+  "friendRequestCancelButton": "Cancel request",
+  "@friendRequestCancelButton": {
+    "description": "Button cancelling an outgoing friend request."
+  },
+  "friendRequestAcceptButton": "Accept",
+  "@friendRequestAcceptButton": {
+    "description": "Button accepting an incoming friend request."
+  },
+  "friendRequestDeclineButton": "Decline",
+  "@friendRequestDeclineButton": {
+    "description": "Button declining an incoming friend request."
+  },
+  "friendshipStatusFriends": "Friends",
+  "@friendshipStatusFriends": {
+    "description": "Caller-relative label for an established friendship."
+  },
+  "friendshipUnavailableMessage": "Friend requests aren’t available for this profile.",
+  "@friendshipUnavailableMessage": {
+    "description": "Privacy-safe unavailable relationship state."
+  },
+  "friendshipsTitle": "Friendships",
+  "@friendshipsTitle": {
+    "description": "Title for friendship and request management."
+  },
+  "friendshipsDescription": "Review your friends and active requests. Relationship history and private availability details aren’t shown.",
+  "@friendshipsDescription": {
+    "description": "Privacy-safe friendship management explanation."
+  },
+  "friendshipsRefreshButton": "Refresh friendships",
+  "@friendshipsRefreshButton": {
+    "description": "Accessible tooltip for refreshing friendship management."
+  },
+  "friendshipsLoadingLabel": "Loading friendships",
+  "@friendshipsLoadingLabel": {
+    "description": "Accessible loading label for friendship management."
+  },
+  "friendshipActionInProgressLabel": "Updating friendship",
+  "@friendshipActionInProgressLabel": {
+    "description": "Accessible progress label for one friendship mutation."
+  },
+  "friendshipsEmptyTitle": "No active friendships or requests",
+  "@friendshipsEmptyTitle": {
+    "description": "Heading when friendship management is completely empty."
+  },
+  "friendshipsEmptyDescription": "Use exact username search to send a friend request.",
+  "@friendshipsEmptyDescription": {
+    "description": "Guidance when friendship management is completely empty."
+  },
+  "friendshipsFriendsSection": "Friends",
+  "@friendshipsFriendsSection": {
+    "description": "Heading for established friendships."
+  },
+  "friendshipsFriendsEmpty": "No friends yet.",
+  "@friendshipsFriendsEmpty": {
+    "description": "Empty copy for the friends section."
+  },
+  "friendshipsIncomingSection": "Incoming requests",
+  "@friendshipsIncomingSection": {
+    "description": "Heading for incoming friend requests."
+  },
+  "friendshipsIncomingEmpty": "No incoming requests.",
+  "@friendshipsIncomingEmpty": {
+    "description": "Empty copy for the incoming requests section."
+  },
+  "friendshipsSentSection": "Sent requests",
+  "@friendshipsSentSection": {
+    "description": "Heading for outgoing friend requests."
+  },
+  "friendshipsSentEmpty": "No sent requests.",
+  "@friendshipsSentEmpty": {
+    "description": "Empty copy for the sent requests section."
+  },
+  "friendshipRemoveButton": "Remove friend",
+  "@friendshipRemoveButton": {
+    "description": "Button ending a friendship."
+  },
+  "friendshipRemoveDialogTitle": "Remove @{username}?",
+  "@friendshipRemoveDialogTitle": {
+    "description": "Confirmation title before ending a friendship.",
+    "placeholders": {
+      "username": {
+        "type": "String"
+      }
+    }
+  },
+  "friendshipRemoveDialogDescription": "This ends the friendship for both people. It won’t be restored automatically.",
+  "@friendshipRemoveDialogDescription": {
+    "description": "Consequences shown before ending a friendship."
+  },
+  "friendshipBlockDialogDescription": "Blocking ends any active request or friendship and prevents contact while either person has an active block. They won’t be notified.",
+  "@friendshipBlockDialogDescription": {
+    "description": "Silent block consequence from friendship management."
   },
   "manageBlockedUsersButton": "Manage blocked users",
   "@manageBlockedUsersButton": {
@@ -355,6 +456,30 @@
   "communityUnblockedMessage": "Profile unblocked. No relationship was restored.",
   "@communityUnblockedMessage": {
     "description": "Successful outgoing unblock result."
+  },
+  "friendRequestSentMessage": "Friend request sent.",
+  "@friendRequestSentMessage": {
+    "description": "Successful friend-request send result."
+  },
+  "friendRequestCancelledMessage": "Friend request cancelled.",
+  "@friendRequestCancelledMessage": {
+    "description": "Successful outgoing friend-request cancellation result."
+  },
+  "friendRequestAcceptedMessage": "Friend request accepted.",
+  "@friendRequestAcceptedMessage": {
+    "description": "Successful friend-request acceptance result."
+  },
+  "friendRequestDeclinedMessage": "Friend request declined.",
+  "@friendRequestDeclinedMessage": {
+    "description": "Successful friend-request decline result."
+  },
+  "friendshipEndedMessage": "Friend removed.",
+  "@friendshipEndedMessage": {
+    "description": "Successful friendship-end result."
+  },
+  "friendshipChangedMessage": "This relationship changed elsewhere. The latest state is shown.",
+  "@friendshipChangedMessage": {
+    "description": "Privacy-safe stale-version conflict message."
   },
   "accountLoadErrorTitle": "We couldn’t load your account",
   "@accountLoadErrorTitle": {
