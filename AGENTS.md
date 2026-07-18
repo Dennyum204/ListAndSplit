@@ -1,7 +1,35 @@
 # Repository guidance for coding agents
 
-This file applies to the entire repository. Follow the user's task first, then
-these durable rules.
+This file applies to the entire repository. It contains durable engineering
+rules, not temporary phase or branch status.
+
+## Project context and decision sources
+
+List & Split is an Android/iOS Flutter application for collaborative active
+lists, reusable templates, mutual friendships and community, persistent
+notifications, and optional expense-ledger functionality.
+
+Before planning feature work, read the relevant source documents:
+
+- [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md): agreed user-facing behavior.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): technical boundaries.
+- [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md): conceptual entities and invariants.
+- [`docs/DECISIONS.md`](docs/DECISIONS.md): accepted and open decisions.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md): delivery order and phase gates.
+
+Apply this decision hierarchy:
+
+1. The current user task has priority.
+2. Accepted decisions in `docs/DECISIONS.md` are authoritative durable decisions.
+3. The product, architecture, and data-model documents provide the relevant
+   contract.
+4. The roadmap controls planned sequencing, not implementation status.
+5. If documents conflict or a relevant decision remains open, do not silently
+   choose behavior affecting authorization, money, privacy, copying, retention,
+   concurrency, or irreversible schema. Report or resolve it first.
+
+When an accepted decision changes, update every affected source document in the
+same pull request as the implementation.
 
 ## Start safely
 
@@ -88,8 +116,7 @@ weaken checks to make them pass.
 
 - Work on a task branch; do not commit directly to `main` unless the user
   explicitly authorizes repository initialization.
-- The bootstrap foundation branch is `chore/bootstrap-foundation`; later work uses
-  the branch authorized for that task.
+- Use the branch authorized for the current task.
 - Use conventional commits and keep commits focused. Review staged content before
   committing.
 - Never force-push. Push only the intended working branch, and only when the task
@@ -103,9 +130,9 @@ weaken checks to make them pass.
 
 - Git-committed migrations are the schema source of truth. Do not make
   Dashboard-only schema changes.
-- There are intentionally no business-schema migrations during the bootstrap
-  phase. `docs/DATA_MODEL.md` is conceptual until a later task approves schema
-  work.
+- Do not introduce or alter business schema unless the current task explicitly
+  authorizes it. Resolve and record the relevant decisions first, then implement
+  schema changes through reviewed migrations with RLS and tests.
 - Enable Row Level Security on every application table in the migration that
   creates it. Add least-privilege policies and test allowed and denied cases.
 - Derive access from `auth.uid()` and server-validated relationships. Never trust
