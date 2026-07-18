@@ -1,0 +1,19 @@
+{
+  "@@locale": "en",
+  "appTitle": "List & Split",
+  "@appTitle": {
+    "description": "The application display title."
+  },
+  "foundationTagline": "Plan together. Settle simply.",
+  "@foundationTagline": {
+    "description": "The short tagline on the foundation screen."
+  },
+  "foundationDescription": "A shared home for lists, reusable templates, and the little details that keep everyone in sync.",
+  "@foundationDescription": {
+    "description": "The introductory product description on the foundation screen."
+  },
+  "foundationReady": "Foundation ready",
+  "@foundationReady": {
+    "description": "Status label on the initial foundation screen."
+  }
+}

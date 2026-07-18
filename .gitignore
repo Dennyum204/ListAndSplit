@@ -29,6 +29,7 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/lib/l10n/generated/
 
 # Android build outputs
 /android/app/debug
