@@ -57,17 +57,20 @@ Candidate slices:
   registered mobile callback.
 - Add migration-driven owner-only profiles and verified-user onboarding with
   canonical globally unique immutable usernames and editable display names.
-- Implement basic blocking before enabling cross-user username discovery or friend
-  requests.
-- Implement friend request send, accept, decline, and the mutual friendship model.
+- Implement active directional block/unblock, private outgoing-block management,
+  and secure exact canonical-username discovery with symmetric either-direction
+  separation.
+- After that gate, implement atomic friend request send/cancel/decline and the
+  versioned one-current-state-per-unordered-pair mutual friendship model.
 - Introduce the persistent in-app notification infrastructure for friend requests.
 - Resolve and implement the Phase 1 account deletion/export lifecycle.
 - Add RLS and database-function tests for every relationship transition.
 
-Before the next social migration, resolve detailed block effects plus friendship
-and request collision/retry/unfriending rules. Resolve the immutable-username
-support/admin correction path, avatar storage lifecycle, and account
-deletion/export/retention behavior before the later slices that encode them.
+Before friend request schema, preserve the accepted collision, retry, cancellation,
+decline, reopening, and block-transition rules. Shared-resource block effects must
+be resolved before shared lists ship. Resolve the immutable-username support/admin
+correction path, avatar storage lifecycle, and account deletion/export/retention
+behavior before the later slices that encode them.
 
 ## Phase 2 — Active/shared lists (planned)
 
@@ -99,6 +102,7 @@ Candidate slices:
 - Saving a public template as an independent recipient-owned deep copy.
 - Sending a template to a friend with Accept/Decline and idempotent copy creation.
 - A friends-only feed of recent public templates.
+- Block-aware public profile, template, and feed visibility in both directions.
 - Tests proving that source changes/deletion never mutate snapshots or recipient
   copies.
 
