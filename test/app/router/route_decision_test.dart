@@ -108,10 +108,29 @@ void main() {
     );
   });
 
-  test('completed profile may use foundation and profile routes', () {
+  test('completed profile may use post-onboarding routes', () {
     final complete = decision();
     expect(complete.redirect(AppRoutes.foundation), isNull);
     expect(complete.redirect(AppRoutes.profile), isNull);
+    expect(complete.redirect(AppRoutes.community), isNull);
+    expect(complete.redirect(AppRoutes.blockedUsers), isNull);
     expect(complete.redirect(AppRoutes.signIn), AppRoutes.foundation);
+  });
+
+  test('community routes preserve verification and onboarding gates', () {
+    expect(
+      decision(session: const AuthSessionState.signedOut())
+          .redirect(AppRoutes.community),
+      AppRoutes.signIn,
+    );
+    expect(
+      decision(session: unverifiedSession).redirect(AppRoutes.blockedUsers),
+      AppRoutes.verification,
+    );
+    expect(
+      decision(profile: FakeProfileRepository.incompleteProfile)
+          .redirect(AppRoutes.community),
+      AppRoutes.onboarding,
+    );
   });
 }

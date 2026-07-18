@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:list_and_split/features/auth/domain/auth_repository.dart';
 import 'package:list_and_split/features/auth/domain/auth_session.dart';
+import 'package:list_and_split/features/community/domain/community_profile.dart';
+import 'package:list_and_split/features/community/domain/community_repository.dart';
 import 'package:list_and_split/features/profile/domain/profile_repository.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 
@@ -148,6 +150,74 @@ class FakeProfileRepository implements ProfileRepository {
       onboardingCompletedAt: profile.onboardingCompletedAt,
     );
     return profile;
+  }
+}
+
+class FakeCommunityRepository implements CommunityRepository {
+  DiscoveredProfile? searchResult;
+  List<BlockedProfile> blockedProfiles = [];
+  Object? searchFailure;
+  Object? blockFailure;
+  Object? unblockFailure;
+  Object? listFailure;
+  Completer<DiscoveredProfile?>? searchCompleter;
+  Completer<List<BlockedProfile>>? listCompleter;
+
+  String? lastUsername;
+  String? lastBlockedProfileId;
+  String? lastUnblockedProfileId;
+  int searchCalls = 0;
+  int blockCalls = 0;
+  int unblockCalls = 0;
+  int listCalls = 0;
+
+  @override
+  Future<DiscoveredProfile?> findProfileByUsername(String username) async {
+    searchCalls += 1;
+    lastUsername = username;
+    if (searchFailure != null) throw searchFailure!;
+    final completer = searchCompleter;
+    if (completer != null) return completer.future;
+    return searchResult;
+  }
+
+  @override
+  Future<void> blockProfile(String profileId) async {
+    blockCalls += 1;
+    lastBlockedProfileId = profileId;
+    if (blockFailure != null) throw blockFailure!;
+    final result = searchResult;
+    if (result != null &&
+        result.id == profileId &&
+        !blockedProfiles.any((profile) => profile.id == profileId)) {
+      blockedProfiles = [
+        ...blockedProfiles,
+        BlockedProfile(
+          id: result.id,
+          username: result.username,
+          displayName: result.displayName,
+        ),
+      ];
+    }
+  }
+
+  @override
+  Future<void> unblockProfile(String profileId) async {
+    unblockCalls += 1;
+    lastUnblockedProfileId = profileId;
+    if (unblockFailure != null) throw unblockFailure!;
+    blockedProfiles = blockedProfiles
+        .where((profile) => profile.id != profileId)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<BlockedProfile>> listBlockedProfiles() async {
+    listCalls += 1;
+    if (listFailure != null) throw listFailure!;
+    final completer = listCompleter;
+    if (completer != null) return completer.future;
+    return List.unmodifiable(blockedProfiles);
   }
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/features/auth/presentation/auth_actions_controller.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
@@ -66,9 +67,18 @@ class FoundationScreen extends ConsumerWidget {
                   FilledButton.tonalIcon(
                     onPressed: actionState.isSubmitting
                         ? null
-                        : () => context.go('/profile'),
+                        : () => context.go(AppRoutes.profile),
                     icon: const Icon(Icons.person_outline_rounded),
                     label: Text(localizations.editProfileButton),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    key: const Key('findPeopleButton'),
+                    onPressed: actionState.isSubmitting
+                        ? null
+                        : () => context.go(AppRoutes.community),
+                    icon: const Icon(Icons.person_search_rounded),
+                    label: Text(localizations.findPeopleButton),
                   ),
                   const SizedBox(height: 8),
                   TextButton.icon(

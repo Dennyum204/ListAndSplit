@@ -25,13 +25,17 @@
       }
     }
   },
-  "foundationAuthenticatedDescription": "Your verified profile is ready. Collaborative lists arrive in a later phase.",
+  "foundationAuthenticatedDescription": "Your verified profile is ready. Exact username discovery and blocking are available; collaborative lists arrive in a later phase.",
   "@foundationAuthenticatedDescription": {
     "description": "Honest post-onboarding status copy."
   },
   "editProfileButton": "Edit profile",
   "@editProfileButton": {
     "description": "Button opening profile editing."
+  },
+  "findPeopleButton": "Find people",
+  "@findPeopleButton": {
+    "description": "Button opening exact community discovery."
   },
   "signOutButton": "Sign out",
   "@signOutButton": {
@@ -166,6 +170,84 @@
   "@usernameHelper": {
     "description": "Username format helper."
   },
+  "communityTitle": "Find people",
+  "@communityTitle": {
+    "description": "Title for exact username discovery."
+  },
+  "communityDescription": "Search for one exact username. Missing and unavailable profiles look the same.",
+  "@communityDescription": {
+    "description": "Privacy-safe discovery explanation."
+  },
+  "communityUsernameHelper": "Enter the complete username; partial matches aren’t shown.",
+  "@communityUsernameHelper": {
+    "description": "Exact username search helper."
+  },
+  "communitySearchButton": "Search",
+  "@communitySearchButton": {
+    "description": "Exact username search submit button."
+  },
+  "manageBlockedUsersButton": "Manage blocked users",
+  "@manageBlockedUsersButton": {
+    "description": "Button opening private outgoing block management."
+  },
+  "communityBlockButton": "Block",
+  "@communityBlockButton": {
+    "description": "Block action label."
+  },
+  "communityBlockDialogTitle": "Block @{username}?",
+  "@communityBlockDialogTitle": {
+    "description": "Confirmation title before blocking a discovered profile.",
+    "placeholders": {
+      "username": {
+        "type": "String"
+      }
+    }
+  },
+  "communityBlockDialogDescription": "You won’t be able to find or contact each other while either person has an active block. They won’t be notified.",
+  "@communityBlockDialogDescription": {
+    "description": "Silent symmetric-separation warning before blocking."
+  },
+  "blockedUsersTitle": "Blocked users",
+  "@blockedUsersTitle": {
+    "description": "Title for private outgoing block management."
+  },
+  "blockedUsersDescription": "Only people you blocked appear here. Incoming blocks are never shown.",
+  "@blockedUsersDescription": {
+    "description": "Privacy explanation for outgoing block management."
+  },
+  "blockedUsersLoadingLabel": "Loading blocked users",
+  "@blockedUsersLoadingLabel": {
+    "description": "Accessible loading label for blocked users."
+  },
+  "blockedUsersEmptyTitle": "No blocked users",
+  "@blockedUsersEmptyTitle": {
+    "description": "Empty blocked-users list heading."
+  },
+  "blockedUsersEmptyDescription": "People you block will appear here.",
+  "@blockedUsersEmptyDescription": {
+    "description": "Empty blocked-users list explanation."
+  },
+  "communityUnblockButton": "Unblock",
+  "@communityUnblockButton": {
+    "description": "Unblock action label."
+  },
+  "communityUnblockDialogTitle": "Unblock @{username}?",
+  "@communityUnblockDialogTitle": {
+    "description": "Confirmation title before removing an outgoing block.",
+    "placeholders": {
+      "username": {
+        "type": "String"
+      }
+    }
+  },
+  "communityUnblockDialogDescription": "This removes only your block. It doesn’t restore a relationship, and the profile may still be unavailable.",
+  "@communityUnblockDialogDescription": {
+    "description": "Privacy-safe unblock consequence explanation."
+  },
+  "cancelButton": "Cancel",
+  "@cancelButton": {
+    "description": "Generic confirmation cancellation label."
+  },
   "usernameImmutableHelper": "Your username is permanent after onboarding.",
   "@usernameImmutableHelper": {
     "description": "Read-only username explanation."
@@ -214,6 +296,10 @@
   "@usernameRequiredError": {
     "description": "Required username validation error."
   },
+  "communityUsernameRequiredError": "Enter a username to search.",
+  "@communityUsernameRequiredError": {
+    "description": "Required exact username search error."
+  },
   "usernameInvalidError": "Use 3–24 lowercase letters, numbers, or underscores, starting with a letter.",
   "@usernameInvalidError": {
     "description": "Invalid username validation error."
@@ -257,6 +343,18 @@
   "profileSavedMessage": "Profile saved.",
   "@profileSavedMessage": {
     "description": "Profile save success."
+  },
+  "communityNotFoundMessage": "No matching profile was found or is available.",
+  "@communityNotFoundMessage": {
+    "description": "Generic result shared by missing and block-suppressed usernames."
+  },
+  "communityBlockedMessage": "Profile blocked. You can manage your outgoing blocks from Blocked users.",
+  "@communityBlockedMessage": {
+    "description": "Successful block result without reverse-block disclosure."
+  },
+  "communityUnblockedMessage": "Profile unblocked. No relationship was restored.",
+  "@communityUnblockedMessage": {
+    "description": "Successful outgoing unblock result."
   },
   "accountLoadErrorTitle": "We couldn’t load your account",
   "@accountLoadErrorTitle": {
