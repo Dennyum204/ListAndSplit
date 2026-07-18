@@ -98,9 +98,10 @@ the reciprocal row remains.
 
 The blocker may receive the target's ID, username, and display name through the
 private outgoing-block management projection. Incoming-only and unrelated blocks
-are never disclosed. Account deletion/retention and shared-resource effects remain
-open, so the block model does not select cascading profile deletion or active-list
-membership behavior.
+are never disclosed. An active block in either direction makes the separate
+relationship-summary RPC return no row and no target profile fields. Account
+deletion/retention and shared-resource effects remain open, so the block model does
+not select cascading profile deletion or active-list membership behavior.
 
 ### Versioned friend request and friendship relationship
 
@@ -151,8 +152,10 @@ Accepted transition invariants are:
 - Mutations after initial send require the caller's expected version. Send accepts
   a nullable expected version: null is valid only for first, duplicate-pending, or
   crossed-pending sends, while reopening a cancelled, declined, or ended row
-  requires its exact current version. Stale or ineligible actions fail safely
-  without overwriting a newer state.
+  requires its exact current version. Once a send reopens a dormant row to pending,
+  a duplicate retry or opposite crossed send may use that immediately prior dormant
+  version as well as the current pending version; older values remain stale. Stale
+  or ineligible actions fail safely without overwriting a newer state.
 - All operations normalize and lock the same pair in one deterministic order so
   concurrent first sends, crossed sends, blocks, and transitions cannot produce
   duplicate or contradictory rows.
@@ -167,7 +170,9 @@ name, one of `can-send`, `incoming-pending`, `outgoing-pending`, `friends`, or
 `unavailable`, and nullable version/state-change values where an eligible action
 or active-list ordering requires them. Privacy-safe `unavailable` results expose
 neither version nor state-change metadata; an eligible dormant reopener receives
-the version required for the next send.
+the version required for the next send. `unavailable` applies to dormant
+declined/ended reopening privacy; an active either-direction block suppresses the
+entire summary/profile row.
 Raw declined/ended state and `reopen_by_id` are not disclosed to the other
 participant; email/Auth metadata, incoming block identity, unrelated rows, and
 unnecessary internal timestamps are never returned.

@@ -108,6 +108,9 @@ used in new UI or documentation.
   directional block remains.
 - The blocker may see the username and display name associated with their own
   outgoing blocks only through the private blocked-users management contract.
+- An active block in either direction makes the relationship-summary contract
+  return no row at all. It does not return an `unavailable` row or any target
+  profile fields; the private outgoing-block contract remains the only exception.
 - Friend requests are directional while friendship is mutual rather than
   follower-based. Each unordered profile pair has one persistent, versioned
   current relationship row with a physical state of `pending`, `friends`,
@@ -133,11 +136,15 @@ used in new UI or documentation.
   overwriting newer state.
 - A send from a first-load or preloaded result may omit an expected version for
   first, duplicate-pending, or crossed-pending behavior. Reopening a cancelled,
-  declined, or ended row requires its exact current version.
+  declined, or ended row requires its exact current version. If that send has
+  already reopened the row to pending, the same sender's retry and the opposite
+  participant's crossed send may reuse the immediately prior dormant version;
+  materially older versions remain stale.
 - Client-facing relationship results use caller-relative states such as `can-send`,
   `incoming-pending`, `outgoing-pending`, `friends`, or `unavailable`. They do not
   reveal raw declined/ended state or the reopening controller to the other
-  participant.
+  participant. `unavailable` is the privacy-safe dormant-state projection; active
+  blocks suppress the entire relationship and profile projection instead.
 - Only the current row, version, creation and state-change times, most recent
   requester, and reopening controller are retained. Detailed audit history is not
   introduced; account deletion and retention remain unresolved.

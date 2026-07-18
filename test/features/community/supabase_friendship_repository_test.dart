@@ -77,6 +77,21 @@ void main() {
     }
   });
 
+  test('maps an empty relationship summary to unavailable', () async {
+    response = <Object?>[];
+
+    await expectLater(
+      repository.getRelationshipSummary('profile-2'),
+      throwsA(
+        isA<FriendshipFailure>().having(
+          (error) => error.code,
+          'code',
+          FriendshipFailureCode.unavailable,
+        ),
+      ),
+    );
+  });
+
   test('maps the active relationship list without exposing extra fields',
       () async {
     response = [
@@ -190,10 +205,8 @@ void main() {
     ]);
   });
 
-  test('rejects zero, multiple, malformed, and undocumented result rows',
-      () async {
+  test('rejects multiple, malformed, and undocumented result rows', () async {
     final malformedResponses = <Object?>[
-      <Object?>[],
       [
         _summaryRow(status: 'friends', version: 1, stateChangedAt: null),
         _summaryRow(status: 'friends', version: 1, stateChangedAt: null),
@@ -241,6 +254,26 @@ void main() {
         ),
       );
     }
+  });
+
+  test('keeps summary backend failures distinct from unavailable', () async {
+    failure = const PostgrestException(
+      message: 'sensitive backend state',
+      code: '57014',
+      details: 'private details',
+      hint: 'private hint',
+    );
+
+    await expectLater(
+      repository.getRelationshipSummary('profile-2'),
+      throwsA(
+        isA<FriendshipFailure>().having(
+          (error) => error.code,
+          'code',
+          FriendshipFailureCode.generic,
+        ),
+      ),
+    );
   });
 
   test('maps only SQLSTATE 40001 to the stable stale failure', () async {

@@ -27,7 +27,10 @@ class SupabaseFriendshipRepository implements FriendshipRepository {
           params: {'target_profile_id': profileId},
         ),
       );
-      if (rows.length != 1) {
+      if (rows.isEmpty) {
+        throw const FriendshipFailure(FriendshipFailureCode.unavailable);
+      }
+      if (rows.length > 1) {
         throw const FriendshipFailure(FriendshipFailureCode.generic);
       }
       return _mapSummary(rows.single);

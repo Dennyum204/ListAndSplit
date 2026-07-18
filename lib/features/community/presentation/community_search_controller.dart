@@ -97,6 +97,10 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
         relationship: relationship,
       );
       return true;
+    } on FriendshipFailure catch (failure) {
+      if (!mounted) return false;
+      state = CommunitySearchState(message: _summaryFailureMessage(failure));
+      return false;
     } catch (_) {
       if (!mounted) return false;
       state = const CommunitySearchState(
@@ -125,6 +129,10 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
         relationship: relationship,
       );
       return true;
+    } on FriendshipFailure catch (failure) {
+      if (!mounted) return false;
+      state = CommunitySearchState(message: _summaryFailureMessage(failure));
+      return false;
     } catch (_) {
       if (!mounted) return false;
       state = const CommunitySearchState(
@@ -305,6 +313,18 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
       );
       _drainExternalRefresh();
       return true;
+    } on FriendshipFailure catch (failure) {
+      if (!mounted) return false;
+      state = failure.code == FriendshipFailureCode.unavailable
+          ? const CommunitySearchState(
+              message: CommunitySearchMessage.notFoundOrUnavailable,
+            )
+          : CommunitySearchState(
+              result: result,
+              message: failureMessage,
+            );
+      _drainExternalRefresh();
+      return false;
     } catch (_) {
       if (!mounted) return false;
       state = CommunitySearchState(
@@ -335,6 +355,11 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
       throw const FriendshipFailure(FriendshipFailureCode.generic);
     }
   }
+
+  CommunitySearchMessage _summaryFailureMessage(FriendshipFailure failure) =>
+      failure.code == FriendshipFailureCode.unavailable
+          ? CommunitySearchMessage.notFoundOrUnavailable
+          : CommunitySearchMessage.operationFailed;
 
   static void _noop() {}
 }

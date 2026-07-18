@@ -221,7 +221,10 @@ These contracts derive the actor only from `auth.uid()`, require completed calle
 and target profiles where relevant, and return only profile ID, username, and
 display name. Discovery excludes self and any pair blocked in either direction.
 Missing and block-suppressed targets have the same empty result. The existing
-owner-only profile policy is not broadened.
+owner-only profile policy is not broadened. The relationship-summary RPC follows
+the same separation rule: an active block in either direction returns no row and
+no target profile projection. Only the private outgoing-block management RPC may
+show a blocker the profile they blocked.
 
 Cross-user profile projection requires a deliberately small `security definer`
 boundary. Every privileged function has an empty pinned `search_path`, fully
@@ -273,9 +276,12 @@ increments the version exactly once and updates the state-change time. Mutations
 other than the initial send require the caller's expected version. Send accepts a
 nullable expected version: null supports first, duplicate-pending, and crossed-
 pending sends from a preloaded result, while reopening a cancelled, declined, or
-ended row requires the exact current version. Stale or ineligible actions fail
-generically without overwriting newer state. A crossed send can atomically promote
-a pending request to friendship even when initiated from a preloaded search result.
+ended row requires the exact current version. After reopening produces a pending
+row, a duplicate retry or crossed send may safely reuse that immediately prior
+dormant version; materially older versions still fail stale. Stale or ineligible
+actions fail generically without overwriting newer state. A crossed send can
+atomically promote a pending request to friendship even when both users acted from
+the same dormant preloaded result.
 
 The existing `block_profile(uuid)` signature, identity derivation, pinned empty
 `search_path`, exact authenticated grant, and revoked default/anon/service-role
@@ -288,7 +294,9 @@ display name, a relative status (`can-send`, `incoming-pending`,
 `outgoing-pending`, `friends`, or `unavailable`), plus nullable version and
 state-change time. Privacy-safe `unavailable` results expose neither version nor
 state-change metadata; eligible dormant reopeners receive the version required
-for the next send. They never expose email/Auth metadata, block direction, raw
+for the next send. `unavailable` protects declined/ended reopening details; active
+blocks return no relationship-summary/profile row at all. They never expose
+email/Auth metadata, block direction, raw
 declined/ended state to the non-controller, the reopening-controller column,
 unrelated relationships, or unnecessary internal timestamps.
 

@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(151);
+select plan(163);
 
 -- Catalog shape, integrity, and RPC-only access boundary.
 select has_table(
@@ -294,6 +294,32 @@ select is(
   'every privileged friendship RPC pins an empty search path'
 );
 
+select is(
+  (
+    select count(*)
+    from pg_catalog.pg_proc
+    where oid in (
+      'public.get_relationship_summary(uuid)'::regprocedure,
+      'public.send_friend_request(uuid,bigint)'::regprocedure
+    )
+      and pg_catalog.pg_get_userbyid(proowner) = 'postgres'
+  ),
+  2::bigint,
+  'the replaced friendship RPCs preserve their postgres ownership'
+);
+
+select ok(
+  pg_catalog.obj_description(
+    'public.get_relationship_summary(uuid)'::regprocedure,
+    'pg_proc'
+  ) = 'Returns one minimal caller-relative relationship summary without dormant-state disclosure.'
+  and pg_catalog.obj_description(
+    'public.send_friend_request(uuid,bigint)'::regprocedure,
+    'pg_proc'
+  ) = 'Creates, retries, crosses, or eligibly reopens a versioned friend request.',
+  'the replaced friendship RPCs preserve their reviewed comments'
+);
+
 select ok(
   not (
     select prosecdef
@@ -577,10 +603,29 @@ select throws_like(
 
 set local "request.jwt.claim.sub" = '11111111-1111-4111-8111-111111111111';
 
-select throws_like(
-  $$select * from public.get_relationship_summary('11111111-1111-4111-8111-111111111111')$$,
-  '%profile unavailable%',
-  'single-target summary rejects self relationships generically'
+select is(
+  (
+    select count(*)
+    from public.get_relationship_summary('11111111-1111-4111-8111-111111111111')
+  ),
+  0::bigint,
+  'single-target summary suppresses a self relationship projection'
+);
+
+select ok(
+  (
+    select count(*) = 0
+    from public.get_relationship_summary(null)
+  )
+  and (
+    select count(*) = 0
+    from public.get_relationship_summary('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
+  )
+  and (
+    select count(*) = 0
+    from public.get_relationship_summary('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+  ),
+  'null, nonexistent, and incomplete targets share the empty unavailable summary'
 );
 
 select throws_like(
@@ -849,6 +894,13 @@ select lives_ok(
 select lives_ok(
   $$select public.send_friend_request('11111111-1111-4111-8111-111111111111', 1)$$,
   'a duplicate send with the current version is an idempotent retry'
+);
+
+select throws_ok(
+  $$select public.send_friend_request('11111111-1111-4111-8111-111111111111', 0)$$,
+  '40001',
+  'relationship changed',
+  'a first-send pending row does not invent a prior dormant version'
 );
 
 select throws_ok(
@@ -1514,25 +1566,44 @@ select throws_like(
 
 select is(
   (
-    select relationship_status
+    select count(*)
     from public.get_relationship_summary('22222222-2222-4222-8222-222222222222')
   ),
-  'unavailable',
-  'a blocked pair has a privacy-safe unavailable summary'
-);
-
-select ok(
-  (
-    select version is null and state_changed_at is null
-    from public.get_relationship_summary('22222222-2222-4222-8222-222222222222')
-  ),
-  'a blocked summary reveals no relationship version or state-change metadata'
+  0::bigint,
+  'an incoming block suppresses the entire relationship and profile projection'
 );
 
 select is(
   (select count(*) from public.list_active_relationships()),
   0::bigint,
-  'a blocked pair is absent from active relationships'
+  'an incoming-blocked pair is absent from active relationships'
+);
+
+select is(
+  (
+    select count(*)
+    from public.profiles
+    where id = '22222222-2222-4222-8222-222222222222'
+  ),
+  0::bigint,
+  'direct profile access remains owner-only while relationship projection is suppressed'
+);
+
+set local "request.jwt.claim.sub" = '22222222-2222-4222-8222-222222222222';
+
+select is(
+  (
+    select count(*)
+    from public.get_relationship_summary('11111111-1111-4111-8111-111111111111')
+  ),
+  0::bigint,
+  'an outgoing block also suppresses the entire relationship and profile projection'
+);
+
+select is(
+  (select count(*) from public.list_active_relationships()),
+  0::bigint,
+  'an outgoing-blocked pair is absent from active relationships'
 );
 
 reset role;
@@ -1571,12 +1642,93 @@ select lives_ok(
   'either participant may reopen a block-cancelled request after all blocks are gone'
 );
 
+reset role;
+
+insert into friendship_test_snapshots
+select 'reopened-pending', version, state_changed_at
+from public.user_relationships;
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = '11111111-1111-4111-8111-111111111111';
+
+select lives_ok(
+  $$select public.send_friend_request('22222222-2222-4222-8222-222222222222', 2)$$,
+  'retrying a reopened send with the prior dormant version is idempotent'
+);
+
+select throws_ok(
+  $$select public.send_friend_request('22222222-2222-4222-8222-222222222222', 1)$$,
+  '40001',
+  'relationship changed',
+  'a materially older reopened-send version remains stale'
+);
+
+reset role;
+
+select ok(
+  (
+    select current_row.version = snapshot.version
+      and current_row.state_changed_at = snapshot.state_changed_at
+    from public.user_relationships as current_row
+    join friendship_test_snapshots as snapshot
+      on snapshot.label = 'reopened-pending'
+  ),
+  'a reopened-send retry changes neither version nor state-change timestamp'
+);
+
+set local role authenticated;
 set local "request.jwt.claim.sub" = '22222222-2222-4222-8222-222222222222';
 
 select lives_ok(
-  $$select public.accept_friend_request('11111111-1111-4111-8111-111111111111', 3)$$,
-  'the reopened request can become friendship'
+  $$select public.send_friend_request('11111111-1111-4111-8111-111111111111', 2)$$,
+  'an opposite send from the same preloaded dormant version creates friendship'
 );
+
+reset role;
+
+select ok(
+  (
+    select current_row.state = 'friends'
+      and current_row.version = dormant_snapshot.version + 2
+      and current_row.state_changed_at > pending_snapshot.state_changed_at
+    from public.user_relationships as current_row
+    join friendship_test_snapshots as dormant_snapshot
+      on dormant_snapshot.label = 'blocked-pending'
+    join friendship_test_snapshots as pending_snapshot
+      on pending_snapshot.label = 'reopened-pending'
+  ),
+  'cancelled to pending to friends performs exactly two real transitions'
+);
+
+insert into friendship_test_snapshots
+select 'crossed-friends', version, state_changed_at
+from public.user_relationships;
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = '11111111-1111-4111-8111-111111111111';
+
+select lives_ok(
+  $$select public.send_friend_request('22222222-2222-4222-8222-222222222222', 1)$$,
+  'a send with a stale version while already friends is a harmless no-op'
+);
+
+reset role;
+
+select ok(
+  (
+    select current_row.state = 'friends'
+      and current_row.requester_id = '22222222-2222-4222-8222-222222222222'
+      and current_row.version = snapshot.version
+      and current_row.state_changed_at = snapshot.state_changed_at
+    from public.user_relationships as current_row
+    join friendship_test_snapshots as snapshot
+      on snapshot.label = 'crossed-friends'
+  ),
+  'a send while friends changes neither state, requester, version, nor timestamp'
+);
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = '22222222-2222-4222-8222-222222222222';
 
 select lives_ok(
   $$select public.block_profile('11111111-1111-4111-8111-111111111111')$$,

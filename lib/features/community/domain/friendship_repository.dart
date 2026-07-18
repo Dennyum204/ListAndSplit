@@ -1,6 +1,6 @@
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 
-enum FriendshipFailureCode { stale, generic }
+enum FriendshipFailureCode { unavailable, stale, generic }
 
 class FriendshipFailure implements Exception {
   const FriendshipFailure(this.code);

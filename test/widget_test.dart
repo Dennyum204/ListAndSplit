@@ -12,6 +12,7 @@ import 'package:list_and_split/features/auth/domain/auth_repository.dart';
 import 'package:list_and_split/features/auth/domain/auth_session.dart';
 import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
 import 'package:list_and_split/features/community/domain/community_profile.dart';
+import 'package:list_and_split/features/community/domain/friendship_repository.dart';
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/community/presentation/community_providers.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
@@ -769,6 +770,47 @@ void main() {
     expect(find.textContaining('declined'), findsNothing);
     expect(find.textContaining('ended'), findsNothing);
     expect(find.textContaining('reopen'), findsNothing);
+    await auth.close();
+  });
+
+  testWidgets('summary unavailability clears the discovered profile card',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final community = FakeCommunityRepository()
+      ..searchResult = const DiscoveredProfile(
+        id: 'profile-2',
+        username: 'beta_user',
+        displayName: 'Beta User',
+      );
+    final friendships = FakeFriendshipRepository()
+      ..summaryFailure =
+          const FriendshipFailure(FriendshipFailureCode.unavailable);
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      community: community,
+      friendships: friendships,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('communityUsername')),
+      'beta_user',
+    );
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('No matching profile was found or is available.'),
+      findsOneWidget,
+    );
+    expect(find.text('Beta User'), findsNothing);
+    expect(find.byKey(const Key('sendFriendRequestButton')), findsNothing);
     await auth.close();
   });
 

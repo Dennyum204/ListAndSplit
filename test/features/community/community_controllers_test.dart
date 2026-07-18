@@ -176,6 +176,65 @@ void main() {
     expect(controller.state.relationship, same(incomingRelationship));
   });
 
+  test('search clears discovery when the summary becomes unavailable',
+      () async {
+    repository.searchResult = foundProfile;
+    friendshipRepository.summaryFailure =
+        const FriendshipFailure(FriendshipFailureCode.unavailable);
+    final controller = CommunitySearchController(
+      repository,
+      friendshipRepository,
+    );
+    addTearDown(controller.dispose);
+
+    expect(await controller.search('beta_user'), isFalse);
+
+    expect(controller.state.result, isNull);
+    expect(controller.state.relationship, isNull);
+    expect(
+      controller.state.message,
+      CommunitySearchMessage.notFoundOrUnavailable,
+    );
+  });
+
+  test('search keeps a summary backend failure generic', () async {
+    repository.searchResult = foundProfile;
+    friendshipRepository.summaryFailure = StateError('private backend details');
+    final controller = CommunitySearchController(
+      repository,
+      friendshipRepository,
+    );
+    addTearDown(controller.dispose);
+
+    expect(await controller.search('beta_user'), isFalse);
+
+    expect(controller.state.result, isNull);
+    expect(controller.state.relationship, isNull);
+    expect(controller.state.message, CommunitySearchMessage.operationFailed);
+  });
+
+  test('external refresh removes a result that became unavailable', () async {
+    repository.searchResult = foundProfile;
+    final controller = CommunitySearchController(
+      repository,
+      friendshipRepository,
+    );
+    addTearDown(controller.dispose);
+    await controller.search('beta_user');
+
+    friendshipRepository.summaryFailure =
+        const FriendshipFailure(FriendshipFailureCode.unavailable);
+    controller.handleFriendshipInvalidation();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.state.result, isNull);
+    expect(controller.state.relationship, isNull);
+    expect(
+      controller.state.message,
+      CommunitySearchMessage.notFoundOrUnavailable,
+    );
+  });
+
   test('search rejects a relationship summary for a different target',
       () async {
     repository.searchResult = foundProfile;
@@ -282,6 +341,29 @@ void main() {
       );
       expect(friendships.summaryCalls, 2);
     }
+  });
+
+  test('post-action refresh removes a result that became unavailable',
+      () async {
+    repository.searchResult = foundProfile;
+    friendshipRepository.summaryResult = incomingRelationship;
+    final controller = CommunitySearchController(
+      repository,
+      friendshipRepository,
+    );
+    addTearDown(controller.dispose);
+    await controller.search('beta_user');
+
+    friendshipRepository.summaryFailure =
+        const FriendshipFailure(FriendshipFailureCode.unavailable);
+
+    expect(await controller.acceptFriendRequest(), isFalse);
+    expect(controller.state.result, isNull);
+    expect(controller.state.relationship, isNull);
+    expect(
+      controller.state.message,
+      CommunitySearchMessage.notFoundOrUnavailable,
+    );
   });
 
   test(

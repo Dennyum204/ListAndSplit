@@ -170,8 +170,10 @@ only reviewed summary, active-list, send, cancel, accept, decline, and end RPCs;
 it never reads or writes the relationship table directly. Caller-relative
 results expose only actionable status and minimal profile data. Declined/ended
 state, reopening control, block direction, and unavailable-state version metadata
-remain private. Block creation atomically cancels a pending request or ends a
-friendship, while unblocking restores no relationship.
+remain private. An active block in either direction returns no relationship
+summary or target profile fields; only private outgoing-block management exposes a
+blocker's own blocked-user projection. Block creation atomically cancels a pending
+request or ends a friendship, while unblocking restores no relationship.
 
 ### Hosted development Auth configuration
 
