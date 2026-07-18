@@ -7,9 +7,8 @@ lists, reusable list templates, a friends-based community, and an optional expen
 ledger.
 
 This document records the agreed product direction. It is not a statement that the
-features below are implemented. The bootstrap phase establishes only the Flutter
-foundation, development workflow, and Supabase development infrastructure; product
-features and the business database schema are planned work.
+features below are implemented. Source code, tests, migrations, and pull requests
+are the evidence of implementation status.
 
 ## Product principles
 
@@ -25,6 +24,38 @@ features and the business database schema are planned work.
   for localization.
 
 ## Functional requirements
+
+### Authentication and profile onboarding
+
+- Initial authentication uses email and password only. Google, Apple, anonymous,
+  magic-link-only, and other providers are outside the initial release.
+- Email verification is mandatory before a user can enter the authenticated
+  application.
+- The identity flow includes sign-up, sign-in, sign-out, resend verification,
+  forgotten-password request, and password recovery with a new password.
+- New and replacement passwords require at least eight characters. Passwords and
+  confirmations are compared exactly as entered; the client does not trim,
+  lowercase, or impose composition rules.
+- Authentication failures use generic wording where a more specific response
+  would disclose whether an account exists.
+- After verification, a user completes profile onboarding by choosing a username
+  and display name.
+- Username input is trimmed and converted to lowercase. The canonical username is
+  globally unique, 3-24 characters, begins with a lowercase ASCII letter, and then
+  contains only lowercase ASCII letters, digits, or underscores. Its canonical
+  expression is `^[a-z][a-z0-9_]{2,23}$`.
+- A username becomes immutable after onboarding. A future support or administrator
+  correction path, if any, must be designed and audited separately.
+- Display name is separate from username, non-unique, editable, trimmed, and 1-50
+  characters.
+- Email addresses remain private authentication data and are never copied into
+  public profile fields.
+- The initial profile capability is owner-only. Users can read and update only
+  their own approved fields; cross-user search/discovery is deferred until it can
+  account for blocking.
+- Avatar editing is accepted future behavior. Image selection, upload, Storage
+  buckets, object policies, and avatar lifecycle are outside the initial profile
+  slice.
 
 ### Active and shared lists
 
@@ -59,14 +90,16 @@ used in new UI or documentation.
 
 ### Community
 
-- A user can be found by a unique username.
+- After basic blocking is available, a user can be found by a unique username
+  through a block-aware discovery contract.
 - A user can send, accept, or decline a friend request.
 - An accepted request creates a mutual friendship; it does not create a one-way
   follower relationship.
 - Only accepted friends can be invited to a shared active list.
 - A user's public templates can be viewed from that user's profile.
 - The community feed shows recent public templates from accepted friends.
-- Public content must eventually support user blocking and content/user reporting.
+- Basic blocking must be delivered in Phase 1 before friend discovery and requests.
+  Detailed block effects and content/user reporting still require separate design.
 
 ### Payment Control
 
@@ -93,7 +126,7 @@ the presentation of simplified debts remain open decisions.
   mentions.
 - Push notifications are planned for a later phase using Firebase Cloud Messaging
   and Apple Push Notification service.
-- The bootstrap phase does not create a Firebase project.
+- Creating a Firebase project requires separate explicit authorization.
 
 ### Navigation
 
@@ -105,7 +138,11 @@ The four primary destinations are:
 4. Profile
 
 The notification centre is opened from a bell affordance and is not a primary tab.
-Route and deep-link details have not yet been specified.
+Authentication uses the mobile callback
+`com.ferbatech.listandsplit://auth-callback`. The application resolves backend
+configuration, authentication, email verification, and profile onboarding before
+allowing access to an authenticated destination. The final signed-in route tree,
+restoration, notification links, and feature deep links remain open.
 
 ## Cross-cutting behavior
 
@@ -117,7 +154,10 @@ Route and deep-link details have not yet been specified.
   users who require it.
 - PostgreSQL Row Level Security is a mandatory server-side authorization layer; UI
   visibility is not an authorization control.
-- Blocking and reporting are required before the public-content experience is
+- The initial profile capability exposes no cross-user reads. Basic blocking must
+  precede friend discovery and requests; its effects on existing relationships,
+  shared resources, and future public content are not yet designed.
+- Reporting and moderation are required before the public-content experience is
   considered mature, but their detailed behavior is not yet designed.
 
 ### Reliability and offline direction
@@ -141,8 +181,12 @@ Route and deep-link details have not yet been specified.
 - No real payment initiation, wallet, card processing, or money custody.
 - No follower model.
 - No fifth navigation tab for notifications.
-- No production Supabase project or business schema in the bootstrap phase.
-- No Firebase project or push delivery in the bootstrap phase.
+- No social providers, anonymous authentication, or magic-link-only
+  authentication in the initial release.
+- No cross-user profile discovery before block-aware access rules exist.
+- No avatar upload or Storage bucket in the initial profile slice.
+- No production Supabase or Firebase project without separate explicit
+  authorization.
 - No promise of fully offline operation until cache and conflict rules are defined.
 
 ## Open product decisions
@@ -155,8 +199,11 @@ choose them:
 - Item quantity precision, validation, unit vocabulary, ordering, and duplicate
   handling.
 - Note mention parsing, eligibility, editing, and notification deduplication.
-- Username normalization, case sensitivity, rename policy, and profile privacy.
-- Friend-request cancellation, expiry, retry, and behavior after blocking.
+- A support or administrator correction process for immutable usernames, including
+  its authorization and audit requirements.
+- Avatar storage, upload validation, privacy, replacement, and deletion lifecycle.
+- Friend-request cancellation, expiry, retry, crossed/duplicate-request behavior,
+  unfriending, and the detailed effects of blocking.
 - Template/category ordering, copy visibility defaults, version/provenance display,
   and feed ranking/retention.
 - Invitation and sent-template expiry, revocation, and idempotent re-acceptance.
@@ -167,5 +214,5 @@ choose them:
 - Blocking/reporting scope, moderation workflow, evidence retention, and appeal
   behavior.
 - Offline conflict resolution and which operations are permitted while offline.
-- Authentication methods, account deletion/export policy, and initial additional
-  locales.
+- Account deletion/export, retention and re-registration behavior, and initial
+  additional locales.

@@ -1,12 +1,12 @@
 # Conceptual data model
 
-## Status: design input only
+## Status and authority
 
-This document describes a **future conceptual model**. It does not define final SQL
-table names, columns, enums, indexes, or API contracts. The bootstrap phase must
-not create application tables or business migrations; only standard Supabase local
-configuration is expected. A later schema task must turn reviewed decisions into
-Git-committed migrations and policy tests.
+This document describes the conceptual model and accepted invariants. It does not,
+by itself, define final SQL names, columns, enums, indexes, or API contracts;
+Git-committed migrations are the physical schema source of truth. The initial
+profile contract below is sufficiently resolved for its reviewed migration. Later
+aggregates remain conceptual until their open decisions are accepted.
 
 The names below are illustrative so relationships and invariants can be discussed
 without prematurely freezing the physical schema.
@@ -14,7 +14,7 @@ without prematurely freezing the physical schema.
 ## Global modeling rules
 
 - Supabase Auth owns authentication identities. Application profile data relates
-  to an authenticated user without duplicating credentials.
+  one-to-one to an authenticated user without duplicating email or credentials.
 - Every application record has a stable identifier. Audit timestamps and soft
   delete/archive behavior are still to be decided per aggregate.
 - Client-provided identity and authorization fields are untrusted. Ownership,
@@ -50,9 +50,37 @@ Profile --receives--> List Invitation / Sent Template / Friend Request
 ### Profile
 
 A profile represents a user in product surfaces and supports lookup through a
-unique username. Public profile fields beyond username, username normalization,
-case sensitivity, rename history, discovery privacy, and account deletion behavior
-are open decisions.
+unique username. The initial physical record is `public.profiles`; its `id` is a
+primary key and foreign key to `auth.users(id)`. The foreign key prevents orphaned
+profile records, but automatic deletion is intentionally not encoded while the
+account lifecycle remains open. Who may delete an account, export obligations,
+retention, profile cleanup, and re-registration behavior require a later accepted
+decision.
+
+A server-owned creation mechanism creates one profile for each Auth identity.
+`username` and `display_name` may remain null until a verified user completes
+onboarding. Database-managed `created_at` and `updated_at` timestamps provide audit
+timing, and nullable `onboarding_completed_at` is set when both onboarding fields
+are valid. Clients cannot edit these timestamps.
+
+Accepted field invariants are:
+
+- Username input is trimmed and converted to lowercase before validation.
+- A canonical username matches `^[a-z][a-z0-9_]{2,23}$` and is globally unique.
+- Username can be set during onboarding and cannot change after onboarding. The
+  database enforces this for direct API calls as well as application flows.
+- Retrying the same canonical onboarding write is safe and does not count as a
+  username change.
+- Display name is trimmed, 1-50 characters, non-unique, and remains editable.
+- Email remains private in Supabase Auth and is never copied into the profile.
+- Anonymous users cannot read profiles. In the initial slice an authenticated
+  user can read only their own profile and update only approved fields; clients
+  cannot insert or delete profile records.
+
+Cross-user username discovery is deferred until a basic blocking model and
+block-aware access contract exist. A future support/administrator correction path
+for immutable usernames, avatar storage/lifecycle, and account deletion/export
+remain open decisions.
 
 ### Friend request
 
@@ -77,6 +105,8 @@ lists are not yet specified.
 
 Blocking is planned. Its interaction with search, requests, existing friendships,
 shared lists, feed visibility, and templates requires a separate reviewed design.
+The accepted sequence is to implement a minimal block model before enabling friend
+discovery or requests; that sequence does not decide those detailed effects.
 
 ## Active-list aggregate
 
@@ -233,15 +263,17 @@ retries, and a stale notification. Retention, archive/delete behavior, badge
 semantics, and payload localization are open.
 
 Push tokens and delivery attempts are future infrastructure for FCM/APNs and are
-not part of the bootstrap schema. Device token ownership, rotation, invalidation,
-and privacy rules must be designed before push implementation.
+outside the initial identity/profile schema. Device token ownership, rotation,
+invalidation, and privacy rules must be designed before push implementation.
 
 ## Future safety records
 
-Blocking and reporting are required future capabilities for public content. Their
-records, policy visibility, moderation roles, evidence retention, and effects on
-existing relationships are intentionally not designed here. Do not improvise these
-rules in a migration.
+Basic blocking is required in Phase 1 before friend discovery and requests.
+Reporting remains required before public content is considered mature. Their
+records, policy visibility, detailed effects on existing relationships/resources,
+moderation roles, evidence retention, and appeal behavior are intentionally not
+designed here. Resolve them before the next social migration rather than
+improvising them in schema.
 
 ## Row Level Security expectations
 
@@ -251,7 +283,7 @@ anonymous denial unless public read is explicitly intended.
 
 | Data area | Minimum expected access boundary |
 | --- | --- |
-| Profiles | Authenticated discovery may expose approved public fields; private fields remain owner-only |
+| Profiles | Initial access is authenticated owner-only select and approved-field update; cross-user discovery requires a later block-aware policy |
 | Friend requests | Requester and recipient only; only recipient changes Accept/Decline state |
 | Friendships | The two members only, except deliberately exposed public relationship data if later approved |
 | Active lists and memberships | Current authorized members; invitees see only invitation-safe list data |
@@ -271,8 +303,11 @@ explicit grants, protected search paths, and adversarial policy/function tests.
 
 ## Physical-model decisions still required
 
-- Identifier types, timestamp/audit conventions, soft delete, and archival.
-- Username normalization and search/index strategy.
+- Identifier types, timestamp/audit conventions, soft delete, and archival for
+  later aggregates beyond the accepted profile record.
+- Support/administrator correction and audit rules for immutable usernames; future
+  block-aware username discovery/search strategy.
+- Avatar Storage, validation, replacement, retention, and deletion lifecycle.
 - Friendship/request uniqueness, history retention, and block interaction.
 - List role model and membership lifecycle.
 - Quantity/unit types and ordering strategy.

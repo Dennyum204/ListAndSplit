@@ -1,0 +1,43 @@
+name: Supabase verification
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.1
+
+      - name: Start local database
+        run: supabase db start
+
+      - name: Reset local database from migrations
+        run: supabase db reset --local --no-seed
+
+      - name: Run database and RLS tests
+        run: supabase test db --local supabase/tests
