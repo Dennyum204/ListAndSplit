@@ -6,4 +6,3 @@ output-class: AppLocalizations
 synthetic-package: false
 nullable-getter: false
 format: true
-header: "// ignore_for_file: type=lint"
