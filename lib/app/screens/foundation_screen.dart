@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:list_and_split/features/auth/presentation/auth_actions_controller.dart';
+import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
-class FoundationScreen extends StatelessWidget {
+class FoundationScreen extends ConsumerWidget {
   const FoundationScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final localizations = AppLocalizations.of(context);
+    final profile = ref.watch(ownProfileProvider).valueOrNull;
+    final actionState = ref.watch(
+      authActionsControllerProvider(AuthActionFlow.session),
+    );
 
     return Scaffold(
       body: SafeArea(
@@ -33,7 +41,10 @@ class FoundationScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    localizations.foundationTagline,
+                    profile?.displayName == null
+                        ? localizations.foundationTagline
+                        : localizations
+                            .foundationWelcome(profile!.displayName!),
                     textAlign: TextAlign.center,
                     style: textTheme.titleMedium?.copyWith(
                       color: colorScheme.primary,
@@ -42,7 +53,7 @@ class FoundationScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    localizations.foundationDescription,
+                    localizations.foundationAuthenticatedDescription,
                     textAlign: TextAlign.center,
                     style: textTheme.bodyLarge?.copyWith(
                       color: colorScheme.onSurfaceVariant,
@@ -51,6 +62,33 @@ class FoundationScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 28),
                   _FoundationBadge(label: localizations.foundationReady),
+                  const SizedBox(height: 28),
+                  FilledButton.tonalIcon(
+                    onPressed: actionState.isSubmitting
+                        ? null
+                        : () => context.go('/profile'),
+                    icon: const Icon(Icons.person_outline_rounded),
+                    label: Text(localizations.editProfileButton),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: actionState.isSubmitting
+                        ? null
+                        : () => ref
+                            .read(
+                              authActionsControllerProvider(
+                                AuthActionFlow.session,
+                              ).notifier,
+                            )
+                            .signOut(),
+                    icon: actionState.isSubmitting
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.logout_rounded),
+                    label: Text(localizations.signOutButton),
+                  ),
                 ],
               ),
             ),

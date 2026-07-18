@@ -15,5 +15,259 @@
   "foundationReady": "Foundation ready",
   "@foundationReady": {
     "description": "Status label on the initial foundation screen."
+  },
+  "foundationWelcome": "Welcome, {displayName}",
+  "@foundationWelcome": {
+    "description": "Greeting for an onboarded user.",
+    "placeholders": {
+      "displayName": {
+        "type": "String"
+      }
+    }
+  },
+  "foundationAuthenticatedDescription": "Your verified profile is ready. Collaborative lists arrive in a later phase.",
+  "@foundationAuthenticatedDescription": {
+    "description": "Honest post-onboarding status copy."
+  },
+  "editProfileButton": "Edit profile",
+  "@editProfileButton": {
+    "description": "Button opening profile editing."
+  },
+  "signOutButton": "Sign out",
+  "@signOutButton": {
+    "description": "Button signing out the current user."
+  },
+  "configurationTitle": "Connect Supabase to continue",
+  "@configurationTitle": {
+    "description": "Title of the missing developer configuration screen."
+  },
+  "configurationDescription": "This development build needs both SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY supplied with --dart-define. Restart the app after setting them.",
+  "@configurationDescription": {
+    "description": "Developer instructions when backend configuration is absent."
+  },
+  "configurationPartialWarning": "Only one Supabase value is set. Provide both values or remove both.",
+  "@configurationPartialWarning": {
+    "description": "Warning for partially supplied configuration."
+  },
+  "loadingLabel": "Loading your account…",
+  "@loadingLabel": {
+    "description": "Accessible loading status."
+  },
+  "emailLabel": "Email",
+  "@emailLabel": {
+    "description": "Email form field label."
+  },
+  "passwordLabel": "Password",
+  "@passwordLabel": {
+    "description": "Password form field label."
+  },
+  "confirmPasswordLabel": "Confirm password",
+  "@confirmPasswordLabel": {
+    "description": "Password confirmation field label."
+  },
+  "signInTitle": "Welcome back",
+  "@signInTitle": {
+    "description": "Sign-in screen title."
+  },
+  "signInDescription": "Sign in with your verified email address.",
+  "@signInDescription": {
+    "description": "Sign-in screen description."
+  },
+  "signInButton": "Sign in",
+  "@signInButton": {
+    "description": "Sign-in submit button."
+  },
+  "createAccountButton": "Create account",
+  "@createAccountButton": {
+    "description": "Link and submit label for account creation."
+  },
+  "forgotPasswordButton": "Forgot password?",
+  "@forgotPasswordButton": {
+    "description": "Link to password-reset request."
+  },
+  "signUpTitle": "Create your account",
+  "@signUpTitle": {
+    "description": "Sign-up screen title."
+  },
+  "signUpDescription": "Use an email address you can verify. You’ll choose your permanent username next.",
+  "@signUpDescription": {
+    "description": "Sign-up screen description."
+  },
+  "alreadyHaveAccountButton": "Already have an account? Sign in",
+  "@alreadyHaveAccountButton": {
+    "description": "Link from sign-up to sign-in."
+  },
+  "verificationTitle": "Verify your email",
+  "@verificationTitle": {
+    "description": "Email verification screen title."
+  },
+  "verificationDescription": "Open the verification link sent to {email}. Return here after verifying; the app will continue automatically.",
+  "@verificationDescription": {
+    "description": "Email verification instructions.",
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "verificationFallbackDescription": "Open the verification link in your email. Return here after verifying; the app will continue automatically.",
+  "@verificationFallbackDescription": {
+    "description": "Verification instructions when no address is available."
+  },
+  "resendVerificationButton": "Resend verification email",
+  "@resendVerificationButton": {
+    "description": "Button resending sign-up verification."
+  },
+  "backToSignInButton": "Back to sign in",
+  "@backToSignInButton": {
+    "description": "Navigation button to sign-in."
+  },
+  "forgotPasswordTitle": "Reset your password",
+  "@forgotPasswordTitle": {
+    "description": "Password-reset request title."
+  },
+  "forgotPasswordDescription": "Enter your email. If it matches an account, we’ll send a secure reset link.",
+  "@forgotPasswordDescription": {
+    "description": "Enumeration-safe password-reset instructions."
+  },
+  "sendResetLinkButton": "Send reset link",
+  "@sendResetLinkButton": {
+    "description": "Password-reset request submit button."
+  },
+  "passwordRecoveryTitle": "Choose a new password",
+  "@passwordRecoveryTitle": {
+    "description": "Password recovery screen title."
+  },
+  "passwordRecoveryDescription": "Set a new password with at least 6 characters.",
+  "@passwordRecoveryDescription": {
+    "description": "Password recovery instructions."
+  },
+  "updatePasswordButton": "Update password",
+  "@updatePasswordButton": {
+    "description": "Password update submit button."
+  },
+  "cancelRecoveryButton": "Cancel and sign out",
+  "@cancelRecoveryButton": {
+    "description": "Button that abandons password recovery and signs out."
+  },
+  "onboardingTitle": "Choose your profile",
+  "@onboardingTitle": {
+    "description": "Profile onboarding title."
+  },
+  "onboardingDescription": "Your username will identify you in future community features and is permanent after onboarding. Your display name can be changed later.",
+  "@onboardingDescription": {
+    "description": "Profile onboarding decision explanation."
+  },
+  "usernameLabel": "Username",
+  "@usernameLabel": {
+    "description": "Username field label."
+  },
+  "usernameHelper": "3–24 lowercase letters, numbers, or underscores; start with a letter.",
+  "@usernameHelper": {
+    "description": "Username format helper."
+  },
+  "usernameImmutableHelper": "Your username is permanent after onboarding.",
+  "@usernameImmutableHelper": {
+    "description": "Read-only username explanation."
+  },
+  "displayNameLabel": "Display name",
+  "@displayNameLabel": {
+    "description": "Display name field label."
+  },
+  "displayNameHelper": "1–50 characters. You can change this later.",
+  "@displayNameHelper": {
+    "description": "Display-name format helper."
+  },
+  "finishProfileButton": "Finish profile",
+  "@finishProfileButton": {
+    "description": "Profile onboarding submit button."
+  },
+  "profileTitle": "Your profile",
+  "@profileTitle": {
+    "description": "Profile editing screen title."
+  },
+  "saveChangesButton": "Save changes",
+  "@saveChangesButton": {
+    "description": "Profile editing submit button."
+  },
+  "emailRequiredError": "Enter your email address.",
+  "@emailRequiredError": {
+    "description": "Required email validation error."
+  },
+  "emailInvalidError": "Enter a valid email address.",
+  "@emailInvalidError": {
+    "description": "Invalid email validation error."
+  },
+  "passwordRequiredError": "Enter your password.",
+  "@passwordRequiredError": {
+    "description": "Required password validation error."
+  },
+  "passwordTooShortError": "Use at least 6 characters.",
+  "@passwordTooShortError": {
+    "description": "Short password validation error."
+  },
+  "passwordsDoNotMatchError": "Passwords do not match.",
+  "@passwordsDoNotMatchError": {
+    "description": "Password confirmation validation error."
+  },
+  "usernameRequiredError": "Choose a username.",
+  "@usernameRequiredError": {
+    "description": "Required username validation error."
+  },
+  "usernameInvalidError": "Use 3–24 lowercase letters, numbers, or underscores, starting with a letter.",
+  "@usernameInvalidError": {
+    "description": "Invalid username validation error."
+  },
+  "displayNameRequiredError": "Enter a display name.",
+  "@displayNameRequiredError": {
+    "description": "Required display-name validation error."
+  },
+  "displayNameTooLongError": "Use 50 characters or fewer.",
+  "@displayNameTooLongError": {
+    "description": "Long display-name validation error."
+  },
+  "checkInboxMessage": "Check your inbox to verify your email before continuing.",
+  "@checkInboxMessage": {
+    "description": "Generic sign-up or unverified sign-in result."
+  },
+  "verificationSentMessage": "If the address can receive verification mail, a new message is on its way.",
+  "@verificationSentMessage": {
+    "description": "Enumeration-safe resend result."
+  },
+  "passwordResetSentMessage": "If the address matches an account, a reset link is on its way.",
+  "@passwordResetSentMessage": {
+    "description": "Enumeration-safe reset result."
+  },
+  "passwordUpdatedMessage": "Your password has been updated.",
+  "@passwordUpdatedMessage": {
+    "description": "Password update success."
+  },
+  "signInFailedMessage": "We couldn’t sign you in. Check your details and try again.",
+  "@signInFailedMessage": {
+    "description": "Enumeration-safe sign-in failure."
+  },
+  "operationFailedMessage": "Something went wrong. Please try again.",
+  "@operationFailedMessage": {
+    "description": "Generic operation failure."
+  },
+  "usernameUnavailableMessage": "That username isn’t available. Try another one.",
+  "@usernameUnavailableMessage": {
+    "description": "Username uniqueness failure."
+  },
+  "profileSavedMessage": "Profile saved.",
+  "@profileSavedMessage": {
+    "description": "Profile save success."
+  },
+  "accountLoadErrorTitle": "We couldn’t load your account",
+  "@accountLoadErrorTitle": {
+    "description": "Title shown when session or own-profile loading fails."
+  },
+  "accountLoadErrorDescription": "Check your connection and try again. If the problem continues, sign out and sign back in.",
+  "@accountLoadErrorDescription": {
+    "description": "Recovery advice for an own-profile request failure."
+  },
+  "tryAgainButton": "Try again",
+  "@tryAgainButton": {
+    "description": "Generic retry button."
   }
 }

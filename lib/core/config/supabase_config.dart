@@ -12,13 +12,30 @@ abstract final class SupabaseConfig {
       url.isNotEmpty != publishableKey.isNotEmpty;
 }
 
-Future<void> initializeSupabaseIfConfigured() async {
-  if (SupabaseConfig.isPartiallyConfigured) {
-    throw StateError(
-      'Set both SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY, or neither.',
-    );
-  }
+class AppConfiguration {
+  const AppConfiguration({
+    required this.isConfigured,
+    required this.isPartiallyConfigured,
+  });
 
+  const AppConfiguration.configured()
+      : isConfigured = true,
+        isPartiallyConfigured = false;
+
+  const AppConfiguration.missing()
+      : isConfigured = false,
+        isPartiallyConfigured = false;
+
+  final bool isConfigured;
+  final bool isPartiallyConfigured;
+
+  factory AppConfiguration.fromEnvironment() => AppConfiguration(
+        isConfigured: SupabaseConfig.isConfigured,
+        isPartiallyConfigured: SupabaseConfig.isPartiallyConfigured,
+      );
+}
+
+Future<void> initializeSupabaseIfConfigured() async {
   if (!SupabaseConfig.isConfigured) {
     return;
   }
