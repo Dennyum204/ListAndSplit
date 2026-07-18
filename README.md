@@ -5,8 +5,9 @@ reusable templates, a mutual-friend community, and an optional expense ledger.
 The repository provides the runnable Flutter foundation and current Phase 1
 identity/community slices: verified email/password authentication, session
 routing, password recovery, owner-only profile onboarding, secure exact-username
-discovery, and directional block management. Lists, templates, friendships,
-notifications, and the expense ledger remain planned work.
+discovery, directional block management, versioned friend requests, and mutual
+friendship management. Lists, templates, persistent notifications, and the
+expense ledger remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
@@ -163,6 +164,15 @@ no direct client grants, and direct profile reads remain owner-only. Discovery i
 an exact canonical-username lookup and returns only profile ID, username, and
 display name; missing and block-suppressed profiles share the same empty result.
 
+Friend requests and friendships use one retained, versioned
+`user_relationships` row per normalized profile pair. The Flutter client uses
+only reviewed summary, active-list, send, cancel, accept, decline, and end RPCs;
+it never reads or writes the relationship table directly. Caller-relative
+results expose only actionable status and minimal profile data. Declined/ended
+state, reopening control, block direction, and unavailable-state version metadata
+remain private. Block creation atomically cancels a pending request or ends a
+friendship, while unblocking restores no relationship.
+
 ### Hosted development Auth configuration
 
 Migrations configure database objects, but they do not configure hosted Auth email
@@ -195,10 +205,10 @@ SQL into the Dashboard.
 
 ## Intentional deferrals
 
-The current slices do not implement friend requests or friendships, unrestricted
-profile/directory search, avatars, lists, templates, notifications, reporting,
-realtime behavior, server-side ledger logic, SQLite caching/offline
-synchronization, push delivery, Firebase setup, account deletion/export, or a
-production backend. Effects of blocks on future shared resources remain open.
-Other open product and architecture choices are recorded in the project
-documentation and must be decided before their implementation slices.
+The current slices do not implement unrestricted profile/directory search,
+avatars, lists, templates, persistent notifications, reporting, Realtime,
+server-side ledger logic, SQLite caching/offline synchronization, push delivery,
+Firebase setup, account deletion/export, or a production backend. Effects of
+blocks or friendship changes on future shared resources remain open. Other open
+product and architecture choices are recorded in the project documentation and
+must be decided before their implementation slices.

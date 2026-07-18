@@ -4,6 +4,8 @@ import 'package:list_and_split/features/auth/domain/auth_repository.dart';
 import 'package:list_and_split/features/auth/domain/auth_session.dart';
 import 'package:list_and_split/features/community/domain/community_profile.dart';
 import 'package:list_and_split/features/community/domain/community_repository.dart';
+import 'package:list_and_split/features/community/domain/friendship_repository.dart';
+import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/profile/domain/profile_repository.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 
@@ -219,6 +221,108 @@ class FakeCommunityRepository implements CommunityRepository {
     if (completer != null) return completer.future;
     return List.unmodifiable(blockedProfiles);
   }
+}
+
+class FakeFriendshipRepository implements FriendshipRepository {
+  FriendshipSummary? summaryResult;
+  List<FriendshipSummary> activeRelationships = [];
+  Object? summaryFailure;
+  Object? listFailure;
+  Object? mutationFailure;
+  Completer<FriendshipSummary>? summaryCompleter;
+  Completer<List<FriendshipSummary>>? friendshipListCompleter;
+  Completer<void>? mutationCompleter;
+  final List<List<FriendshipSummary>> queuedRelationshipLists = [];
+
+  String? lastSummaryProfileId;
+  int summaryCalls = 0;
+  int friendshipListCalls = 0;
+  final List<FriendshipMutationCall> mutationCalls = [];
+
+  @override
+  Future<FriendshipSummary> getRelationshipSummary(String profileId) async {
+    summaryCalls += 1;
+    lastSummaryProfileId = profileId;
+    if (summaryFailure != null) throw summaryFailure!;
+    final completer = summaryCompleter;
+    if (completer != null) return completer.future;
+    final result = summaryResult;
+    if (result == null) {
+      throw const FriendshipFailure(FriendshipFailureCode.generic);
+    }
+    return result;
+  }
+
+  @override
+  Future<List<FriendshipSummary>> listActiveRelationships() async {
+    friendshipListCalls += 1;
+    if (listFailure != null) throw listFailure!;
+    final completer = friendshipListCompleter;
+    if (completer != null) return completer.future;
+    if (queuedRelationshipLists.isNotEmpty) {
+      return List.unmodifiable(queuedRelationshipLists.removeAt(0));
+    }
+    return List.unmodifiable(activeRelationships);
+  }
+
+  @override
+  Future<void> sendFriendRequest(
+    String profileId, {
+    required int? expectedVersion,
+  }) =>
+      _mutate('send', profileId, expectedVersion);
+
+  @override
+  Future<void> cancelFriendRequest(
+    String profileId, {
+    required int expectedVersion,
+  }) =>
+      _mutate('cancel', profileId, expectedVersion);
+
+  @override
+  Future<void> acceptFriendRequest(
+    String profileId, {
+    required int expectedVersion,
+  }) =>
+      _mutate('accept', profileId, expectedVersion);
+
+  @override
+  Future<void> declineFriendRequest(
+    String profileId, {
+    required int expectedVersion,
+  }) =>
+      _mutate('decline', profileId, expectedVersion);
+
+  @override
+  Future<void> endFriendship(
+    String profileId, {
+    required int expectedVersion,
+  }) =>
+      _mutate('end', profileId, expectedVersion);
+
+  Future<void> _mutate(
+    String operation,
+    String profileId,
+    int? expectedVersion,
+  ) async {
+    mutationCalls.add(
+      FriendshipMutationCall(operation, profileId, expectedVersion),
+    );
+    if (mutationFailure != null) throw mutationFailure!;
+    await mutationCompleter?.future;
+  }
+}
+
+class FriendshipMutationCall {
+  const FriendshipMutationCall(
+    this.operation,
+    this.profileId,
+    this.expectedVersion,
+  );
+
+  final String operation;
+  final String profileId;
+  final int? expectedVersion;
 }
 
 const verifiedSession = AuthSessionState(

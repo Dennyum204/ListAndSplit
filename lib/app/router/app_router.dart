@@ -19,6 +19,7 @@ import 'package:list_and_split/features/auth/presentation/sign_up_screen.dart';
 import 'package:list_and_split/features/auth/presentation/verification_screen.dart';
 import 'package:list_and_split/features/community/presentation/blocked_users_screen.dart';
 import 'package:list_and_split/features/community/presentation/community_screen.dart';
+import 'package:list_and_split/features/community/presentation/friendship_management_screen.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 import 'package:list_and_split/features/profile/presentation/onboarding_screen.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
@@ -131,6 +132,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.community,
         builder: (context, state) => const CommunityScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.friendships,
+        builder: (context, state) => const FriendshipManagementScreen(),
       ),
       GoRoute(
         path: AppRoutes.blockedUsers,

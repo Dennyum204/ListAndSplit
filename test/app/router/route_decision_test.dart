@@ -113,11 +113,17 @@ void main() {
     expect(complete.redirect(AppRoutes.foundation), isNull);
     expect(complete.redirect(AppRoutes.profile), isNull);
     expect(complete.redirect(AppRoutes.community), isNull);
+    expect(complete.redirect(AppRoutes.friendships), isNull);
     expect(complete.redirect(AppRoutes.blockedUsers), isNull);
     expect(complete.redirect(AppRoutes.signIn), AppRoutes.foundation);
   });
 
   test('community routes preserve verification and onboarding gates', () {
+    expect(
+      decision(session: const AuthSessionState.signedOut())
+          .redirect(AppRoutes.friendships),
+      AppRoutes.signIn,
+    );
     expect(
       decision(session: const AuthSessionState.signedOut())
           .redirect(AppRoutes.community),
@@ -128,8 +134,16 @@ void main() {
       AppRoutes.verification,
     );
     expect(
+      decision(session: unverifiedSession).redirect(AppRoutes.friendships),
+      AppRoutes.verification,
+    );
+    expect(
+      decision(session: recoverySession).redirect(AppRoutes.friendships),
+      AppRoutes.passwordRecovery,
+    );
+    expect(
       decision(profile: FakeProfileRepository.incompleteProfile)
-          .redirect(AppRoutes.community),
+          .redirect(AppRoutes.friendships),
       AppRoutes.onboarding,
     );
   });
