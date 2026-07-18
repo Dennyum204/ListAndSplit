@@ -13,6 +13,8 @@ abstract final class AppRoutes {
   static const accountError = '/account-error';
   static const foundation = '/';
   static const profile = '/profile';
+  static const community = '/community';
+  static const blockedUsers = '/community/blocked';
 }
 
 class AppRouteDecision {
@@ -79,7 +81,9 @@ class AppRouteDecision {
     }
 
     if (currentPath == AppRoutes.foundation ||
-        currentPath == AppRoutes.profile) {
+        currentPath == AppRoutes.profile ||
+        currentPath == AppRoutes.community ||
+        currentPath == AppRoutes.blockedUsers) {
       return null;
     }
     return AppRoutes.foundation;

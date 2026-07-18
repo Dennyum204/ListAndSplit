@@ -17,6 +17,8 @@ import 'package:list_and_split/features/auth/presentation/password_recovery_scre
 import 'package:list_and_split/features/auth/presentation/sign_in_screen.dart';
 import 'package:list_and_split/features/auth/presentation/sign_up_screen.dart';
 import 'package:list_and_split/features/auth/presentation/verification_screen.dart';
+import 'package:list_and_split/features/community/presentation/blocked_users_screen.dart';
+import 'package:list_and_split/features/community/presentation/community_screen.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 import 'package:list_and_split/features/profile/presentation/onboarding_screen.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
@@ -125,6 +127,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.profile,
         builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.community,
+        builder: (context, state) => const CommunityScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.blockedUsers,
+        builder: (context, state) => const BlockedUsersScreen(),
       ),
     ],
   );

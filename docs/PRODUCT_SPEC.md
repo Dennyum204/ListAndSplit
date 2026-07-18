@@ -90,16 +90,42 @@ used in new UI or documentation.
 
 ### Community
 
-- After basic blocking is available, a user can be found by a unique username
-  through a block-aware discovery contract.
-- A user can send, accept, or decline a friend request.
-- An accepted request creates a mutual friendship; it does not create a one-way
-  follower relationship.
+- Initial discovery is a deliberate exact lookup of one canonical username.
+  Input is trimmed and lowercased under the profile username rules; prefix,
+  substring, fuzzy, recommendation, directory, and all-user search are excluded.
+- Discovery excludes the current user, incomplete profiles, and any pair with an
+  active block in either direction. At most one result is returned, containing
+  only the target profile ID, username, and display name.
+- Invalid username syntax may be explained locally. A valid username that is
+  absent or unavailable because of blocking produces the same generic not-found
+  or unavailable result and never reveals who blocked whom.
+- Blocking is an independently directional, silent action. Either person's active
+  block creates symmetric separation for discovery, contact, future friend
+  requests, public profiles, public templates, and community feeds.
+- A user can privately list and remove only blocks they created. Blocking and
+  unblocking are idempotent; unblocking removes only the caller's outgoing block,
+  restores no relationship, and permits discovery again only after neither
+  directional block remains.
+- The blocker may see the username and display name associated with their own
+  outgoing blocks only through the private blocked-users management contract.
+- Future friend requests are directional, while friendship is mutual rather than
+  follower-based. Each unordered pair has one versioned current relationship
+  state; active directional blocks remain separate from that state.
+- Duplicate request sends are idempotent. Crossed requests atomically become a
+  friendship. The sender may cancel a pending request, the recipient may decline,
+  and requests do not automatically expire in the initial design.
+- The person who declines a request or ends a friendship controls reopening by
+  initiating the next request. Relationship transitions are atomic and safe under
+  duplicate or stale actions.
+- When requests and friendships exist, creating a block atomically cancels pending
+  requests in both directions and ends an existing friendship. This direction
+  does not authorize their schema in the blocking/discovery slice.
 - Only accepted friends can be invited to a shared active list.
 - A user's public templates can be viewed from that user's profile.
 - The community feed shows recent public templates from accepted friends.
-- Basic blocking must be delivered in Phase 1 before friend discovery and requests.
-  Detailed block effects and content/user reporting still require separate design.
+- Blocking effects on existing or future shared resources, including active-list
+  membership, remain unresolved and must be decided before shared lists ship.
+  Reporting, moderation, evidence retention, and appeals remain future work.
 
 ### Payment Control
 
@@ -154,9 +180,11 @@ restoration, notification links, and feature deep links remain open.
   users who require it.
 - PostgreSQL Row Level Security is a mandatory server-side authorization layer; UI
   visibility is not an authorization control.
-- The initial profile capability exposes no cross-user reads. Basic blocking must
-  precede friend discovery and requests; its effects on existing relationships,
-  shared resources, and future public content are not yet designed.
+- The profile table remains owner-only. Cross-user identity is disclosed only by
+  narrow block-aware contracts that return the approved minimal profile fields.
+- Blocks apply symmetrically to discovery and future community contact even though
+  each block record is directional. Effects on existing shared resources remain
+  unresolved.
 - Reporting and moderation are required before the public-content experience is
   considered mature, but their detailed behavior is not yet designed.
 
@@ -202,8 +230,8 @@ choose them:
 - A support or administrator correction process for immutable usernames, including
   its authorization and audit requirements.
 - Avatar storage, upload validation, privacy, replacement, and deletion lifecycle.
-- Friend-request cancellation, expiry, retry, crossed/duplicate-request behavior,
-  unfriending, and the detailed effects of blocking.
+- The effects of blocking or ending a friendship on existing shared resources,
+  including active-list membership and invitations.
 - Template/category ordering, copy visibility defaults, version/provenance display,
   and feed ranking/retention.
 - Invitation and sent-template expiry, revocation, and idempotent re-acceptance.
@@ -211,8 +239,7 @@ choose them:
   remainder allocation, expense correction, settlement reversal, and debt
   simplification rules.
 - Notification retention, read/archive behavior, badge counts, and push preferences.
-- Blocking/reporting scope, moderation workflow, evidence retention, and appeal
-  behavior.
+- Reporting scope, moderation workflow, evidence retention, and appeal behavior.
 - Offline conflict resolution and which operations are permitted while offline.
 - Account deletion/export, retention and re-registration behavior, and initial
   additional locales.

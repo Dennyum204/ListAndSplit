@@ -30,8 +30,8 @@ without prematurely freezing the physical schema.
 
 ```text
 Auth User --1:1-- Profile
-Profile --< Friend Request >-- Profile
-Profile --< mutual Friendship >-- Profile
+Profile --blocks (directional)--> Profile
+Profile --< versioned Relationship state >-- Profile
 
 Profile --creates--> Active List --< List Member >-- Profile
 Active List --< List Item --< Item Assignment >-- List Member
@@ -77,10 +77,33 @@ Accepted field invariants are:
   user can read only their own profile and update only approved fields; clients
   cannot insert or delete profile records.
 
-Cross-user username discovery is deferred until a basic blocking model and
-block-aware access contract exist. A future support/administrator correction path
-for immutable usernames, avatar storage/lifecycle, and account deletion/export
-remain open decisions.
+Cross-user identity is disclosed only through narrow block-aware contracts. Exact
+canonical-username discovery returns at most one fully onboarded profile and only
+its ID, username, and display name. It excludes the caller and any pair with a
+block in either direction. A future support/administrator correction path for
+immutable usernames, avatar storage/lifecycle, and account deletion/export remain
+open decisions.
+
+### Active directional block
+
+An active block records one profile (`blocker`) silently blocking another
+(`blocked`). The physical model uses one active row per ordered pair and prohibits
+self-blocking. Reciprocal rows are valid because each user acts independently.
+The creation time is database-managed; no unlimited block event/history record is
+introduced.
+
+Any active row in either direction creates symmetric separation for exact
+discovery, future friend requests and contact, and future public profile/template/
+feed visibility. Only the blocker can privately list or remove their outgoing
+row. Blocking and unblocking are idempotent. Removing A's A-to-B row does not
+remove B's B-to-A row, restore a relationship, or make discovery available while
+the reciprocal row remains.
+
+The blocker may receive the target's ID, username, and display name through the
+private outgoing-block management projection. Incoming-only and unrelated blocks
+are never disclosed. Account deletion/retention and shared-resource effects remain
+open, so the block model does not select cascading profile deletion or active-list
+membership behavior.
 
 ### Friend request
 
@@ -88,25 +111,28 @@ A friend request is directional: one authenticated user requests friendship with
 another. It supports at least pending, accepted, and declined outcomes because the
 recipient must explicitly Accept or Decline.
 
-Expected invariants:
+Accepted lifecycle invariants for the future implementation:
 
 - A user cannot request themselves.
-- Only the recipient can accept or decline a pending request.
-- Acceptance creates one mutual friendship, atomically and idempotently.
-- Duplicate pending requests and crossed requests must have a defined server-side
-  resolution before implementation.
+- Duplicate request sends are idempotent.
+- Crossed pending requests atomically become a friendship.
+- The sender may cancel; only the recipient may decline.
+- Requests do not automatically expire in the initial design.
+- Acceptance creates the mutual friendship atomically and idempotently.
+- A block in either direction prevents request creation. Creating a block later
+  atomically cancels pending requests in both directions and ends the friendship.
+- The person who declines or ends a friendship controls reopening by initiating
+  the next request.
+- All transitions are versioned, atomic, and safe under stale or duplicate input.
 
 ### Friendship
 
 A friendship is an unordered, mutual relationship between two profiles. Neither
-side is a follower. The physical model must enforce a single relationship per pair
-regardless of pair ordering. Ending a friendship and its effect on existing shared
-lists are not yet specified.
-
-Blocking is planned. Its interaction with search, requests, existing friendships,
-shared lists, feed visibility, and templates requires a separate reviewed design.
-The accepted sequence is to implement a minimal block model before enabling friend
-discovery or requests; that sequence does not decide those detailed effects.
+side is a follower. Each unordered pair will have one versioned current
+relationship state rather than contradictory independent states or an unlimited
+event log. Active directional blocks remain separate from this state. Ending a
+friendship and the effects of relationship/block changes on existing shared lists
+remain unresolved.
 
 ## Active-list aggregate
 
@@ -268,12 +294,11 @@ invalidation, and privacy rules must be designed before push implementation.
 
 ## Future safety records
 
-Basic blocking is required in Phase 1 before friend discovery and requests.
-Reporting remains required before public content is considered mature. Their
-records, policy visibility, detailed effects on existing relationships/resources,
-moderation roles, evidence retention, and appeal behavior are intentionally not
-designed here. Resolve them before the next social migration rather than
-improvising them in schema.
+Directional blocking and exact block-aware username discovery precede friend
+requests in Phase 1. Reporting remains required before public content is
+considered mature. Reporting records, moderation roles, evidence retention,
+appeals, and block effects on existing shared resources are intentionally not
+designed here.
 
 ## Row Level Security expectations
 
@@ -283,7 +308,8 @@ anonymous denial unless public read is explicitly intended.
 
 | Data area | Minimum expected access boundary |
 | --- | --- |
-| Profiles | Initial access is authenticated owner-only select and approved-field update; cross-user discovery requires a later block-aware policy |
+| Profiles | Direct access remains authenticated owner-only select and approved-field update; exact cross-user discovery uses only the approved block-aware minimal projection |
+| Active blocks | RPC-only application access; the caller can create/remove/list only outgoing blocks, while incoming and unrelated rows remain private |
 | Friend requests | Requester and recipient only; only recipient changes Accept/Decline state |
 | Friendships | The two members only, except deliberately exposed public relationship data if later approved |
 | Active lists and memberships | Current authorized members; invitees see only invitation-safe list data |
@@ -295,7 +321,7 @@ anonymous denial unless public read is explicitly intended.
 | Expenses, shares, settlements, balances | Authorized members of the enabled active list, subject to final ledger roles |
 | Notifications | Recipient only; related actors do not gain notification-row access |
 | Storage objects | Same ownership/membership rules as the parent application record |
-| Future blocks/reports | Strictly limited to involved user and authorized moderation paths |
+| Future reports | Strictly limited to the reporter and authorized moderation paths |
 
 Policies must derive identity from `auth.uid()` and server-owned relationships, not
 from a user ID supplied by the Flutter client. Privileged functions require
@@ -305,10 +331,11 @@ explicit grants, protected search paths, and adversarial policy/function tests.
 
 - Identifier types, timestamp/audit conventions, soft delete, and archival for
   later aggregates beyond the accepted profile record.
-- Support/administrator correction and audit rules for immutable usernames; future
-  block-aware username discovery/search strategy.
+- Support/administrator correction and audit rules for immutable usernames.
 - Avatar Storage, validation, replacement, retention, and deletion lifecycle.
-- Friendship/request uniqueness, history retention, and block interaction.
+- Exact relationship-state values, version-transition storage, and any limited
+  relationship audit retention beyond the accepted one-current-state model.
+- Block effects on existing shared resources and later account deletion/retention.
 - List role model and membership lifecycle.
 - Quantity/unit types and ordering strategy.
 - Mention representation and parser ownership.
@@ -319,4 +346,4 @@ explicit grants, protected search paths, and adversarial policy/function tests.
 - Notification payload schema, retention, localization, and push token tables.
 - Optimistic concurrency/version fields, realtime publication, offline mutation
   identifiers, tombstones, and conflict resolution.
-- Reporting/blocking schema and moderation authorization.
+- Reporting schema and moderation authorization.

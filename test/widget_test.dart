@@ -9,6 +9,8 @@ import 'package:list_and_split/core/config/supabase_config.dart';
 import 'package:list_and_split/features/auth/domain/auth_repository.dart';
 import 'package:list_and_split/features/auth/domain/auth_session.dart';
 import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
+import 'package:list_and_split/features/community/domain/community_profile.dart';
+import 'package:list_and_split/features/community/presentation/community_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 
 import 'helpers/fakes.dart';
@@ -400,7 +402,7 @@ void main() {
     expect(find.text('List & Split'), findsOneWidget);
     expect(find.text('Welcome, Fernando'), findsOneWidget);
     expect(
-      find.textContaining('Collaborative lists arrive in a later phase'),
+      find.textContaining('collaborative lists arrive in a later phase'),
       findsOneWidget,
     );
     expect(find.byIcon(Icons.checklist_rounded), findsOneWidget);
@@ -416,6 +418,223 @@ void main() {
     expect(usernameField.readOnly, isTrue);
     expect(find.text('fernando_1'), findsOneWidget);
     expect(find.textContaining('permanent after onboarding'), findsWidgets);
+    await auth.close();
+  });
+
+  testWidgets('exact discovery validates, canonicalizes, and confirms block',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final community = FakeCommunityRepository()
+      ..searchResult = const DiscoveredProfile(
+        id: 'profile-2',
+        username: 'beta_user',
+        displayName: 'Beta User',
+      );
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      community: community,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('communityUsername')),
+      'invalid username',
+    );
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('starting with a letter'), findsOneWidget);
+    expect(community.searchCalls, 0);
+
+    await tester.enterText(
+      find.byKey(const Key('communityUsername')),
+      '  BETA_USER  ',
+    );
+    expect(community.searchCalls, 0);
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+
+    expect(community.lastUsername, 'beta_user');
+    expect(find.text('Beta User'), findsOneWidget);
+    expect(find.text('@beta_user'), findsOneWidget);
+    expect(find.textContaining('profile-2'), findsNothing);
+    expect(find.text('Add friend'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('blockSearchResultButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('Block @beta_user?'), findsOneWidget);
+    expect(find.textContaining('won’t be notified'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(community.blockCalls, 0);
+
+    await tester.tap(find.byKey(const Key('blockSearchResultButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmBlockButton')));
+    await tester.pumpAndSettle();
+
+    expect(community.blockCalls, 1);
+    expect(community.lastBlockedProfileId, 'profile-2');
+    expect(find.byKey(const Key('communitySearchResult')), findsNothing);
+    expect(find.textContaining('Profile blocked'), findsOneWidget);
+    await auth.close();
+  });
+
+  testWidgets('missing exact discovery uses the generic unavailable result',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final community = FakeCommunityRepository();
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      community: community,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('communityUsername')),
+      'missing_user',
+    );
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('No matching profile was found or is available.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('blocked by'), findsNothing);
+    await auth.close();
+  });
+
+  testWidgets('blocked users are private and unblock requires confirmation',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final community = FakeCommunityRepository()
+      ..blockedProfiles = const [
+        BlockedProfile(
+          id: 'profile-2',
+          username: 'beta_user',
+          displayName: 'Beta User',
+        ),
+      ];
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      community: community,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('manageBlockedUsersButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Blocked users'), findsOneWidget);
+    expect(find.text('Beta User'), findsOneWidget);
+    expect(find.text('@beta_user'), findsOneWidget);
+    expect(
+        find.textContaining('Incoming blocks are never shown'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('unblockProfile-profile-2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Unblock @beta_user?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(community.unblockCalls, 0);
+
+    await tester.tap(find.byKey(const Key('unblockProfile-profile-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmUnblockButton')));
+    await tester.pumpAndSettle();
+
+    expect(community.unblockCalls, 1);
+    expect(find.text('No blocked users'), findsOneWidget);
+    expect(find.textContaining('No relationship was restored'), findsOneWidget);
+    await auth.close();
+  });
+
+  testWidgets('blocked-user load failures can be retried safely',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final community = FakeCommunityRepository()
+      ..listFailure = StateError('database details');
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      community: community,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('manageBlockedUsersButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('Something went wrong. Please try again.'), findsWidgets);
+
+    community.listFailure = null;
+    await tester.tap(find.byKey(const Key('retryBlockedUsersButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('No blocked users'), findsOneWidget);
+    expect(community.listCalls, 2);
+    await auth.close();
+  });
+
+  testWidgets('community search state clears across session changes',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final community = FakeCommunityRepository()
+      ..searchResult = const DiscoveredProfile(
+        id: 'profile-2',
+        username: 'beta_user',
+        displayName: 'Beta User',
+      );
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      community: community,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('communityUsername')),
+      'beta_user',
+    );
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('communitySearchResult')), findsOneWidget);
+
+    auth.emit(const AuthSessionState.signedOut());
+    await tester.pumpAndSettle();
+    expect(find.text('Welcome back'), findsOneWidget);
+
+    auth.emit(verifiedSession);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('communitySearchResult')), findsNothing);
     await auth.close();
   });
 
@@ -442,6 +661,7 @@ Future<void> _pumpConfiguredApp(
   WidgetTester tester, {
   required FakeAuthRepository auth,
   required FakeProfileRepository profile,
+  FakeCommunityRepository? community,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -451,6 +671,9 @@ Future<void> _pumpConfiguredApp(
         ),
         authRepositoryProvider.overrideWithValue(auth),
         profileRepositoryProvider.overrideWithValue(profile),
+        communityRepositoryProvider.overrideWithValue(
+          community ?? FakeCommunityRepository(),
+        ),
       ],
       child: const ListAndSplitApp(),
     ),

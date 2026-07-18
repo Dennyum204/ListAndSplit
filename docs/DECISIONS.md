@@ -35,7 +35,10 @@ and data-model documents in the same pull request.
 | P-017 | Initial authentication uses email and password only. Email verification is mandatory before authenticated application access; sign-up, sign-in, sign-out, verification resend, forgotten-password, and password-recovery flows are required. New and replacement passwords require at least eight characters, and confirmation must match the unmodified password exactly. | Google, Apple, anonymous, magic-link-only, and other providers are excluded from the initial release. Authentication errors must not disclose account existence where that would be inappropriate. Passwords are not trimmed, lowercased, or subject to composition rules. |
 | P-018 | A user chooses a username during onboarding after authentication and email verification. It is trimmed, lowercased, globally unique, matches `^[a-z][a-z0-9_]{2,23}$`, and becomes immutable after onboarding. Display name is separate, trimmed, non-unique, editable, and 1-50 characters. | PostgreSQL enforces canonicalization, validation, uniqueness, and immutability. Email remains private and is never copied into public profile data. |
 | P-019 | The initial profile slice is owner-only: a user can read and update only their own approved profile fields. Cross-user discovery waits for a block-aware friendship slice. | A permissive interim profile-read policy is prohibited. Avatar editing remains accepted future behavior, outside the initial profile slice. |
-| P-020 | Basic user blocking is sequenced in Phase 1 before username discovery and friend requests. | The detailed block/friendship lifecycle must be resolved before their migration; this decision does not itself authorize block or friendship schema. |
+| P-020 | Basic user blocking is sequenced in Phase 1 before username discovery and friend requests. | The blocking/discovery slice is independently reviewable and does not authorize friend request or friendship schema. |
+| P-021 | Blocking is a silent, independently directional action, while any active block in either direction creates symmetric separation. Users privately manage only their outgoing blocks; block and unblock are idempotent, unblock removes only the caller's row, and no relationship is restored. | Exact discovery, future friend requests/contact, and future public profile/template/feed visibility exclude either-direction blocks. Missing and block-suppressed usernames share one generic result. Shared-resource effects and reporting/moderation remain open. |
+| P-022 | Initial discovery is exact canonical-username lookup only. It trims/lowercases input, excludes self, incomplete profiles, and either-direction blocks, and returns at most one profile ID, username, and display name. | No directory, prefix, substring, fuzzy, recommendation, unrestricted profile read, email, Auth metadata, timestamp, or onboarding-state disclosure is permitted. |
+| P-023 | Future friendships use one versioned current relationship state per unordered profile pair, separate from directional blocks. Duplicate sends are idempotent, crossed requests become friendship, senders can cancel, recipients can decline, requests do not initially expire, and the person declining/ending controls reopening. | Transitions are atomic and stale/retry-safe. Creating a block later cancels pending requests both ways and ends friendship, but this decision does not authorize friendship/request schema in the blocking/discovery slice. |
 
 ### Architecture and delivery
 
@@ -60,6 +63,7 @@ and data-model documents in the same pull request.
 | A-017 | Public Supabase client configuration uses the compile-time names `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`. The mobile Auth callback is `com.ferbatech.listandsplit://auth-callback`. | Only public/publishable client values enter Flutter. Android and iOS register the callback without changing application identifiers. |
 | A-018 | Session routing is centralized in `go_router` and gates destinations in this order: backend configuration, authentication, email verification, then profile onboarding. Password-recovery callbacks enter the new-password flow. | Redirect logic is deterministic, repository-backed, and testable without a live backend. |
 | A-019 | The initial profile is a one-to-one application record for an `auth.users` identity. A server-owned creation mechanism allows nullable onboarding fields; RLS and explicit Data API grants permit authenticated owner read and approved-field update only. | Anonymous and cross-user access, plus client insert/delete, are denied. Authorization does not rely on user-editable Auth metadata. |
+| A-020 | Active directional blocks use a narrowly scoped application table with RLS and RPC-only client access. Exact discovery and outgoing-block management use minimal privileged projections derived exclusively from `auth.uid()`, without broadening owner-only profile SELECT. | Privileged functions pin an empty `search_path`, fully qualify objects, validate completed profiles, revoke default execution, grant only exact authenticated signatures, and return only approved fields. |
 
 ## Deferred but accepted direction
 
@@ -69,8 +73,8 @@ These items are part of the agreed direction but intentionally deferred:
 - Supabase Realtime integration after repository reconciliation rules exist.
 - FCM and APNs push delivery; Firebase project creation requires separate explicit
   authorization.
-- Basic blocking before discovery and friend requests; detailed block effects and
-  reporting/moderation behavior remain deferred decisions.
+- Friend request/friendship schema after the accepted blocking/discovery slice;
+  shared-resource block effects and reporting/moderation remain deferred.
 - Production backend/environment creation under a separate explicit authorization.
 
 ## Open product decisions
@@ -81,7 +85,7 @@ These items are part of the agreed direction but intentionally deferred:
 | O-P02 | What quantity precision, unit vocabulary, item ordering, duplicate, completion-audit, and concurrent-edit rules apply? |
 | O-P03 | How are `@mentions` parsed, validated, edited, deduplicated, and rendered? |
 | O-P04 | What support or administrator correction path, if any, exists for an immutable username, and what audit/authorization rules govern it? |
-| O-P05 | How do crossed/duplicate requests, cancellation, expiry, re-request, unfriending, and blocking affect friendships? |
+| O-P05 | How do blocking or friendship termination affect existing shared resources, including list membership and invitations? |
 | O-P06 | Can templates be in multiple categories; what are ordering, default copied visibility/category, attribution, and provenance rules? |
 | O-P07 | What defines “recent” and ranking/pagination/retention in the friends' public-template feed? |
 | O-P08 | When do list invitations and sent-template offers expire or become revocable, and what should repeated acceptance return? |
@@ -89,7 +93,7 @@ These items are part of the agreed direction but intentionally deferred:
 | O-P10 | How is an equal-split remainder allocated deterministically; may the payer be excluded; and how are exact shares validated? |
 | O-P11 | What are expense correction/deletion, member-removal, settlement direction/reversal, and debt-simplification/display rules? |
 | O-P12 | What are notification read/archive/retention/badge/preferences rules and what content is safe for push? |
-| O-P13 | What precisely does blocking hide or revoke, and what are reporting, moderation, evidence, retention, and appeal workflows? |
+| O-P13 | What are the reporting, moderation, evidence-retention, and appeal workflows? |
 | O-P14 | Which operations work offline, how are conflicts presented, and what promise can the UI make while disconnected? |
 | O-P15 | What are the account deletion/export, data-retention, re-registration, and related identity-lifecycle rules, and which additional locales ship first? |
 | O-P16 | When does avatar editing ship, where are avatar objects stored, and what validation, privacy, replacement, and deletion lifecycle applies? |
@@ -106,7 +110,7 @@ These items are part of the agreed direction but intentionally deferred:
 | O-A06 | What realtime subscription scope, event ordering, reconnect/replay, and repository reconciliation rules apply? |
 | O-A07 | Which SQLite package, cache schema, mutation queue, tombstone, retry, and conflict algorithm should be used? |
 | O-A08 | What physical identifiers, audit timestamps, archival/soft-delete conventions, indexes, and enum/check-constraint strategy should later aggregates use beyond the accepted profile record? |
-| O-A09 | What is the physical friendship uniqueness/history model and how is block state enforced across RLS policies? |
+| O-A09 | What exact columns, states, indexes, transition versioning, and limited audit retention implement the accepted one-current-state-per-unordered-pair friendship model? |
 | O-A10 | What is the mention-storage model and which layer owns parsing? |
 | O-A11 | What server algorithm and stable output contract calculate balances and debts, and are derived results computed on demand or projected? |
 | O-A12 | What notification payload, localization, retention, push-token, and delivery-attempt schema is needed? |

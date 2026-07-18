@@ -2,10 +2,11 @@
 
 List & Split is an Android and iOS app for collaborative active lists,
 reusable templates, a mutual-friend community, and an optional expense ledger.
-The repository provides the runnable Flutter foundation and the first Phase 1
-identity slice: verified email/password authentication, session routing, password
-recovery, and owner-only profile onboarding. Lists, templates, friendships,
-notifications, blocking, and the expense ledger remain planned work.
+The repository provides the runnable Flutter foundation and current Phase 1
+identity/community slices: verified email/password authentication, session
+routing, password recovery, owner-only profile onboarding, secure exact-username
+discovery, and directional block management. Lists, templates, friendships,
+notifications, and the expense ledger remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
@@ -155,6 +156,13 @@ client key. Never put a Supabase `service_role` key, secret key, access token,
 database password, signing material, or other privileged credential in Flutter or
 Git.
 
+Community discovery and block management use only the reviewed
+`find_profile_by_username`, `block_profile`, `unblock_profile`, and
+`list_blocked_profiles` RPC contracts. The `user_blocks` table has RLS enabled but
+no direct client grants, and direct profile reads remain owner-only. Discovery is
+an exact canonical-username lookup and returns only profile ID, username, and
+display name; missing and block-suppressed profiles share the same empty result.
+
 ### Hosted development Auth configuration
 
 Migrations configure database objects, but they do not configure hosted Auth email
@@ -187,10 +195,10 @@ SQL into the Dashboard.
 
 ## Intentional deferrals
 
-The identity slice does not expose cross-user profile search or implement avatar
-upload, blocking, friendships, lists, templates, notifications, realtime behavior,
-server-side ledger logic, SQLite caching/offline synchronization, push delivery,
-Firebase setup, account deletion/export, or a production backend. Basic blocking
-must precede friend discovery and requests. Open product and architecture choices
-are recorded in the project documentation and must be decided before their
-implementation slices.
+The current slices do not implement friend requests or friendships, unrestricted
+profile/directory search, avatars, lists, templates, notifications, reporting,
+realtime behavior, server-side ledger logic, SQLite caching/offline
+synchronization, push delivery, Firebase setup, account deletion/export, or a
+production backend. Effects of blocks on future shared resources remain open.
+Other open product and architecture choices are recorded in the project
+documentation and must be decided before their implementation slices.

@@ -97,6 +97,12 @@ and view models depend on the repository contracts, so validation, asynchronous
 state, sign-out, recovery, onboarding, and redirects can be tested with fakes and
 without a live Supabase project.
 
+The initial community slice follows the same boundary: a community repository owns
+exact-username discovery and outgoing block management. Its Supabase implementation
+calls only reviewed RPC contracts. Widgets and Riverpod controllers never query
+profiles or block rows directly, and community behavior remains testable with
+repository fakes.
+
 ### Generated models
 
 Freezed and JSON serialization may be used for immutable state and boundary
@@ -131,6 +137,11 @@ The registered mobile Auth callback is
 changing either platform identifier. Final signed-in route nesting, restoration,
 notification-link behavior, and other feature deep links remain open. Redirect
 decisions are centralized and covered by navigation/widget tests.
+
+Exact community discovery and blocked-user management are authenticated,
+post-onboarding routes. They use the same configuration, session, verification,
+recovery, and onboarding gates as the foundation and profile destinations. This
+does not introduce the planned four-tab root shell.
 
 ## Backend architecture
 
@@ -178,6 +189,41 @@ on `auth.uid()`, never `user_metadata` or another user-editable JWT field. Any
 server function that crosses the Auth/application boundary uses qualified object
 names, a pinned safe `search_path`, revoked default execution, and the minimum
 required rights.
+
+### Blocking and discovery boundary
+
+Active blocks are directional rows between two fully onboarded profiles, with one
+active row per direction, a self-block constraint, and a database-managed creation
+timestamp. They remain separate from the future friendship relationship state.
+Account deletion behavior is unresolved, so block foreign keys do not silently
+select cascading deletion semantics.
+
+The block table is not a general client-readable or client-writable Data API
+surface. Authenticated application access uses narrowly granted functions for:
+
+- exact canonical-username discovery;
+- idempotent block creation;
+- idempotent removal of the caller's outgoing block; and
+- the caller's private outgoing-block projection.
+
+These contracts derive the actor only from `auth.uid()`, require completed caller
+and target profiles where relevant, and return only profile ID, username, and
+display name. Discovery excludes self and any pair blocked in either direction.
+Missing and block-suppressed targets have the same empty result. The existing
+owner-only profile policy is not broadened.
+
+Cross-user profile projection requires a deliberately small `security definer`
+boundary. Every privileged function has an empty pinned `search_path`, fully
+qualified references, explicit caller validation, revoked default execution, and
+an exact `authenticated` signature grant. Anonymous execution and unrestricted
+table access remain denied. Block/unblock operations are atomic and idempotent.
+
+Future friend requests and friendships use one versioned current relationship
+state per unordered profile pair rather than contradictory directional states or
+an unlimited event log. Blocks remain directional records outside that state.
+Duplicate sends, crossed requests, cancellation, decline, friendship termination,
+and reopening are atomic server transitions designed to tolerate retry and stale
+clients. No friendship or request schema is part of the blocking/discovery slice.
 
 ### Client configuration
 
@@ -268,7 +314,7 @@ reconciliation, not as direct UI mutations.
 
 ## Open architecture decisions
 
-- Account deletion/export, retention, and related Auth/profile lifecycle.
+- Account deletion/export, retention, and related Auth/profile/block lifecycle.
 - Precise feature folder layering and whether Riverpod code generation is used.
 - Final authenticated route topology, state restoration, notification links, and
   non-Auth feature deep links.
@@ -277,7 +323,9 @@ reconciliation, not as direct UI mutations.
 - Realtime subscription granularity, reconnect/replay behavior, and event ordering.
 - SQLite library, cache schema, synchronization algorithm, conflict policy, and
   background execution limits.
-- Stable identifiers/version fields needed for optimistic concurrency.
+- Exact physical columns, state values, and audit retention for the accepted
+  versioned one-state-per-unordered-pair friendship model.
+- How blocking or relationship changes affect existing shared resources.
 - Avatar and other Storage use cases, upload validation, object policies, and
   retention.
 - Logging, analytics, crash reporting, performance budgets, and privacy controls.
