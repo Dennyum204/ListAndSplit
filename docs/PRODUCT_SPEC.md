@@ -100,7 +100,7 @@ used in new UI or documentation.
   absent or unavailable because of blocking produces the same generic not-found
   or unavailable result and never reveals who blocked whom.
 - Blocking is an independently directional, silent action. Either person's active
-  block creates symmetric separation for discovery, contact, future friend
+  block creates symmetric separation for discovery, contact, friend
   requests, public profiles, public templates, and community feeds.
 - A user can privately list and remove only blocks they created. Blocking and
   unblocking are idempotent; unblocking removes only the caller's outgoing block,
@@ -108,18 +108,42 @@ used in new UI or documentation.
   directional block remains.
 - The blocker may see the username and display name associated with their own
   outgoing blocks only through the private blocked-users management contract.
-- Future friend requests are directional, while friendship is mutual rather than
-  follower-based. Each unordered pair has one versioned current relationship
-  state; active directional blocks remain separate from that state.
-- Duplicate request sends are idempotent. Crossed requests atomically become a
-  friendship. The sender may cancel a pending request, the recipient may decline,
-  and requests do not automatically expire in the initial design.
-- The person who declines a request or ends a friendship controls reopening by
-  initiating the next request. Relationship transitions are atomic and safe under
-  duplicate or stale actions.
-- When requests and friendships exist, creating a block atomically cancels pending
-  requests in both directions and ends an existing friendship. This direction
-  does not authorize their schema in the blocking/discovery slice.
+- Friend requests are directional while friendship is mutual rather than
+  follower-based. Each unordered profile pair has one persistent, versioned
+  current relationship row with a physical state of `pending`, `friends`,
+  `cancelled`, `declined`, or `ended`; requests and friendships are not separate
+  tables and this slice keeps no relationship event log.
+- A pending row identifies the current requester. The most recent requester is
+  retained internally after a transition for authorization and idempotency, but
+  is not exposed unnecessarily. Declined and ended rows identify the participant
+  who controls reopening.
+- Duplicate sends and repeated already-completed caller-authorized actions are
+  idempotent. Crossed pending requests atomically become friendship. The requester
+  may cancel, the recipient may accept or decline, either friend may end the
+  friendship, and requests do not automatically expire in the initial design.
+- Either participant may send again after cancellation. Only the participant who
+  declined or ended a friendship may initiate the next request after that outcome.
+  Blocking a pending request changes it to cancelled and permits either participant
+  to send again after all blocks are removed. Blocking friends changes the state to
+  ended with the blocker controlling reopening. Unblocking never restores a
+  request or friendship.
+- Every real relationship transition increments a positive, monotonically
+  increasing version and updates a server-owned state-change timestamp. Duplicate
+  no-ops change neither value, and stale conflicting actions fail without
+  overwriting newer state.
+- A send from a first-load or preloaded result may omit an expected version for
+  first, duplicate-pending, or crossed-pending behavior. Reopening a cancelled,
+  declined, or ended row requires its exact current version.
+- Client-facing relationship results use caller-relative states such as `can-send`,
+  `incoming-pending`, `outgoing-pending`, `friends`, or `unavailable`. They do not
+  reveal raw declined/ended state or the reopening controller to the other
+  participant.
+- Only the current row, version, creation and state-change times, most recent
+  requester, and reopening controller are retained. Detailed audit history is not
+  introduced; account deletion and retention remain unresolved.
+- This relationship-management slice does not introduce persistent notifications,
+  Realtime, push delivery, public profiles, shared lists, or the final four-tab
+  shell.
 - Only accepted friends can be invited to a shared active list.
 - A user's public templates can be viewed from that user's profile.
 - The community feed shows recent public templates from accepted friends.

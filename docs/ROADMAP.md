@@ -60,15 +60,20 @@ Candidate slices:
 - Implement active directional block/unblock, private outgoing-block management,
   and secure exact canonical-username discovery with symmetric either-direction
   separation.
-- After that gate, implement atomic friend request send/cancel/decline and the
-  versioned one-current-state-per-unordered-pair mutual friendship model.
+- After that gate, implement the resolved RPC-only relationship model: atomic
+  send/cancel/accept/decline/end transitions, caller-relative active lists, strict
+  reopening control, expected-version conflict protection, and the versioned
+  one-current-state-per-unordered-pair mutual friendship contract.
 - Introduce the persistent in-app notification infrastructure for friend requests.
 - Resolve and implement the Phase 1 account deletion/export lifecycle.
 - Add RLS and database-function tests for every relationship transition.
 
-Before friend request schema, preserve the accepted collision, retry, cancellation,
-decline, reopening, and block-transition rules. Shared-resource block effects must
-be resolved before shared lists ship. Resolve the immutable-username support/admin
+The friend relationship schema gate O-A09 is resolved: one current row uses the
+five accepted states, deterministic pair locking, monotonic versions, server-owned
+state-change time, and no detailed event log. The relationship slice does not
+include persistent notifications, Realtime, push delivery, public profiles, shared
+lists, or the final navigation shell. Shared-resource block effects must be
+resolved before shared lists ship. Resolve the immutable-username support/admin
 correction path, avatar storage lifecycle, and account deletion/export/retention
 behavior before the later slices that encode them.
 

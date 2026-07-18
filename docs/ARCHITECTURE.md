@@ -103,6 +103,12 @@ calls only reviewed RPC contracts. Widgets and Riverpod controllers never query
 profiles or block rows directly, and community behavior remains testable with
 repository fakes.
 
+Friend-request and friendship behavior extends that repository boundary with
+caller-relative relationship summaries, active relationship lists, and reviewed
+mutation RPCs. Widgets and controllers receive domain models rather than physical
+relationship states or database rows. Repository failures, including stale-version
+conflicts, are translated into privacy-safe feature outcomes and refresh behavior.
+
 ### Generated models
 
 Freezed and JSON serialization may be used for immutable state and boundary
@@ -142,6 +148,11 @@ Exact community discovery and blocked-user management are authenticated,
 post-onboarding routes. They use the same configuration, session, verification,
 recovery, and onboarding gates as the foundation and profile destinations. This
 does not introduce the planned four-tab root shell.
+
+Friendship management and request actions use those same gates and are reachable
+from Community. Their delivery does not introduce persistent notifications,
+Realtime, push delivery, public profiles, shared lists, or the final four-tab
+shell.
 
 ## Backend architecture
 
@@ -194,7 +205,7 @@ required rights.
 
 Active blocks are directional rows between two fully onboarded profiles, with one
 active row per direction, a self-block constraint, and a database-managed creation
-timestamp. They remain separate from the future friendship relationship state.
+timestamp. They remain separate from the friendship relationship state.
 Account deletion behavior is unresolved, so block foreign keys do not silently
 select cascading deletion semantics.
 
@@ -218,12 +229,68 @@ qualified references, explicit caller validation, revoked default execution, and
 an exact `authenticated` signature grant. Anonymous execution and unrestricted
 table access remain denied. Block/unblock operations are atomic and idempotent.
 
-Future friend requests and friendships use one versioned current relationship
-state per unordered profile pair rather than contradictory directional states or
-an unlimited event log. Blocks remain directional records outside that state.
-Duplicate sends, crossed requests, cancellation, decline, friendship termination,
-and reopening are atomic server transitions designed to tolerate retry and stale
-clients. No friendship or request schema is part of the blocking/discovery slice.
+Friend requests and friendships use one persistent, versioned current relationship
+row per unordered profile pair rather than contradictory directional states,
+separate request/friendship tables, or an unlimited event log. Blocks remain
+directional records outside that state. Creating a block and any resulting
+relationship transition occur atomically; unblocking changes only the block row.
+
+### Friendship relationship boundary
+
+The physical relationship row uses the normalized low/high profile IDs as its
+composite identity. It stores one check-constrained text state (`pending`,
+`friends`, `cancelled`, `declined`, or `ended`), the most recent requester, an
+optional reopening controller, a positive monotonic version, a server-owned
+creation time, and a server-owned state-change time. Only declined and ended rows
+have a reopening controller. Participant foreign keys do not cascade while account
+deletion and retention remain unresolved.
+
+The relationship table is RPC-only. Its creating migration enables RLS, revokes
+table privileges from `PUBLIC`, `anon`, `authenticated`, and `service_role`, and
+adds one restrictive `FOR ALL` policy for `anon` and `authenticated` with
+`USING (false)` and `WITH CHECK (false)`. Existing owner-only profile policies
+remain unchanged. Authenticated application access is limited to reviewed
+functions for:
+
+- a caller-relative summary for one target;
+- the caller's active incoming, outgoing, and friend lists;
+- sending a request;
+- cancelling an outgoing request;
+- accepting or declining an incoming request; and
+- ending a friendship.
+
+These functions derive the actor only from `auth.uid()`, require a verified,
+fully onboarded caller and a fully onboarded target, reject self-pairs, normalize
+the pair deterministically, and recheck either-direction blocks inside the
+protected transition. Mutations use one
+consistent transaction-level pair lock and row lock strategy so concurrent first
+sends, crossed sends, blocks, and relationship actions cannot create contradictory
+state or deadlock through inconsistent ordering.
+
+Duplicate sends and repeated already-completed caller-authorized actions are
+no-ops: they do not change the version or timestamp. Every real transition
+increments the version exactly once and updates the state-change time. Mutations
+other than the initial send require the caller's expected version. Send accepts a
+nullable expected version: null supports first, duplicate-pending, and crossed-
+pending sends from a preloaded result, while reopening a cancelled, declined, or
+ended row requires the exact current version. Stale or ineligible actions fail
+generically without overwriting newer state. A crossed send can atomically promote
+a pending request to friendship even when initiated from a preloaded search result.
+
+The existing `block_profile(uuid)` signature, identity derivation, pinned empty
+`search_path`, exact authenticated grant, and revoked default/anon/service-role
+execution remain unchanged. Its implementation is extended in the additive
+migration so inserting a block and cancelling/ending an active relationship use
+the same pair lock and one atomic transaction.
+
+Caller-facing projections expose only the target profile ID, canonical username,
+display name, a relative status (`can-send`, `incoming-pending`,
+`outgoing-pending`, `friends`, or `unavailable`), plus nullable version and
+state-change time. Privacy-safe `unavailable` results expose neither version nor
+state-change metadata; eligible dormant reopeners receive the version required
+for the next send. They never expose email/Auth metadata, block direction, raw
+declined/ended state to the non-controller, the reopening-controller column,
+unrelated relationships, or unnecessary internal timestamps.
 
 ### Client configuration
 
@@ -323,8 +390,6 @@ reconciliation, not as direct UI mutations.
 - Realtime subscription granularity, reconnect/replay behavior, and event ordering.
 - SQLite library, cache schema, synchronization algorithm, conflict policy, and
   background execution limits.
-- Exact physical columns, state values, and audit retention for the accepted
-  versioned one-state-per-unordered-pair friendship model.
 - How blocking or relationship changes affect existing shared resources.
 - Avatar and other Storage use cases, upload validation, object policies, and
   retention.
