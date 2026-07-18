@@ -1,14 +1,16 @@
 # List & Split
 
-List & Split is a planned Android and iOS app for collaborative active lists,
+List & Split is an Android and iOS app for collaborative active lists,
 reusable templates, a mutual-friend community, and an optional expense ledger.
-The repository currently contains the runnable Flutter foundation, not those
-product features or their business database schema.
+The repository provides the runnable Flutter foundation and the first Phase 1
+identity slice: verified email/password authentication, session routing, password
+recovery, and owner-only profile onboarding. Lists, templates, friendships,
+notifications, blocking, and the expense ledger remain planned work.
 
-The implemented foundation provides Riverpod application scope,
-`MaterialApp.router` with `go_router`, Material 3 light and dark themes,
-English localization wiring, a branded startup screen, and optional Supabase
-client initialization.
+The client uses Riverpod application scope and view models, repository boundaries,
+`MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
+localization wiring. Supabase is initialized only from public compile-time
+configuration.
 
 ## Project identity
 
@@ -25,8 +27,8 @@ client initialization.
   `pubspec.yaml`).
 - Git and an Android toolchain for Android development.
 - macOS, Xcode, and the iOS toolchain for iOS development.
-- Optionally, the Supabase CLI and a running Docker-compatible container runtime
-  for the local backend stack.
+- For local Auth, migration, and database-policy work, the Supabase CLI and a
+  running Docker-compatible container runtime.
 
 Check the local mobile toolchain before starting:
 
@@ -49,22 +51,33 @@ Run on an available Android or iOS target:
 flutter run -d <device-id>
 ```
 
-Supabase credentials are optional during the foundation phase. With neither
-configuration value supplied, backend initialization is skipped and the app still
-runs. Supply both values or neither; a partial configuration fails fast.
+Authentication requires both public Supabase configuration values. If either is
+missing, the app remains runnable and shows a non-secret development-configuration
+screen rather than entering an authentication flow.
 
 ```text
 flutter run -d <device-id> --dart-define=SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_PUBLISHABLE_KEY
 ```
 
 Use placeholder or local-development values in documentation and source control.
-Keep real environment values outside the repository.
+Keep real environment values outside the repository. Only the public publishable
+key belongs in a Flutter build; never use a secret or `service_role` key.
+
+The registered mobile Auth callback is:
+
+```text
+com.ferbatech.listandsplit://auth-callback
+```
+
+Android and iOS platform files register this URI. Do not change the application or
+bundle identifiers when configuring deep links.
 
 ## Verify changes
 
 Run the standard checks from the repository root:
 
 ```text
+flutter pub get
 dart format .
 dart format --output=none --set-exit-if-changed .
 flutter analyze
@@ -83,12 +96,12 @@ flutter build apk --debug
 
 ```text
 lib/main.dart       Process entry point and startup
-lib/app/            App composition, router, and foundation screen
+lib/app/            App composition, router, and app-wide providers
 lib/core/           Cross-feature configuration, themes, and primitives
 lib/l10n/           English ARB source; generated localization code is ignored
-lib/features/       Future feature-first modules, added only when implemented
+lib/features/       Feature-first presentation, domain, and data modules
 test/               Unit and widget tests
-supabase/           Local Supabase configuration and future migrations
+supabase/           Local configuration, reviewed migrations, and database tests
 docs/               Product, architecture, data-model, roadmap, and decisions
 .github/workflows/  Continuous integration
 ```
@@ -120,7 +133,13 @@ supabase migration new <descriptive_name>
 # Edit the generated migration file.
 supabase db reset --local
 supabase migration list --local
+supabase test db
 ```
+
+For a local client build, use the local API URL and public publishable/anonymous
+key reported by `supabase status` as the two `dart-define` values. Never copy the
+reported `service_role` key into Flutter or source control. Local verification
+messages are available through the local mail viewer reported by the CLI.
 
 `db reset --local` recreates the local database and removes uncommitted local data.
 Never run a destructive reset against a linked remote project. Applying reviewed
@@ -131,6 +150,26 @@ and use least-privilege policies. Flutter may receive only a public publishable
 client key. Never put a Supabase `service_role` key, secret key, access token,
 database password, signing material, or other privileged credential in Flutter or
 Git.
+
+### Hosted development Auth configuration
+
+Migrations configure database objects, but they do not configure hosted Auth email
+or redirect settings. For each explicitly authorized hosted development project,
+complete these steps in the Supabase Dashboard before testing email verification
+or password recovery:
+
+1. Open **Authentication > URL Configuration** and add
+   `com.ferbatech.listandsplit://auth-callback` to **Redirect URLs**.
+2. Open **Authentication > Providers > Email**, enable email/password sign-in and
+   **Confirm email**, then save.
+3. Keep other providers and anonymous sign-ins disabled for the initial release.
+4. Use a test account to verify that both confirmation and password-recovery links
+   return to the mobile callback and that the app reaches the expected gated flow.
+
+Do not compensate for missing hosted Auth settings by weakening client routing,
+email-verification requirements, or database authorization. Hosted schema changes
+must still be applied from committed migration history, never by pasting untracked
+SQL into the Dashboard.
 
 ## Project documentation
 
@@ -143,8 +182,10 @@ Git.
 
 ## Intentional deferrals
 
-The bootstrap does not implement product flows, authentication flows, business
-tables or migrations, RLS policies, realtime behavior, server-side ledger logic,
-SQLite caching or offline synchronization, push notifications, Firebase setup, or
-a production backend. Open product and architecture choices are recorded in the
-project documentation and must be decided before their implementation phases.
+The identity slice does not expose cross-user profile search or implement avatar
+upload, blocking, friendships, lists, templates, notifications, realtime behavior,
+server-side ledger logic, SQLite caching/offline synchronization, push delivery,
+Firebase setup, account deletion/export, or a production backend. Basic blocking
+must precede friend discovery and requests. Open product and architecture choices
+are recorded in the project documentation and must be decided before their
+implementation slices.

@@ -43,8 +43,7 @@ Exit evidence:
 - Platform identifiers, generated artifacts, secrets, and documentation claims are
   reviewed.
 - Work is published only on the authorized task branch and draft pull request; it
-  is not merged automatically. The bootstrap branch is
-  `chore/bootstrap-foundation`.
+  is not merged automatically.
 
 ## Phase 1 — Identity, profiles, and friendships (planned)
 
@@ -53,15 +52,22 @@ collaboration.
 
 Candidate slices:
 
-- Select authentication methods and implement session bootstrap/account lifecycle.
-- Add migration-driven profiles with unique username lookup and reviewed privacy
-  rules.
+- Implement verified email/password sign-up, sign-in, sign-out, verification
+  resend, forgotten-password, password recovery, and session routing through the
+  registered mobile callback.
+- Add migration-driven owner-only profiles and verified-user onboarding with
+  canonical globally unique immutable usernames and editable display names.
+- Implement basic blocking before enabling cross-user username discovery or friend
+  requests.
 - Implement friend request send, accept, decline, and the mutual friendship model.
 - Introduce the persistent in-app notification infrastructure for friend requests.
+- Resolve and implement the Phase 1 account deletion/export lifecycle.
 - Add RLS and database-function tests for every relationship transition.
 
-Required decisions include username normalization, request collision/retry rules,
-unfriending, blocking interaction, account deletion, and auth providers.
+Before the next social migration, resolve detailed block effects plus friendship
+and request collision/retry/unfriending rules. Resolve the immutable-username
+support/admin correction path, avatar storage lifecycle, and account
+deletion/export/retention behavior before the later slices that encode them.
 
 ## Phase 2 — Active/shared lists (planned)
 
@@ -131,8 +137,8 @@ Candidate slices:
 - Add FCM and APNs registration, delivery, preferences, and notification deep links.
 - Handle device-token rotation/removal and redact sensitive notification content.
 
-This phase requires an explicit sync design. It does not authorize creation of a
-Firebase project during bootstrap.
+This phase requires an explicit sync design. It does not itself authorize creation
+of a Firebase project.
 
 ## Phase 6 — Public safety, hardening, and release readiness (planned)
 
@@ -141,8 +147,10 @@ release.
 
 Candidate slices:
 
-- User blocking and content/user reporting with a reviewed moderation workflow.
-- Privacy, account deletion/export, retention, and abuse-response implementation.
+- Extend Phase 1 basic blocking to public content and add content/user reporting
+  with a reviewed moderation workflow.
+- Privacy/retention hardening and abuse-response implementation beyond the Phase 1
+  account lifecycle.
 - Accessibility and localization audits.
 - Security review of RLS, functions, storage, realtime, secrets, and dependency
   supply chain.
@@ -172,12 +180,10 @@ future, explicit task with environment and cost approval.
 
 ## Sequencing decisions still open
 
-- Whether blocking must land with friendship foundations rather than the later
-  public-safety phase.
 - Whether basic templates should precede full collaborative lists.
 - Which minimum persistent-notification capability belongs in each action-producing
   phase.
-- When authenticated Supabase client initialization and environment/flavor support
-  should be introduced.
+- When the accepted compile-time configuration should expand into a full
+  development/staging/production flavor model.
 - Whether offline read caching can ship safely before offline mutations.
 - What constitutes the minimum community/safety feature set for an external beta.

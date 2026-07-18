@@ -4,9 +4,9 @@
 
 This is the agreed target architecture for the product. It distinguishes durable
 constraints from planned components; it is not an implementation-progress report.
-At bootstrap, only a small runnable application foundation is expected. Product
-features, business tables, offline caching, push delivery, and most backend logic
-remain unimplemented until their roadmap phases.
+Source code, tests, migrations, and pull requests are the evidence of implementation
+status. Offline caching, push delivery, and later product areas remain sequenced by
+the roadmap.
 
 ## Fixed platform choices
 
@@ -27,7 +27,7 @@ remain unimplemented until their roadmap phases.
 
 ## Client composition
 
-The bootstrap path is intentionally small:
+The application composition path is intentionally small:
 
 ```text
 main.dart
@@ -39,7 +39,7 @@ main.dart
 ```
 
 `main.dart` should contain process bootstrapping rather than feature behavior. The
-The `app/` layer owns the root widget, router, and only truly app-wide providers.
+`app/` layer owns the root widget, router, and only truly app-wide providers.
 Shared configuration and themes live in `core/`; localization resources live in
 `l10n/` and are consumed through Flutter's generated localization API.
 
@@ -90,6 +90,13 @@ should remain shallow until its complexity justifies separation.
 - Cross-feature helpers enter `core/` only when they are stable, non-product-specific,
   and used by more than one feature. Avoid a generic utilities dumping ground.
 
+For the identity slice, an authentication repository owns session and credential
+operations and a profile repository owns profile reads/onboarding updates.
+Supabase-backed implementations remain in feature data layers. Riverpod providers
+and view models depend on the repository contracts, so validation, asynchronous
+state, sign-out, recovery, onboarding, and redirects can be tested with fakes and
+without a live Supabase project.
+
 ### Generated models
 
 Freezed and JSON serialization may be used for immutable state and boundary
@@ -103,16 +110,36 @@ because code generation is available.
 planned main shell has four destinations: Lists, Templates, Community, and
 Profile. Notifications open from a bell and must not become a fifth destination.
 
-Authentication redirects, nested route names, deep-link URLs, restoration, and
-notification-link behavior remain open. Route decisions should be centralized and
-covered by navigation/widget tests as flows are introduced.
+Routing resolves these gates in order before entering an authenticated destination:
+
+1. Required public backend configuration is available.
+2. An authenticated session exists.
+3. The session's email is verified.
+4. The current user's profile onboarding is complete.
+
+The missing-configuration state has a clear non-secret development screen. An
+unauthenticated user sees authentication flows; an authenticated but unverified
+user sees verification-pending/resend behavior; and a verified user with an
+incomplete profile sees onboarding. Password-recovery Auth events route to the
+new-password flow rather than normal signed-in content. A non-secret local marker
+preserves that recovery gate across process restarts until password update,
+explicit sign-out, or a normal sign-in succeeds; it is navigation state only and
+is never treated as authentication or authorization evidence.
+
+The registered mobile Auth callback is
+`com.ferbatech.listandsplit://auth-callback` on both Android and iOS, without
+changing either platform identifier. Final signed-in route nesting, restoration,
+notification-link behavior, and other feature deep links remain open. Redirect
+decisions are centralized and covered by navigation/widget tests.
 
 ## Backend architecture
 
 ### Supabase responsibilities
 
 - **Auth** identifies the current user; application authorization is still enforced
-  by RLS and server-side checks.
+  by RLS and server-side checks. The initial release uses verified email/password
+  accounts only and supports sign-up, sign-in, sign-out, resend verification,
+  forgotten-password, and password recovery.
 - **PostgreSQL** stores authoritative product records and relationships.
 - **Row Level Security** restricts every application table by identity,
   membership, ownership, or recipient relationship.
@@ -125,15 +152,39 @@ covered by navigation/widget tests as flows are introduced.
   server-side and require unit tests.
 
 Database migrations committed under `supabase/migrations/` are the only schema
-source of truth. The bootstrap phase initializes Supabase tooling but intentionally
-creates no application tables or business migrations. The conceptual model is in
+source of truth. Every schema change must be introduced by a reviewed migration
+with database/RLS tests. The conceptual contracts are in
 [`DATA_MODEL.md`](DATA_MODEL.md).
+
+### Initial profile boundary
+
+`public.profiles` has a one-to-one primary-key/foreign-key relationship with
+`auth.users`. A controlled server-owned mechanism creates the record with nullable
+onboarding fields when an Auth identity is created. Email and credentials stay in
+Auth and are never copied into the profile.
+
+PostgreSQL, rather than Flutter alone, canonicalizes and validates usernames,
+enforces global uniqueness, and prevents username changes after onboarding.
+Display name remains an approved editable field. The database-managed
+`onboarding_completed_at` timestamp is set when both onboarding fields are valid,
+so route gating does not infer completion from UI state. `created_at`, `updated_at`,
+and onboarding completion are not client-editable.
+
+RLS is enabled when the profile table is created. The Data API receives explicit
+least-privilege grants: an authenticated user can select their own profile and
+update only `username` and `display_name`. Anonymous access, cross-user
+read/mutation, and direct client insert/delete are denied. Authorization is based
+on `auth.uid()`, never `user_metadata` or another user-editable JWT field. Any
+server function that crosses the Auth/application boundary uses qualified object
+names, a pinned safe `search_path`, revoked default execution, and the minimum
+required rights.
 
 ### Client configuration
 
-The Flutter client must eventually receive its public Supabase configuration at
-build/run time. Real values are not hardcoded or committed. A placeholder-only
-example is:
+The Flutter client receives its public Supabase configuration at build/run time
+through the standardized compile-time names `SUPABASE_URL` and
+`SUPABASE_PUBLISHABLE_KEY`. Real values are not hardcoded or committed. A
+placeholder-only example is:
 
 ```text
 flutter run \
@@ -141,10 +192,11 @@ flutter run \
   --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_PUBLISHABLE_KEY
 ```
 
-The bootstrap conditionally initializes the Supabase client only when both values
-are supplied; with neither value, the foundation remains runnable. Only a public
-anonymous/publishable client key may enter Flutter. A service-role key or any
-other privileged secret must never be included in a client binary.
+Both values are required for backend-dependent flows. Missing or incomplete
+configuration routes to the development-configuration screen while keeping the
+app runnable. Only a public anonymous/publishable client key may enter Flutter. A
+service-role key or any other privileged secret must never be included in a client
+binary.
 
 ### Server operation shape
 
@@ -193,8 +245,10 @@ reconciliation, not as direct UI mutations.
 - Unit-test deterministic business behavior and view-model transitions without
   network access.
 - Use repository contract/fake tests and widget tests for feature flows.
-- Test RLS policies and database functions with allowed and denied identities when
-  business migrations begin.
+- Test profile routing, verification, recovery, onboarding, and authentication
+  view-model transitions with repository fakes rather than a live backend.
+- Test RLS policies, database constraints, triggers, and functions with allowed
+  and denied identities for every business migration.
 - Payment server tests must cover integer arithmetic, equal and exact shares,
   validation, settlements, balances, and debt output.
 - Logging must redact tokens, secrets, personal content, and notification payloads.
@@ -214,16 +268,17 @@ reconciliation, not as direct UI mutations.
 
 ## Open architecture decisions
 
-- Authentication providers, session bootstrap, and account lifecycle.
+- Account deletion/export, retention, and related Auth/profile lifecycle.
 - Precise feature folder layering and whether Riverpod code generation is used.
-- Route topology, auth redirects, deep-link formats, and state restoration.
-- Public client configuration names and development/staging/production flavor
-  strategy.
+- Final authenticated route topology, state restoration, notification links, and
+  non-Auth feature deep links.
+- Development/staging/production flavor and environment-separation strategy.
 - PostgreSQL-function versus Edge-Function placement for each atomic server action.
 - Realtime subscription granularity, reconnect/replay behavior, and event ordering.
 - SQLite library, cache schema, synchronization algorithm, conflict policy, and
   background execution limits.
 - Stable identifiers/version fields needed for optimistic concurrency.
-- Storage use cases and object retention.
+- Avatar and other Storage use cases, upload validation, object policies, and
+  retention.
 - Logging, analytics, crash reporting, performance budgets, and privacy controls.
 - FCM/APNs registration, token lifecycle, and notification deep links.
