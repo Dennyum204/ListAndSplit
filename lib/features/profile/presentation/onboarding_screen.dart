@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/account/presentation/account_data_export_action.dart';
 import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
+import 'package:list_and_split/features/account/presentation/account_deletion_action.dart';
+import 'package:list_and_split/features/account/presentation/account_deletion_providers.dart';
+import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
 import 'package:list_and_split/features/profile/domain/profile_validation.dart';
 import 'package:list_and_split/features/profile/presentation/profile_controller.dart';
 import 'package:list_and_split/features/profile/presentation/profile_ui.dart';
@@ -35,7 +40,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(profileControllerProvider);
     final exportState = ref.watch(accountDataExportControllerProvider);
-    final isBusy = state.isSubmitting || _isSigningOut || exportState.isBusy;
+    final deletionState = ref.watch(accountDeletionControllerProvider);
+    final email = ref.watch(authSessionProvider).valueOrNull?.user?.email;
+    final isBusy = state.isSubmitting ||
+        _isSigningOut ||
+        exportState.isBusy ||
+        deletionState.isSubmitting;
     return FormPageFrame(
       title: localizations.onboardingTitle,
       description: localizations.onboardingDescription,
@@ -90,11 +100,26 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             SubmissionButton(
               label: localizations.finishProfileButton,
               isSubmitting: state.isSubmitting,
-              onPressed: _isSigningOut || exportState.isBusy ? null : _submit,
+              onPressed: _isSigningOut ||
+                      exportState.isBusy ||
+                      deletionState.isSubmitting
+                  ? null
+                  : _submit,
             ),
             AccountDataExportAction(
-              enabled: !state.isSubmitting && !_isSigningOut,
+              enabled: !state.isSubmitting &&
+                  !_isSigningOut &&
+                  !deletionState.isSubmitting,
             ),
+            if (email != null)
+              AccountDeletionAction(
+                email: email,
+                confirmationTarget: email,
+                enabled: !state.isSubmitting &&
+                    !_isSigningOut &&
+                    !exportState.isBusy,
+                onDeleted: () => context.go(AppRoutes.signIn),
+              ),
             const SizedBox(height: 8),
             TextButton(
               onPressed: isBusy ? null : _signOut,

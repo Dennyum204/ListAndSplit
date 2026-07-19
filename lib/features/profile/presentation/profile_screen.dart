@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/account/presentation/account_data_export_action.dart';
 import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
+import 'package:list_and_split/features/account/presentation/account_deletion_action.dart';
+import 'package:list_and_split/features/account/presentation/account_deletion_providers.dart';
+import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/features/profile/presentation/profile_controller.dart';
@@ -51,7 +55,10 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(profileControllerProvider);
     final exportState = ref.watch(accountDataExportControllerProvider);
-    final isBusy = state.isSubmitting || exportState.isBusy;
+    final deletionState = ref.watch(accountDeletionControllerProvider);
+    final email = ref.watch(authSessionProvider).valueOrNull?.user?.email;
+    final isBusy =
+        state.isSubmitting || exportState.isBusy || deletionState.isSubmitting;
     final displayNameError = state.fieldErrors[ProfileField.displayName];
     return FormPageFrame(
       title: localizations.profileTitle,
@@ -106,9 +113,20 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
           SubmissionButton(
             label: localizations.saveChangesButton,
             isSubmitting: state.isSubmitting,
-            onPressed: exportState.isBusy ? null : _submit,
+            onPressed: exportState.isBusy || deletionState.isSubmitting
+                ? null
+                : _submit,
           ),
-          AccountDataExportAction(enabled: !state.isSubmitting),
+          AccountDataExportAction(
+            enabled: !state.isSubmitting && !deletionState.isSubmitting,
+          ),
+          if (email != null)
+            AccountDeletionAction(
+              email: email,
+              confirmationTarget: widget.profile.username!,
+              enabled: !state.isSubmitting && !exportState.isBusy,
+              onDeleted: () => context.go(AppRoutes.signIn),
+            ),
         ],
       ),
     );

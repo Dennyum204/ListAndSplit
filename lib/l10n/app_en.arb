@@ -495,6 +495,82 @@
   "@accountDataExportFailedMessage": {
     "description": "Generic privacy-safe account export failure."
   },
+  "accountDeletionTitle": "Delete account",
+  "@accountDeletionTitle": {
+    "description": "Heading for permanent account deletion."
+  },
+  "accountDeletionDescription": "Permanently delete your account and current List & Split data. Download your data first if you want to keep a copy.",
+  "@accountDeletionDescription": {
+    "description": "Permanent deletion summary beside the destructive action."
+  },
+  "accountDeletionButton": "Permanently delete account",
+  "@accountDeletionButton": {
+    "description": "Button opening the permanent account deletion flow."
+  },
+  "accountDeletionButtonSemanticLabel": "Permanently delete my List & Split account",
+  "@accountDeletionButtonSemanticLabel": {
+    "description": "Accessible label for the permanent account deletion button."
+  },
+  "accountDeletionDialogTitle": "Permanently delete your account?",
+  "@accountDeletionDialogTitle": {
+    "description": "Permanent account deletion confirmation dialog title."
+  },
+  "accountDeletionIrreversibleWarning": "This cannot be undone. Your profile, friendships, blocks and notifications will be permanently removed. A new account will not restore them.",
+  "@accountDeletionIrreversibleWarning": {
+    "description": "Explicit irreversible consequences shown before deletion."
+  },
+  "accountDeletionConfirmationInstruction": "Enter this value exactly, including case and spaces:",
+  "@accountDeletionConfirmationInstruction": {
+    "description": "Instruction preceding the exact username or email confirmation target."
+  },
+  "accountDeletionConfirmationLabel": "Exact confirmation",
+  "@accountDeletionConfirmationLabel": {
+    "description": "Label for the exact deletion confirmation field."
+  },
+  "accountDeletionPasswordLabel": "Current password",
+  "@accountDeletionPasswordLabel": {
+    "description": "Label for the deletion reauthentication password field."
+  },
+  "accountDeletionFinalConfirmation": "I understand that this deletion is permanent.",
+  "@accountDeletionFinalConfirmation": {
+    "description": "Final explicit acknowledgement before permanent deletion."
+  },
+  "accountDeletionFinalConfirmationError": "Confirm that you understand this deletion is permanent.",
+  "@accountDeletionFinalConfirmationError": {
+    "description": "Validation message for the final deletion acknowledgement."
+  },
+  "accountDeletionConfirmationRequiredError": "Enter the exact value shown above.",
+  "@accountDeletionConfirmationRequiredError": {
+    "description": "Required exact deletion confirmation validation."
+  },
+  "accountDeletionConfirmationMismatchError": "The confirmation must match exactly, including case and spaces.",
+  "@accountDeletionConfirmationMismatchError": {
+    "description": "Privacy-safe exact deletion confirmation mismatch."
+  },
+  "accountDeletionWrongPasswordMessage": "The current password is incorrect. Your account was not deleted.",
+  "@accountDeletionWrongPasswordMessage": {
+    "description": "Privacy-safe failed deletion reauthentication result."
+  },
+  "accountDeletionReauthenticationMessage": "Sign in again with your current password, then retry within ten minutes.",
+  "@accountDeletionReauthenticationMessage": {
+    "description": "Deletion result when the exact Auth session is not recent enough."
+  },
+  "accountDeletionRetryableMessage": "Your account was not confirmed as deleted. Check your connection and try again safely.",
+  "@accountDeletionRetryableMessage": {
+    "description": "Retryable deletion failure that does not claim success."
+  },
+  "accountDeletionOfflineMessage": "We couldn't verify the result while offline. Your local session was kept; reconnect and try again.",
+  "@accountDeletionOfflineMessage": {
+    "description": "Offline deletion reconciliation result preserving the local session."
+  },
+  "accountDeletionProgressMessage": "Permanently deleting your account...",
+  "@accountDeletionProgressMessage": {
+    "description": "Accessible progress announcement during deletion."
+  },
+  "accountDeletionConfirmButton": "Delete permanently",
+  "@accountDeletionConfirmButton": {
+    "description": "Final destructive account deletion submit button."
+  },
   "saveChangesButton": "Save changes",
   "@saveChangesButton": {
     "description": "Profile editing submit button."
