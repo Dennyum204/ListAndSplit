@@ -49,10 +49,9 @@ Profile --receives--> List Invitation / Sent Template
 A profile represents a user in product surfaces and supports lookup through a
 unique username. The initial physical record is `public.profiles`; its `id` is a
 primary key and foreign key to `auth.users(id)`. The foreign key prevents orphaned
-profile records, but automatic deletion is intentionally not encoded while the
-account lifecycle remains open. Who may delete an account, export obligations,
-retention, profile cleanup, and re-registration behavior require a later accepted
-decision.
+profile records. Automatic deletion is not yet encoded: the accepted future hard-
+deletion direction requires one reviewed deletion slice to replace current
+non-cascading behavior across every implemented aggregate atomically.
 
 A server-owned creation mechanism creates one profile for each Auth identity.
 `username` and `display_name` may remain null until a verified user completes
@@ -78,8 +77,37 @@ Cross-user identity is disclosed only through narrow block-aware contracts. Exac
 canonical-username discovery returns at most one fully onboarded profile and only
 its ID, username, and display name. It excludes the caller and any pair with a
 block in either direction. A future support/administrator correction path for
-immutable usernames, avatar storage/lifecycle, and account deletion/export remain
-open decisions.
+immutable usernames and avatar storage/lifecycle remain separate open concerns.
+Export is governed by the non-persistent contract below.
+
+### Versioned account export document
+
+The account export is a transient document, not a table or retained server record.
+Schema version `1` has exactly these root sections:
+
+- `product`, `schema_version`, and server-generated `exported_at`;
+- `auth_identity`, containing only the caller's ID, email, confirmation time,
+  creation time, update time, and nullable last-sign-in time;
+- `profile`, containing ID, nullable username/display name, creation/update times,
+  and nullable onboarding-completion time;
+- deterministic `outgoing_blocks`, `active_relationships`, and
+  `visible_notifications` arrays.
+
+Every nested object is built from an explicit field allowlist. The social arrays
+apply the same directional-block, caller-relative active-relationship, recipient,
+suppression, expiry, and either-direction block filters as their existing RPC
+projections. Arrays are never null. Raw table rows, Auth metadata, credentials,
+tokens, sessions, incoming blocks, dormant relationship internals, hidden actors,
+and future aggregate data are outside the contract. Later schema versions must add
+future list/template/ledger sections deliberately and compatibly.
+
+The accepted future deletion model is immediate permanent hard deletion, followed
+by a 30-day reservation of a completed canonical username that stores neither
+email nor user ID. Re-registration creates an unrelated identity and restores
+nothing. This direction does not alter current foreign keys: cascade cleanup,
+reservation schema, privileged deletion execution, and session invalidation are
+planned for the later deletion migration and must cover every aggregate that
+exists at that time.
 
 ### Active directional block
 
@@ -96,12 +124,14 @@ row. Blocking and unblocking are idempotent. Removing A's A-to-B row does not
 remove B's B-to-A row, restore a relationship, or make discovery available while
 the reciprocal row remains.
 
-The blocker may receive the target's ID, username, and display name through the
-private outgoing-block management projection. Incoming-only and unrelated blocks
-are never disclosed. An active block in either direction makes the separate
+The blocker may receive the target's ID, username, display name, and block creation
+time through their account export; interactive outgoing-block management retains
+its existing narrower projection. Incoming-only and unrelated blocks are never
+disclosed. An active block in either direction makes the separate
 relationship-summary RPC return no row and no target profile fields. Account
-deletion/retention and shared-resource effects remain open, so the block model does
-not select cascading profile deletion or active-list membership behavior.
+shared-resource effects remain open. Current foreign keys remain non-cascading
+until the accepted future hard-deletion direction is implemented atomically; the
+block model still does not select active-list membership behavior.
 
 ### Versioned friend request and friendship relationship
 
@@ -181,7 +211,8 @@ Requests do not expire in the initial design. A persistent notification may
 reference the exact pending relationship version but never becomes authoritative
 for its transition. Realtime, push delivery, public profiles, the final navigation
 shell, shared lists, detailed audit history, and relationship-row account
-deletion/retention remain outside the relationship record. The effects of
+deletion cleanup remain outside the relationship record and are planned for the
+accepted future hard-deletion slice. The effects of
 relationship or block changes on existing shared resources remain unresolved.
 
 ## Active-list aggregate
@@ -371,7 +402,7 @@ Accepted future notification types remain:
 Invitation and sent-template action state will belong to their underlying records,
 as friend-request action state belongs to the relationship. Archive/delete and
 preference controls, future-type payload localization, physical cleanup, and
-account-lifecycle retention remain open.
+retention beyond the accepted future account hard-deletion direction remain open.
 
 Push tokens and delivery attempts are future infrastructure for FCM/APNs and are
 outside the initial identity/profile schema. Device token ownership, rotation,
@@ -417,7 +448,8 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   later aggregates beyond the accepted profile and relationship records.
 - Support/administrator correction and audit rules for immutable usernames.
 - Avatar Storage, validation, replacement, retention, and deletion lifecycle.
-- Block effects on existing shared resources and later account deletion/retention.
+- Block effects on existing shared resources; account deletion cascade mechanics
+  remain to be implemented in the later accepted lifecycle slice.
 - List role model and membership lifecycle.
 - Quantity/unit types and ordering strategy.
 - Mention representation and parser ownership.

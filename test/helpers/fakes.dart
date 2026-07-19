@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:list_and_split/features/account/domain/account_data_export.dart';
+import 'package:list_and_split/features/account/domain/account_data_export_repository.dart';
+import 'package:list_and_split/features/account/domain/account_data_export_share_service.dart';
 import 'package:list_and_split/features/auth/domain/auth_repository.dart';
 import 'package:list_and_split/features/auth/domain/auth_session.dart';
 import 'package:list_and_split/features/community/domain/community_profile.dart';
@@ -10,6 +13,48 @@ import 'package:list_and_split/features/notifications/domain/in_app_notification
 import 'package:list_and_split/features/notifications/domain/notification_repository.dart';
 import 'package:list_and_split/features/profile/domain/profile_repository.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
+
+class FakeAccountDataExportRepository implements AccountDataExportRepository {
+  AccountDataExportDocument? document;
+  Object? failure;
+  Completer<AccountDataExportDocument>? completer;
+  int exportCalls = 0;
+
+  @override
+  Future<AccountDataExportDocument> exportOwnAccountData() async {
+    exportCalls += 1;
+    if (failure != null) throw failure!;
+    final pending = completer;
+    if (pending != null) return pending.future;
+    final result = document;
+    if (result == null) throw const AccountDataExportFailure();
+    return result;
+  }
+}
+
+class FakeAccountDataExportShareService
+    implements AccountDataExportShareService {
+  AccountDataShareResult result = AccountDataShareResult.shared;
+  Object? failure;
+  Completer<AccountDataShareResult>? completer;
+  AccountDataExportDocument? lastDocument;
+  AccountDataShareOrigin? lastOrigin;
+  int shareCalls = 0;
+
+  @override
+  Future<AccountDataShareResult> share(
+    AccountDataExportDocument document, {
+    AccountDataShareOrigin? origin,
+  }) async {
+    shareCalls += 1;
+    lastDocument = document;
+    lastOrigin = origin;
+    if (failure != null) throw failure!;
+    final pending = completer;
+    if (pending != null) return pending.future;
+    return result;
+  }
+}
 
 class FakeAuthRepository implements AuthRepository {
   FakeAuthRepository({

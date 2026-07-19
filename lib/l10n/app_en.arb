@@ -447,6 +447,54 @@
   "@profileTitle": {
     "description": "Profile editing screen title."
   },
+  "accountDataSectionTitle": "Account and data",
+  "@accountDataSectionTitle": {
+    "description": "Heading for self-service account data actions."
+  },
+  "accountDataExportDescription": "Download a JSON copy of your current account data. The file may contain personal information; choose where you share or save it carefully.",
+  "@accountDataExportDescription": {
+    "description": "Privacy warning for the account data export action."
+  },
+  "accountDataExportButton": "Download my data",
+  "@accountDataExportButton": {
+    "description": "Button opening confirmation for account data export."
+  },
+  "accountDataExportButtonSemanticLabel": "Download my account data as a JSON file",
+  "@accountDataExportButtonSemanticLabel": {
+    "description": "Accessible label for the account data export button."
+  },
+  "accountDataExportDialogTitle": "Download your data?",
+  "@accountDataExportDialogTitle": {
+    "description": "Account data export confirmation dialog title."
+  },
+  "accountDataExportDialogDescription": "We will prepare a JSON file containing personal account information and open your device share sheet. The server does not retain an export file.",
+  "@accountDataExportDialogDescription": {
+    "description": "Account data export confirmation and retention explanation."
+  },
+  "accountDataExportConfirmButton": "Prepare file",
+  "@accountDataExportConfirmButton": {
+    "description": "Confirmation button starting account data export."
+  },
+  "accountDataExportPreparingMessage": "Preparing your data file...",
+  "@accountDataExportPreparingMessage": {
+    "description": "Accessible progress announcement while the export RPC runs."
+  },
+  "accountDataExportSharingMessage": "Opening the share sheet...",
+  "@accountDataExportSharingMessage": {
+    "description": "Accessible progress announcement while the export file is shared."
+  },
+  "accountDataExportSharedMessage": "Your data file is ready in the share sheet.",
+  "@accountDataExportSharedMessage": {
+    "description": "Privacy-safe successful account export result."
+  },
+  "accountDataExportDismissedMessage": "The share sheet was closed. You can try again.",
+  "@accountDataExportDismissedMessage": {
+    "description": "Result shown when the user dismisses account export sharing."
+  },
+  "accountDataExportFailedMessage": "We couldn't prepare your data file. Please try again.",
+  "@accountDataExportFailedMessage": {
+    "description": "Generic privacy-safe account export failure."
+  },
   "saveChangesButton": "Save changes",
   "@saveChangesButton": {
     "description": "Profile editing submit button."

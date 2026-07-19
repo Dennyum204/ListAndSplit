@@ -8,6 +8,7 @@ import 'package:list_and_split/app/router/app_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/core/config/configuration_provider.dart';
 import 'package:list_and_split/core/config/supabase_config.dart';
+import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
 import 'package:list_and_split/features/auth/domain/auth_repository.dart';
 import 'package:list_and_split/features/auth/domain/auth_session.dart';
 import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
@@ -173,6 +174,7 @@ void main() {
 
     expect(find.text('Verify your email'), findsOneWidget);
     expect(find.textContaining('person@example.com'), findsOneWidget);
+    expect(find.byKey(const Key('downloadAccountDataButton')), findsNothing);
     await tester.tap(find.text('Resend verification email'));
     await tester.pumpAndSettle();
     expect(auth.resendCalls, 1);
@@ -373,6 +375,12 @@ void main() {
           const AppConfiguration.configured(),
         ),
         authRepositoryProvider.overrideWithValue(auth),
+        accountDataExportRepositoryProvider.overrideWithValue(
+          FakeAccountDataExportRepository(),
+        ),
+        accountDataExportShareServiceProvider.overrideWithValue(
+          FakeAccountDataExportShareService(),
+        ),
         profileRepositoryProvider.overrideWithValue(profile),
         notificationRepositoryProvider.overrideWithValue(
           FakeNotificationRepository(),
@@ -1152,6 +1160,12 @@ Future<void> _pumpConfiguredApp(
           const AppConfiguration.configured(),
         ),
         authRepositoryProvider.overrideWithValue(auth),
+        accountDataExportRepositoryProvider.overrideWithValue(
+          FakeAccountDataExportRepository(),
+        ),
+        accountDataExportShareServiceProvider.overrideWithValue(
+          FakeAccountDataExportShareService(),
+        ),
         profileRepositoryProvider.overrideWithValue(profile),
         communityRepositoryProvider.overrideWithValue(
           community ?? FakeCommunityRepository(),
