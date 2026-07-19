@@ -33,6 +33,17 @@ jobs:
         with:
           version: 2.109.1
 
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.1.13
+
+      - name: Check account deletion function
+        run: deno task --config supabase/functions/delete-account/deno.json --frozen check
+
+      - name: Test account deletion function
+        run: deno task --config supabase/functions/delete-account/deno.json --frozen test
+
       - name: Start local database
         run: supabase db start
 
