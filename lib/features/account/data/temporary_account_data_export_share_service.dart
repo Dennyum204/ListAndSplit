@@ -5,7 +5,7 @@ import 'dart:ui';
 import 'package:list_and_split/features/account/domain/account_data_export.dart';
 import 'package:list_and_split/features/account/domain/account_data_export_share_service.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:share_plus_platform_interface/share_plus_platform_interface.dart';
 
 typedef AccountTemporaryDirectory = Future<Directory> Function();
 typedef AccountExportFileWriter = Future<void> Function(
@@ -86,7 +86,7 @@ class TemporaryAccountDataExportShareService
     List<XFile> files, {
     Rect? sharePositionOrigin,
   }) {
-    return Share.shareXFiles(
+    return SharePlatform.instance.shareXFiles(
       files,
       sharePositionOrigin: sharePositionOrigin,
     );

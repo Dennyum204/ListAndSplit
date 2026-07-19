@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/features/account/data/temporary_account_data_export_share_service.dart';
 import 'package:list_and_split/features/account/domain/account_data_export.dart';
 import 'package:list_and_split/features/account/domain/account_data_export_share_service.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:share_plus_platform_interface/share_plus_platform_interface.dart';
 
 import 'account_data_export_fixtures.dart';
 
