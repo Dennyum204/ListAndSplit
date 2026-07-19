@@ -158,12 +158,12 @@ select ok(
 );
 
 select ok(
-  not (
+  (
     select prosecdef
     from pg_proc
     where oid = 'private.prepare_profile_write()'::regprocedure
   ),
-  'the profile write trigger uses invoker rights'
+  'the profile write trigger is a non-callable hardened definer boundary'
 );
 
 select ok(
@@ -439,7 +439,7 @@ select throws_like(
     set username = ' ALPHA_USER '
     where id = '11111111-1111-4111-8111-111111111111'
   $$,
-  '%profiles_username_key%',
+  '%username unavailable%',
   'canonical username uniqueness is case-insensitive'
 );
 
@@ -587,13 +587,12 @@ select throws_like(
 
 reset role;
 
-select throws_like(
+select lives_ok(
   $$
     delete from auth.users
     where id = '44444444-4444-4444-8444-444444444444'
   $$,
-  '%profiles_id_fkey%',
-  'auth-user deletion is blocked until the open retention behavior is resolved'
+  'Auth-user deletion now cascades through the reviewed account lifecycle'
 );
 
 select is(
@@ -602,8 +601,8 @@ select is(
     from public.profiles
     where id = '44444444-4444-4444-8444-444444444444'
   ),
-  1::bigint,
-  'a blocked auth-user deletion leaves the profile intact'
+  0::bigint,
+  'Auth-user deletion removes the matching profile'
 );
 
 select * from finish();
