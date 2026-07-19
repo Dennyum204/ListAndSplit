@@ -201,13 +201,55 @@ server function that crosses the Auth/application boundary uses qualified object
 names, a pinned safe `search_path`, revoked default execution, and the minimum
 required rights.
 
+### Account export boundary
+
+Account data export is a parameterless authenticated PostgreSQL RPC that derives
+identity only from `auth.uid()`. It requires a confirmed `auth.users` identity and
+exactly one corresponding profile but deliberately does not require completed
+onboarding. This keeps export available from both verified incomplete Onboarding
+and completed Profile without exposing it to anonymous or unverified sessions.
+
+The RPC returns one `jsonb` schema-version-1 document built exclusively from
+explicit key allowlists. It is a hardened `SECURITY DEFINER` boundary because it
+must read the caller's approved Auth columns and RPC-only social tables: ownership
+is `postgres`, `search_path` is empty, every object is qualified, default
+execution is revoked, and only the exact parameterless signature is granted to
+`authenticated`. No Auth schema, table privilege, or direct social-table access is
+exposed to Flutter.
+
+The export reuses the existing caller-relative privacy contracts. It selects only
+outgoing blocks; only active, non-blocked relationship projections; and only
+caller-owned notifications that are unsuppressed, unexpired, and not hidden by a
+block in either direction. Objects are constructed field by field rather than by
+serializing physical rows. The function is stable and read-only: it does not mark
+notifications read, mutate relationships, update Auth, or persist an export job,
+file, audit row, Storage object, signed URL, or background task.
+
+Flutter owns version validation and temporary-file presentation behind repository
+and injectable file/share-service boundaries. The feature controller is scoped to
+the verified session identity, never stores export JSON in global presentation
+state, prevents concurrent requests, and clears transient state when identity
+changes. The file service writes pretty UTF-8 JSON to application-scoped
+temporary/cache storage and invokes the Android/iOS native share sheet with a
+privacy-safe UTC filename and JSON MIME type. It never falls back to public shared
+storage or promises guaranteed cache deletion.
+
+Permanent account deletion remains a later, separate vertical slice. Its accepted
+direction is immediate hard deletion after exact profile/email confirmation,
+current-password reauthentication, and a session age of at most ten minutes,
+through an authenticated `delete-account` Edge Function with a server-only admin
+client. That future slice must add reviewed cascade cleanup and a 30-day
+username-only reservation without retaining email or user ID. It must also revoke
+other sessions on subsequent validation. No deletion, cascade, reservation, Edge
+Function, or Auth setting is introduced by the export boundary.
+
 ### Blocking and discovery boundary
 
 Active blocks are directional rows between two fully onboarded profiles, with one
 active row per direction, a self-block constraint, and a database-managed creation
 timestamp. They remain separate from the friendship relationship state.
-Account deletion behavior is unresolved, so block foreign keys do not silently
-select cascading deletion semantics.
+The accepted future hard-deletion direction is not implemented yet, so block
+foreign keys do not silently select cascading deletion semantics.
 
 The block table is not a general client-readable or client-writable Data API
 surface. Authenticated application access uses narrowly granted functions for:
@@ -245,8 +287,8 @@ composite identity. It stores one check-constrained text state (`pending`,
 `friends`, `cancelled`, `declined`, or `ended`), the most recent requester, an
 optional reopening controller, a positive monotonic version, a server-owned
 creation time, and a server-owned state-change time. Only declined and ended rows
-have a reopening controller. Participant foreign keys do not cascade while account
-deletion and retention remain unresolved.
+have a reopening controller. Participant foreign keys remain non-cascading until
+the accepted future hard-deletion slice implements aggregate cleanup atomically.
 
 The relationship table is RPC-only. Its creating migration enables RLS, revokes
 table privileges from `PUBLIC`, `anon`, `authenticated`, and `service_role`, and
@@ -314,7 +356,8 @@ The physical `public.user_notifications` table is initially constrained to
 normalized relationship participants, the positive relationship version that
 created the notification, database-owned creation and exact 180-day expiry,
 nullable read time, and nullable permanent suppression time. Profile and
-relationship foreign keys do not cascade while account deletion remains open. A
+relationship foreign keys remain non-cascading until the accepted future hard-
+deletion slice implements aggregate cleanup atomically. A
 unique recipient/type/pair/version boundary makes notification creation
 idempotent without storing copied profile text, email, Auth metadata, or arbitrary
 messages.
@@ -439,7 +482,9 @@ reconciliation, not as direct UI mutations.
 
 ## Open architecture decisions
 
-- Account deletion/export, retention, and related Auth/profile/block lifecycle.
+- Shared-resource ownership/deletion, administrator deletion, moderation/legal
+  retention, Storage cleanup, and compliance obligations beyond the accepted
+  current-aggregate account export and planned deletion lifecycle.
 - Precise feature folder layering and whether Riverpod code generation is used.
 - Final authenticated route topology, state restoration, notification links, and
   non-Auth feature deep links.

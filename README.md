@@ -185,6 +185,16 @@ duplicate and crossed sends create none. Listing and badge results exclude
 expired, suppressed, or block-hidden rows, and block creation permanently
 suppresses existing pair notifications in the same transaction.
 
+The accepted account lifecycle separates versioned account-data export from
+permanent deletion. Export is planned as a parameterless, allowlist-only RPC for
+any authenticated email-verified user, including before onboarding, followed by a
+validated UTF-8 JSON file in app-scoped temporary cache and the native share
+sheet. The server retains no export file. A later deletion slice, after export is
+merged and manually verified, will implement the accepted hard-deletion,
+reauthentication, fresh-session, cascade-cleanup, and 30-day username-reservation
+direction. These product directions are not a guarantee of legal/regulatory
+compliance, and the remaining obligations stay open in the decision log.
+
 ### Hosted development Auth configuration
 
 Migrations configure database objects, but they do not configure hosted Auth email
@@ -221,7 +231,8 @@ The current slices do not implement unrestricted profile/directory search,
 avatars, lists, templates, notification types beyond friend requests,
 notification archive/preferences or physical cleanup, reporting, Realtime,
 server-side ledger logic, SQLite caching/offline synchronization, push delivery,
-Firebase setup, account deletion/export, or a production backend. Effects of
-blocks or friendship changes on future shared resources remain open. Other open
+Firebase setup, account export implementation, account deletion, or a production
+backend. Effects of blocks or friendship changes on future shared resources
+remain open. Other open
 product and architecture choices are recorded in the project documentation and
 must be decided before their implementation slices.

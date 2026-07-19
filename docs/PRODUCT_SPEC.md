@@ -57,6 +57,52 @@ are the evidence of implementation status.
   buckets, object policies, and avatar lifecycle are outside the initial profile
   slice.
 
+### Account data export and deletion lifecycle
+
+- Account export and permanent account deletion are separate vertical slices.
+  Export ships first and deletion remains planned until export is merged and
+  manually verified.
+- Any signed-in user with a verified email can download their data, including
+  while profile onboarding is incomplete. The action is available from completed
+  Profile and verified incomplete Onboarding; it does not weaken the existing
+  configuration, authentication, or email-verification gates.
+- **Download my data** produces one UTF-8 JSON document with product identifier,
+  positive export schema version (initially `1`), server-generated UTC export
+  time, the caller's allowlisted Auth identity and profile fields, outgoing
+  blocks, active caller-visible relationships, and currently visible recipient
+  notifications. Collections are deterministic arrays and are empty rather than
+  null.
+- The export includes nullable onboarding fields faithfully. It includes only the
+  existing caller-visible block, relationship, and notification projections, so
+  either-direction block suppression, dormant relationship privacy, notification
+  suppression, and 180-day logical expiry remain authoritative.
+- The export never includes passwords or hashes, tokens, sessions, raw Auth
+  metadata, another person's email or Auth data, incoming blocks, raw dormant
+  relationship state, reopening/requester internals, suppressed/expired/
+  block-hidden notifications, server logs, security records, or unimplemented
+  lists, templates, and ledger data.
+- Export is generated synchronously on demand and returned to the caller. The
+  server retains no export file or export record. The mobile app validates and
+  pretty-prints the versioned document, writes it to OS-managed temporary/cache
+  storage with a non-identifying UTC filename, and opens the native share sheet.
+  Temporary cache cleanup is not guaranteed secure deletion.
+- This is a product-level account-data download. It is not a claim of complete
+  legal or regulatory data-portability compliance; those obligations remain open
+  for explicit review.
+- A later deletion slice will implement immediate permanent hard deletion after
+  exact username confirmation for completed profiles or exact email confirmation
+  for incomplete profiles, current-password reauthentication, and proof of a
+  session no older than ten minutes. A future authenticated `delete-account` Edge
+  Function will use a server-only privileged client, cascade the currently
+  implemented profile/social/notification records, reserve a completed canonical
+  username for 30 days without retaining email or user ID, and invalidate other
+  sessions on subsequent validation.
+- Re-registration after deletion creates a new identity and restores no prior
+  data or relationships. Every future list, template, Storage, and ledger
+  aggregate must extend the reviewed deletion rules before it ships. Hosted
+  deletion QA will use a separately authorized disposable account and must never
+  delete Fernando or Susana.
+
 ### Active and shared lists
 
 - A user can create an active list.
@@ -147,7 +193,7 @@ used in new UI or documentation.
   blocks suppress the entire relationship and profile projection instead.
 - Only the current row, version, creation and state-change times, most recent
   requester, and reopening controller are retained. Detailed audit history is not
-  introduced; account deletion and retention remain unresolved.
+  introduced; accepted account hard-deletion cleanup remains a later slice.
 - The relationship row remains the authoritative action state when persistent
   friend-request notifications are added. Realtime, push delivery, public
   profiles, shared lists, and the final four-tab shell remain separate slices.
@@ -297,5 +343,7 @@ choose them:
   friend-request behavior.
 - Reporting scope, moderation workflow, evidence retention, and appeal behavior.
 - Offline conflict resolution and which operations are permitted while offline.
-- Account deletion/export, retention and re-registration behavior, and initial
-  additional locales.
+- Shared-resource ownership/deletion, administrator-initiated deletion,
+  moderation retention, Storage cleanup, and legal/compliance export obligations
+  beyond the accepted current-aggregate account lifecycle.
+- Which additional locales ship first.
