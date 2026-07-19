@@ -16,6 +16,7 @@ abstract final class AppRoutes {
   static const community = '/community';
   static const friendships = '/community/friendships';
   static const blockedUsers = '/community/blocked';
+  static const notifications = '/notifications';
 }
 
 class AppRouteDecision {
@@ -85,7 +86,8 @@ class AppRouteDecision {
         currentPath == AppRoutes.profile ||
         currentPath == AppRoutes.community ||
         currentPath == AppRoutes.friendships ||
-        currentPath == AppRoutes.blockedUsers) {
+        currentPath == AppRoutes.blockedUsers ||
+        currentPath == AppRoutes.notifications) {
       return null;
     }
     return AppRoutes.foundation;

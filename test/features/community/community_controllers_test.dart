@@ -256,10 +256,12 @@ void main() {
       () async {
     repository.searchResult = foundProfile;
     var managementInvalidations = 0;
+    var notificationInvalidations = 0;
     final controller = CommunitySearchController(
       repository,
       friendshipRepository,
       invalidateManagement: () => managementInvalidations += 1,
+      invalidateNotifications: () => notificationInvalidations += 1,
     );
     addTearDown(controller.dispose);
     await controller.search('beta_user');
@@ -285,6 +287,7 @@ void main() {
     expect(controller.state.message, CommunitySearchMessage.requestSent);
     expect(friendshipRepository.summaryCalls, 2);
     expect(managementInvalidations, 1);
+    expect(notificationInvalidations, 1);
   });
 
   test('search actions use exact displayed versions and refresh each result',
@@ -498,10 +501,12 @@ void main() {
       friendsRelationship,
     ];
     var searchInvalidations = 0;
+    var notificationInvalidations = 0;
     final controller = FriendshipManagementController(
       friendshipRepository,
       repository,
       invalidateSearch: () => searchInvalidations += 1,
+      invalidateNotifications: () => notificationInvalidations += 1,
     );
     addTearDown(controller.dispose);
     await controller.load();
@@ -518,6 +523,7 @@ void main() {
     );
     expect(friendshipRepository.friendshipListCalls, 5);
     expect(searchInvalidations, 4);
+    expect(notificationInvalidations, 4);
   });
 
   test('friendship management busy protection is keyed by profile', () async {
@@ -622,10 +628,12 @@ void main() {
       [],
     ]);
     var searchInvalidations = 0;
+    var notificationInvalidations = 0;
     final controller = FriendshipManagementController(
       friendshipRepository,
       repository,
       invalidateSearch: () => searchInvalidations += 1,
+      invalidateNotifications: () => notificationInvalidations += 1,
     );
     addTearDown(controller.dispose);
     await controller.load();
@@ -636,6 +644,7 @@ void main() {
     expect(controller.state.relationships.valueOrNull, isEmpty);
     expect(controller.state.message, FriendshipManagementMessage.blocked);
     expect(searchInvalidations, 1);
+    expect(notificationInvalidations, 1);
   });
 
   test('friendship controllers ignore late completions after disposal',

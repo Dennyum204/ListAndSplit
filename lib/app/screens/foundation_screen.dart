@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/features/auth/presentation/auth_actions_controller.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
@@ -20,6 +21,7 @@ class FoundationScreen extends ConsumerWidget {
     );
 
     return Scaffold(
+      appBar: AppBar(actions: const [NotificationBell()]),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(

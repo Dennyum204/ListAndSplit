@@ -190,6 +190,84 @@
   "@manageFriendshipsButton": {
     "description": "Button opening friendship and friend-request management."
   },
+  "notificationsOpenButton": "Open notifications",
+  "@notificationsOpenButton": {
+    "description": "Tooltip and semantic label for the notification bell."
+  },
+  "notificationsUnreadCount": "{count, plural, =1{1 unread notification} other{{count} unread notifications}}",
+  "@notificationsUnreadCount": {
+    "description": "Accessible notification bell label including the unread count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "notificationsTitle": "Notifications",
+  "@notificationsTitle": {
+    "description": "Title of the persistent in-app notification centre."
+  },
+  "notificationsDescription": "Friend requests appear here. Actions always use the latest secure relationship state.",
+  "@notificationsDescription": {
+    "description": "Privacy-safe notification-centre explanation."
+  },
+  "notificationsRefreshButton": "Refresh notifications",
+  "@notificationsRefreshButton": {
+    "description": "Tooltip for refreshing the notification centre."
+  },
+  "notificationsLoadingLabel": "Loading notifications",
+  "@notificationsLoadingLabel": {
+    "description": "Accessible initial notification loading label."
+  },
+  "notificationsLoadingMoreLabel": "Loading more notifications",
+  "@notificationsLoadingMoreLabel": {
+    "description": "Accessible pagination loading label."
+  },
+  "notificationsLoadMoreButton": "Load more",
+  "@notificationsLoadMoreButton": {
+    "description": "Button loading the next notification page."
+  },
+  "notificationsEmptyTitle": "No notifications yet",
+  "@notificationsEmptyTitle": {
+    "description": "Notification-centre empty-state heading."
+  },
+  "notificationsEmptyDescription": "New friend requests will appear here.",
+  "@notificationsEmptyDescription": {
+    "description": "Notification-centre empty-state explanation."
+  },
+  "friendRequestNotificationTitle": "{displayName} sent you a friend request",
+  "@friendRequestNotificationTitle": {
+    "description": "Friend-request notification heading using the block-aware actor display name.",
+    "placeholders": {
+      "displayName": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationsCreatedAt": "{date} at {time}",
+  "@notificationsCreatedAt": {
+    "description": "Localized notification creation date and time.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationsUnreadLabel": "Unread notification",
+  "@notificationsUnreadLabel": {
+    "description": "Semantic label for an unread notification marker."
+  },
+  "notificationUnavailableMessage": "This request is no longer available.",
+  "@notificationUnavailableMessage": {
+    "description": "Privacy-safe stale or resolved notification state."
+  },
+  "notificationsReadFailedMessage": "Notifications loaded, but their read status could not be updated. Pull to refresh and try again.",
+  "@notificationsReadFailedMessage": {
+    "description": "Retryable error when displayed notification IDs cannot be marked read."
+  },
   "friendRequestSendButton": "Send request",
   "@friendRequestSendButton": {
     "description": "Button sending a friend request."

@@ -16,6 +16,8 @@ import 'package:list_and_split/features/community/domain/friendship_repository.d
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/community/presentation/community_providers.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
+import 'package:list_and_split/features/notifications/domain/in_app_notification.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 
 import 'helpers/fakes.dart';
@@ -334,6 +336,9 @@ void main() {
             profile: FakeProfileRepository.completeProfile,
           ),
         ),
+        notificationRepositoryProvider.overrideWithValue(
+          FakeNotificationRepository(),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -369,6 +374,9 @@ void main() {
         ),
         authRepositoryProvider.overrideWithValue(auth),
         profileRepositoryProvider.overrideWithValue(profile),
+        notificationRepositoryProvider.overrideWithValue(
+          FakeNotificationRepository(),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -983,6 +991,55 @@ void main() {
     expect(find.text('Welcome back'), findsOneWidget);
     await auth.close();
   });
+
+  testWidgets('notification badge opens the centre and displayed rows are read',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final notifications = FakeNotificationRepository()
+      ..unreadCount = 3
+      ..notifications = [
+        InAppNotification(
+          id: 'notification-1',
+          type: InAppNotificationType.friendRequest,
+          createdAt: DateTime.utc(2026, 7, 19, 8),
+          isRead: false,
+          actorProfileId: 'profile-2',
+          actorUsername: 'beta_user',
+          actorDisplayName: 'Beta User',
+          actionStatus: NotificationActionStatus.actionable,
+          expectedRelationshipVersion: 7,
+        ),
+      ];
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      notifications: notifications,
+    );
+
+    expect(find.text('3'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('3 unread notifications'),
+      findsOneWidget,
+    );
+
+    notifications.unreadCount = 0;
+    await tester.tap(find.byKey(const Key('notificationBellButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Notifications'), findsOneWidget);
+    expect(find.text('Beta User sent you a friend request'), findsOneWidget);
+    expect(notifications.markCalls, [
+      ['notification-1'],
+    ]);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('3'), findsNothing);
+    await auth.close();
+  });
 }
 
 Future<void> _pumpConfiguredApp(
@@ -991,6 +1048,7 @@ Future<void> _pumpConfiguredApp(
   required FakeProfileRepository profile,
   FakeCommunityRepository? community,
   FakeFriendshipRepository? friendships,
+  FakeNotificationRepository? notifications,
 }) async {
   final defaultFriendships = FakeFriendshipRepository()
     ..summaryResult = const FriendshipSummary(
@@ -1014,6 +1072,9 @@ Future<void> _pumpConfiguredApp(
         ),
         friendshipRepositoryProvider.overrideWithValue(
           friendships ?? defaultFriendships,
+        ),
+        notificationRepositoryProvider.overrideWithValue(
+          notifications ?? FakeNotificationRepository(),
         ),
       ],
       child: const ListAndSplitApp(),

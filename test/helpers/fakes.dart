@@ -6,6 +6,8 @@ import 'package:list_and_split/features/community/domain/community_profile.dart'
 import 'package:list_and_split/features/community/domain/community_repository.dart';
 import 'package:list_and_split/features/community/domain/friendship_repository.dart';
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
+import 'package:list_and_split/features/notifications/domain/in_app_notification.dart';
+import 'package:list_and_split/features/notifications/domain/notification_repository.dart';
 import 'package:list_and_split/features/profile/domain/profile_repository.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 
@@ -323,6 +325,56 @@ class FriendshipMutationCall {
   final String operation;
   final String profileId;
   final int? expectedVersion;
+}
+
+class FakeNotificationRepository implements NotificationRepository {
+  List<InAppNotification> notifications = [];
+  final List<List<InAppNotification>> queuedPages = [];
+  int unreadCount = 0;
+  Object? listFailure;
+  Object? unreadFailure;
+  Object? markFailure;
+  Completer<List<InAppNotification>>? listCompleter;
+  Completer<void>? markCompleter;
+  final List<NotificationListCall> listCalls = [];
+  final List<List<String>> markCalls = [];
+  int unreadCalls = 0;
+
+  @override
+  Future<List<InAppNotification>> listNotifications({
+    required int limit,
+    NotificationCursor? before,
+  }) async {
+    listCalls.add(NotificationListCall(limit, before));
+    if (listFailure != null) throw listFailure!;
+    final completer = listCompleter;
+    if (completer != null) return completer.future;
+    if (queuedPages.isNotEmpty) {
+      return List.unmodifiable(queuedPages.removeAt(0));
+    }
+    return List.unmodifiable(notifications);
+  }
+
+  @override
+  Future<int> getUnreadCount() async {
+    unreadCalls += 1;
+    if (unreadFailure != null) throw unreadFailure!;
+    return unreadCount;
+  }
+
+  @override
+  Future<void> markRead(List<String> notificationIds) async {
+    markCalls.add(List.unmodifiable(notificationIds));
+    if (markFailure != null) throw markFailure!;
+    await markCompleter?.future;
+  }
+}
+
+class NotificationListCall {
+  const NotificationListCall(this.limit, this.before);
+
+  final int limit;
+  final NotificationCursor? before;
 }
 
 const verifiedSession = AuthSessionState(

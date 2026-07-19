@@ -7,6 +7,7 @@ import 'package:list_and_split/features/community/domain/community_profile.dart'
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/community/presentation/community_search_controller.dart';
 import 'package:list_and_split/features/community/presentation/community_ui.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class CommunityScreen extends ConsumerStatefulWidget {
@@ -37,6 +38,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
         icon: const Icon(Icons.arrow_back_rounded),
         tooltip: MaterialLocalizations.of(context).backButtonTooltip,
       ),
+      actions: const [NotificationBell()],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

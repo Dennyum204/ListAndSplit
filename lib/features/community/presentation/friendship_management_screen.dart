@@ -6,6 +6,7 @@ import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/community/presentation/community_ui.dart';
 import 'package:list_and_split/features/community/presentation/friendship_management_controller.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class FriendshipManagementScreen extends ConsumerWidget {
@@ -24,6 +25,7 @@ class FriendshipManagementScreen extends ConsumerWidget {
         ),
         title: Text(localizations.friendshipsTitle),
         actions: [
+          const NotificationBell(),
           IconButton(
             key: const Key('refreshFriendshipsButton'),
             onPressed: () => ref

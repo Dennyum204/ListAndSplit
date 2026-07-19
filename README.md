@@ -6,9 +6,10 @@ The repository provides the runnable Flutter foundation and current Phase 1
 identity/community slices: verified email/password authentication, session
 routing, password recovery, owner-only profile onboarding, secure exact-username
 discovery, directional block management, versioned friend requests, and mutual
-friendship management. The persistent friend-request notification contract is
-accepted for the next Phase 1 slice but is not yet implemented. Lists, templates,
-other notifications, and the expense ledger remain planned work.
+friendship management. Persistent in-app friend-request notifications include an
+unread badge, deterministic pagination, safe versioned actions, and block-aware
+suppression. Lists, templates, other notification types, and the expense ledger
+remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
@@ -176,6 +177,14 @@ summary or target profile fields; only private outgoing-block management exposes
 blocker's own blocked-user projection. Block creation atomically cancels a pending
 request or ends a friendship, while unblocking restores no relationship.
 
+Friend-request notifications use only the reviewed `list_notifications`,
+`get_unread_notification_count`, and `mark_notifications_read` RPC contracts;
+Flutter never reads or writes `user_notifications` directly. A real transition
+into a pending relationship version creates one notification atomically, while
+duplicate and crossed sends create none. Listing and badge results exclude
+expired, suppressed, or block-hidden rows, and block creation permanently
+suppresses existing pair notifications in the same transaction.
+
 ### Hosted development Auth configuration
 
 Migrations configure database objects, but they do not configure hosted Auth email
@@ -209,10 +218,10 @@ SQL into the Dashboard.
 ## Intentional deferrals
 
 The current slices do not implement unrestricted profile/directory search,
-avatars, lists, templates, persistent notifications, reporting, Realtime,
+avatars, lists, templates, notification types beyond friend requests,
+notification archive/preferences or physical cleanup, reporting, Realtime,
 server-side ledger logic, SQLite caching/offline synchronization, push delivery,
-Firebase setup, account deletion/export, or a production backend. The accepted
-friend-request notification contract remains planned until its migration, client,
-and tests exist. Effects of blocks or friendship changes on future shared resources
-remain open. Other open product and architecture choices are recorded in the
-project documentation and must be decided before their implementation slices.
+Firebase setup, account deletion/export, or a production backend. Effects of
+blocks or friendship changes on future shared resources remain open. Other open
+product and architecture choices are recorded in the project documentation and
+must be decided before their implementation slices.

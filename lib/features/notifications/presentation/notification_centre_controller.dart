@@ -1,0 +1,387 @@
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/features/community/domain/friendship_repository.dart';
+import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
+import 'package:list_and_split/features/notifications/domain/in_app_notification.dart';
+import 'package:list_and_split/features/notifications/domain/notification_repository.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
+import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+
+const _notificationPageSize = 20;
+const _keepNotificationMessage = Object();
+
+enum NotificationCentreMessage {
+  requestAccepted,
+  requestDeclined,
+  relationshipChanged,
+  readUpdateFailed,
+  operationFailed,
+}
+
+class NotificationCentreState {
+  const NotificationCentreState({
+    required this.notifications,
+    this.cursor,
+    this.hasMore = false,
+    this.isLoadingMore = false,
+    this.paginationFailed = false,
+    this.busyNotificationIds = const {},
+    this.message,
+  });
+
+  const NotificationCentreState.loading()
+      : notifications = const AsyncLoading(),
+        cursor = null,
+        hasMore = false,
+        isLoadingMore = false,
+        paginationFailed = false,
+        busyNotificationIds = const {},
+        message = null;
+
+  final AsyncValue<List<InAppNotification>> notifications;
+  final NotificationCursor? cursor;
+  final bool hasMore;
+  final bool isLoadingMore;
+  final bool paginationFailed;
+  final Set<String> busyNotificationIds;
+  final NotificationCentreMessage? message;
+
+  bool isBusy(String notificationId) =>
+      busyNotificationIds.contains(notificationId);
+
+  NotificationCentreState copyWith({
+    AsyncValue<List<InAppNotification>>? notifications,
+    NotificationCursor? cursor,
+    bool clearCursor = false,
+    bool? hasMore,
+    bool? isLoadingMore,
+    bool? paginationFailed,
+    Set<String>? busyNotificationIds,
+    Object? message = _keepNotificationMessage,
+  }) {
+    return NotificationCentreState(
+      notifications: notifications ?? this.notifications,
+      cursor: clearCursor ? null : cursor ?? this.cursor,
+      hasMore: hasMore ?? this.hasMore,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      paginationFailed: paginationFailed ?? this.paginationFailed,
+      busyNotificationIds: busyNotificationIds ?? this.busyNotificationIds,
+      message: identical(message, _keepNotificationMessage)
+          ? this.message
+          : message as NotificationCentreMessage?,
+    );
+  }
+}
+
+class NotificationUnreadCountController extends StateNotifier<AsyncValue<int>> {
+  NotificationUnreadCountController(
+    this._repository, {
+    bool hasAuthenticatedUser = true,
+  }) : super(
+          hasAuthenticatedUser ? const AsyncLoading() : const AsyncData(0),
+        );
+
+  final NotificationRepository _repository;
+  int _generation = 0;
+
+  Future<void> load() async {
+    final generation = ++_generation;
+    state = const AsyncLoading();
+    try {
+      final count = await _repository.getUnreadCount();
+      if (!mounted || generation != _generation) return;
+      state = AsyncData(count);
+    } catch (error, stackTrace) {
+      if (!mounted || generation != _generation) return;
+      state = AsyncError(error, stackTrace);
+    }
+  }
+}
+
+class NotificationCentreController
+    extends StateNotifier<NotificationCentreState> {
+  NotificationCentreController(
+    this._notificationRepository,
+    this._friendshipRepository, {
+    required Future<void> Function() refreshUnreadCount,
+    void Function()? invalidateFriendshipManagement,
+    void Function()? invalidateCommunitySearch,
+  })  : _refreshUnreadCount = refreshUnreadCount,
+        _invalidateFriendshipManagement =
+            invalidateFriendshipManagement ?? _noop,
+        _invalidateCommunitySearch = invalidateCommunitySearch ?? _noop,
+        super(const NotificationCentreState.loading());
+
+  final NotificationRepository _notificationRepository;
+  final FriendshipRepository _friendshipRepository;
+  final Future<void> Function() _refreshUnreadCount;
+  final void Function() _invalidateFriendshipManagement;
+  final void Function() _invalidateCommunitySearch;
+  int _loadGeneration = 0;
+  bool _externalRefreshPending = false;
+
+  Future<void> load() => _loadFirstPage();
+
+  Future<void> refresh() => _loadFirstPage();
+
+  void handleExternalRefresh() {
+    if (state.busyNotificationIds.isNotEmpty || state.isLoadingMore) {
+      _externalRefreshPending = true;
+      return;
+    }
+    unawaited(_loadFirstPage());
+  }
+
+  Future<void> loadMore() async {
+    final existing = state.notifications.valueOrNull;
+    final cursor = state.cursor;
+    if (existing == null ||
+        cursor == null ||
+        !state.hasMore ||
+        state.isLoadingMore ||
+        state.busyNotificationIds.isNotEmpty) {
+      return;
+    }
+
+    final generation = _loadGeneration;
+    state = state.copyWith(
+      isLoadingMore: true,
+      paginationFailed: false,
+      message: null,
+    );
+    try {
+      final page = await _notificationRepository.listNotifications(
+        limit: _notificationPageSize,
+        before: cursor,
+      );
+      if (!mounted || generation != _loadGeneration) return;
+
+      final existingIds = existing.map((item) => item.id).toSet();
+      final newItems = page
+          .where((item) => existingIds.add(item.id))
+          .toList(growable: false);
+      state = state.copyWith(
+        notifications: AsyncData([...existing, ...newItems]),
+        cursor: page.isEmpty ? cursor : page.last.cursor,
+        hasMore: page.length == _notificationPageSize,
+        isLoadingMore: false,
+        paginationFailed: false,
+      );
+      await _markDisplayedRead(
+        newItems.map((item) => item.id).toList(growable: false),
+        generation,
+      );
+      _drainExternalRefresh();
+    } catch (_) {
+      if (!mounted || generation != _loadGeneration) return;
+      state = state.copyWith(
+        isLoadingMore: false,
+        paginationFailed: true,
+      );
+      _drainExternalRefresh();
+    }
+  }
+
+  Future<bool> accept(InAppNotification notification) {
+    return _runAction(
+      notification,
+      mutation: _friendshipRepository.acceptFriendRequest,
+      successMessage: NotificationCentreMessage.requestAccepted,
+    );
+  }
+
+  Future<bool> decline(InAppNotification notification) {
+    return _runAction(
+      notification,
+      mutation: _friendshipRepository.declineFriendRequest,
+      successMessage: NotificationCentreMessage.requestDeclined,
+    );
+  }
+
+  Future<void> _loadFirstPage({NotificationCentreMessage? message}) async {
+    if (state.busyNotificationIds.isNotEmpty) {
+      _externalRefreshPending = true;
+      return;
+    }
+
+    final generation = ++_loadGeneration;
+    state = NotificationCentreState(
+      notifications: const AsyncLoading(),
+      message: message,
+    );
+    try {
+      final page = await _notificationRepository.listNotifications(
+        limit: _notificationPageSize,
+      );
+      if (!mounted || generation != _loadGeneration) return;
+      state = NotificationCentreState(
+        notifications: AsyncData(page),
+        cursor: page.isEmpty ? null : page.last.cursor,
+        hasMore: page.length == _notificationPageSize,
+        message: message,
+      );
+      await _markDisplayedRead(
+        page.map((item) => item.id).toList(growable: false),
+        generation,
+      );
+      _drainExternalRefresh();
+    } catch (error, stackTrace) {
+      if (!mounted || generation != _loadGeneration) return;
+      state = NotificationCentreState(
+        notifications: AsyncError(error, stackTrace),
+        message: NotificationCentreMessage.operationFailed,
+      );
+      await _refreshUnreadCount();
+      _drainExternalRefresh();
+    }
+  }
+
+  Future<void> _markDisplayedRead(
+    List<String> notificationIds,
+    int generation,
+  ) async {
+    if (notificationIds.isEmpty) {
+      await _refreshUnreadCount();
+      return;
+    }
+
+    try {
+      await _notificationRepository.markRead(notificationIds);
+      if (!mounted || generation != _loadGeneration) return;
+      final displayedIds = notificationIds.toSet();
+      final current = state.notifications.valueOrNull;
+      if (current != null) {
+        state = state.copyWith(
+          notifications: AsyncData(
+            current
+                .map(
+                  (item) => displayedIds.contains(item.id)
+                      ? item.copyWith(isRead: true)
+                      : item,
+                )
+                .toList(growable: false),
+          ),
+        );
+      }
+      await _refreshUnreadCount();
+    } catch (_) {
+      if (!mounted || generation != _loadGeneration) return;
+      state = state.copyWith(
+        message: NotificationCentreMessage.readUpdateFailed,
+      );
+    }
+  }
+
+  Future<bool> _runAction(
+    InAppNotification notification, {
+    required Future<void> Function(
+      String profileId, {
+      required int expectedVersion,
+    }) mutation,
+    required NotificationCentreMessage successMessage,
+  }) async {
+    final version = notification.expectedRelationshipVersion;
+    if (notification.actionStatus != NotificationActionStatus.actionable ||
+        version == null ||
+        state.isBusy(notification.id)) {
+      return false;
+    }
+
+    state = state.copyWith(
+      busyNotificationIds: {...state.busyNotificationIds, notification.id},
+      message: null,
+    );
+    try {
+      await mutation(
+        notification.actorProfileId,
+        expectedVersion: version,
+      );
+      if (!mounted) return false;
+      _invalidateFriendshipState();
+      state = state.copyWith(busyNotificationIds: const {});
+      await _loadFirstPage(message: successMessage);
+      return true;
+    } on FriendshipFailure catch (failure) {
+      if (!mounted) return false;
+      if (failure.code == FriendshipFailureCode.stale) {
+        _invalidateFriendshipState();
+        state = state.copyWith(busyNotificationIds: const {});
+        await _loadFirstPage(
+          message: NotificationCentreMessage.relationshipChanged,
+        );
+        return false;
+      }
+      _finishActionFailure(notification.id);
+      return false;
+    } catch (_) {
+      if (!mounted) return false;
+      _finishActionFailure(notification.id);
+      return false;
+    }
+  }
+
+  void _finishActionFailure(String notificationId) {
+    state = state.copyWith(
+      busyNotificationIds: {
+        for (final id in state.busyNotificationIds)
+          if (id != notificationId) id,
+      },
+      message: NotificationCentreMessage.operationFailed,
+    );
+    _drainExternalRefresh();
+  }
+
+  void _invalidateFriendshipState() {
+    _invalidateFriendshipManagement();
+    _invalidateCommunitySearch();
+  }
+
+  void _drainExternalRefresh() {
+    if (!_externalRefreshPending ||
+        !mounted ||
+        state.busyNotificationIds.isNotEmpty ||
+        state.isLoadingMore) {
+      return;
+    }
+    _externalRefreshPending = false;
+    unawaited(_loadFirstPage());
+  }
+
+  static void _noop() {}
+}
+
+final notificationUnreadCountControllerProvider = StateNotifierProvider
+    .autoDispose<NotificationUnreadCountController, AsyncValue<int>>((ref) {
+  final userId = ref.watch(verifiedUserIdProvider);
+  final controller = NotificationUnreadCountController(
+    ref.watch(notificationRepositoryProvider),
+    hasAuthenticatedUser: userId != null,
+  );
+  ref.listen<int>(notificationRefreshSignalProvider, (_, __) {
+    if (userId != null) unawaited(controller.load());
+  });
+  if (userId != null) {
+    unawaited(controller.load());
+  }
+  return controller;
+});
+
+final notificationCentreControllerProvider = StateNotifierProvider.autoDispose<
+    NotificationCentreController, NotificationCentreState>((ref) {
+  final userId = ref.watch(verifiedUserIdProvider);
+  final controller = NotificationCentreController(
+    ref.watch(notificationRepositoryProvider),
+    ref.watch(friendshipRepositoryProvider),
+    refreshUnreadCount: () =>
+        ref.read(notificationUnreadCountControllerProvider.notifier).load(),
+    invalidateFriendshipManagement:
+        ref.watch(invalidateFriendshipManagementProvider),
+    invalidateCommunitySearch: ref.watch(invalidateCommunitySearchProvider),
+  );
+  ref.listen<int>(notificationRefreshSignalProvider, (_, __) {
+    if (userId != null) controller.handleExternalRefresh();
+  });
+  if (userId != null) unawaited(controller.load());
+  return controller;
+});

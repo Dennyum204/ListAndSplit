@@ -115,6 +115,7 @@ void main() {
     expect(complete.redirect(AppRoutes.community), isNull);
     expect(complete.redirect(AppRoutes.friendships), isNull);
     expect(complete.redirect(AppRoutes.blockedUsers), isNull);
+    expect(complete.redirect(AppRoutes.notifications), isNull);
     expect(complete.redirect(AppRoutes.signIn), AppRoutes.foundation);
   });
 
@@ -144,6 +145,20 @@ void main() {
     expect(
       decision(profile: FakeProfileRepository.incompleteProfile)
           .redirect(AppRoutes.friendships),
+      AppRoutes.onboarding,
+    );
+    expect(
+      decision(session: const AuthSessionState.signedOut())
+          .redirect(AppRoutes.notifications),
+      AppRoutes.signIn,
+    );
+    expect(
+      decision(session: unverifiedSession).redirect(AppRoutes.notifications),
+      AppRoutes.verification,
+    );
+    expect(
+      decision(profile: FakeProfileRepository.incompleteProfile)
+          .redirect(AppRoutes.notifications),
       AppRoutes.onboarding,
     );
   });

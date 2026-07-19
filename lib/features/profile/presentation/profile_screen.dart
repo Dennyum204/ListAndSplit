@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/features/profile/presentation/profile_controller.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_ui.dart';
@@ -56,6 +57,7 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
         icon: const Icon(Icons.arrow_back_rounded),
         tooltip: MaterialLocalizations.of(context).backButtonTooltip,
       ),
+      actions: const [NotificationBell()],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
