@@ -20,6 +20,7 @@ import 'package:list_and_split/features/auth/presentation/verification_screen.da
 import 'package:list_and_split/features/community/presentation/blocked_users_screen.dart';
 import 'package:list_and_split/features/community/presentation/community_screen.dart';
 import 'package:list_and_split/features/community/presentation/friendship_management_screen.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_centre_screen.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 import 'package:list_and_split/features/profile/presentation/onboarding_screen.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
@@ -140,6 +141,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.blockedUsers,
         builder: (context, state) => const BlockedUsersScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.notifications,
+        builder: (context, state) => const NotificationCentreScreen(),
       ),
     ],
   );

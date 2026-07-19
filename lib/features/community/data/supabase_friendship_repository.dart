@@ -135,6 +135,9 @@ class SupabaseFriendshipRepository implements FriendshipRepository {
       if (error.code == '40001') {
         throw const FriendshipFailure(FriendshipFailureCode.stale);
       }
+      if (error.code == '22023') {
+        throw const FriendshipFailure(FriendshipFailureCode.unavailable);
+      }
       throw const FriendshipFailure(FriendshipFailureCode.generic);
     } catch (_) {
       throw const FriendshipFailure(FriendshipFailureCode.generic);

@@ -6,6 +6,7 @@ class FormPageFrame extends StatelessWidget {
     required this.description,
     required this.child,
     this.leading,
+    this.actions,
     super.key,
   });
 
@@ -13,11 +14,12 @@ class FormPageFrame extends StatelessWidget {
   final String description;
   final Widget child;
   final Widget? leading;
+  final List<Widget>? actions;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(leading: leading),
+      appBar: AppBar(leading: leading, actions: actions),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(

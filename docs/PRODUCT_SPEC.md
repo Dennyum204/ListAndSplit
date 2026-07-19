@@ -148,9 +148,9 @@ used in new UI or documentation.
 - Only the current row, version, creation and state-change times, most recent
   requester, and reopening controller are retained. Detailed audit history is not
   introduced; account deletion and retention remain unresolved.
-- This relationship-management slice does not introduce persistent notifications,
-  Realtime, push delivery, public profiles, shared lists, or the final four-tab
-  shell.
+- The relationship row remains the authoritative action state when persistent
+  friend-request notifications are added. Realtime, push delivery, public
+  profiles, shared lists, and the final four-tab shell remain separate slices.
 - Only accepted friends can be invited to a shared active list.
 - A user's public templates can be viewed from that user's profile.
 - The community feed shows recent public templates from accepted friends.
@@ -177,10 +177,33 @@ the presentation of simplified debts remain open decisions.
 ### Notifications and actionable requests
 
 - The app has a persistent in-app notification centre.
-- Friend requests, active-list invitations, and templates sent by friends are
-  actionable and require Accept or Decline.
+- Every real friend-request transition into `pending` creates one persistent
+  notification for the recipient and relationship version. Duplicate sends and
+  crossed sends do not create another notification; reopening an eligible dormant
+  relationship creates one for its new pending version. Existing relationship
+  history is not backfilled.
+- The relationship row, not the notification, remains authoritative. Accept and
+  Decline use its exact expected version, so duplicate taps, retries, and stale
+  notifications cannot overwrite newer state.
+- Notifications do not copy usernames, display names, email, Auth metadata, or
+  arbitrary messages. The visible actor's minimal profile is resolved through a
+  block-aware server contract.
+- The centre lists visible notifications newest first with bounded deterministic
+  keyset pagination. Successfully displaying a page marks only those displayed
+  notification IDs read, and repeated marking is safe.
+- The bell badge counts the current recipient's unread, unsuppressed, unexpired,
+  block-visible notifications.
+- Blocking in either direction permanently suppresses existing notifications
+  between that pair in the same transaction. Unblocking never restores them.
+- Notifications expire logically exactly 180 days after creation and are then
+  omitted from listing and badge counts. Physical cleanup remains a documented
+  pre-production follow-up and no scheduled deletion is introduced here.
+- Active-list invitations and templates sent by friends remain accepted future
+  actionable types requiring Accept or Decline.
 - Users receive informational notifications for new item assignments and note
   mentions.
+- User-facing archive, delete, mark-unread, preference, and notification-history
+  controls are not part of the friend-request slice.
 - Push notifications are planned for a later phase using Firebase Cloud Messaging
   and Apple Push Notification service.
 - Creating a Firebase project requires separate explicit authorization.
@@ -269,7 +292,9 @@ choose them:
 - Supported currencies, currency immutability after ledger use, equal-split
   remainder allocation, expense correction, settlement reversal, and debt
   simplification rules.
-- Notification retention, read/archive behavior, badge counts, and push preferences.
+- Notification archive/delete/preferences, future types, push-safe payloads,
+  physical cleanup, and account-lifecycle retention beyond the accepted
+  friend-request behavior.
 - Reporting scope, moderation workflow, evidence retention, and appeal behavior.
 - Offline conflict resolution and which operations are permitted while offline.
 - Account deletion/export, retention and re-registration behavior, and initial

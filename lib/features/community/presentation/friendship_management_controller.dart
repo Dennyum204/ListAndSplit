@@ -6,6 +6,7 @@ import 'package:list_and_split/features/community/domain/friendship_repository.d
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/community/presentation/community_providers.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 
 enum FriendshipManagementMessage {
@@ -57,12 +58,15 @@ class FriendshipManagementController
     this._friendshipRepository,
     this._communityRepository, {
     void Function()? invalidateSearch,
+    void Function()? invalidateNotifications,
   })  : _invalidateSearch = invalidateSearch ?? _noop,
+        _invalidateNotifications = invalidateNotifications ?? _noop,
         super(const FriendshipManagementState.loading());
 
   final FriendshipRepository _friendshipRepository;
   final CommunityRepository _communityRepository;
   final void Function() _invalidateSearch;
+  final void Function() _invalidateNotifications;
   int _loadGeneration = 0;
 
   Future<void> load() async {
@@ -136,6 +140,7 @@ class FriendshipManagementController
       await _communityRepository.blockProfile(relationship.id);
       if (!mounted) return false;
       _invalidateSearch();
+      _invalidateNotifications();
       return _refreshAfterMutation(
         relationship.id,
         successMessage: FriendshipManagementMessage.blocked,
@@ -143,6 +148,7 @@ class FriendshipManagementController
     } catch (_) {
       if (!mounted) return false;
       _invalidateSearch();
+      _invalidateNotifications();
       await _refreshAfterMutation(
         relationship.id,
         successMessage: FriendshipManagementMessage.operationFailed,
@@ -171,6 +177,7 @@ class FriendshipManagementController
       await mutation(relationship.id, expectedVersion: version);
       if (!mounted) return false;
       _invalidateSearch();
+      _invalidateNotifications();
       return _refreshAfterMutation(
         relationship.id,
         successMessage: successMessage,
@@ -179,6 +186,7 @@ class FriendshipManagementController
       if (!mounted) return false;
       if (failure.code == FriendshipFailureCode.stale) {
         _invalidateSearch();
+        _invalidateNotifications();
         await _refreshAfterMutation(
           relationship.id,
           successMessage: FriendshipManagementMessage.relationshipChanged,
@@ -186,6 +194,7 @@ class FriendshipManagementController
         return false;
       }
       _invalidateSearch();
+      _invalidateNotifications();
       await _refreshAfterMutation(
         relationship.id,
         successMessage: FriendshipManagementMessage.operationFailed,
@@ -194,6 +203,7 @@ class FriendshipManagementController
     } catch (_) {
       if (!mounted) return false;
       _invalidateSearch();
+      _invalidateNotifications();
       await _refreshAfterMutation(
         relationship.id,
         successMessage: FriendshipManagementMessage.operationFailed,
@@ -267,6 +277,7 @@ final friendshipManagementControllerProvider =
     ref.watch(friendshipRepositoryProvider),
     ref.watch(communityRepositoryProvider),
     invalidateSearch: ref.watch(invalidateCommunitySearchProvider),
+    invalidateNotifications: ref.watch(invalidateNotificationsProvider),
   );
   unawaited(controller.load());
   return controller;

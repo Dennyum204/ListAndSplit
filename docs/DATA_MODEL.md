@@ -177,11 +177,12 @@ Raw declined/ended state and `reopen_by_id` are not disclosed to the other
 participant; email/Auth metadata, incoming block identity, unrelated rows, and
 unnecessary internal timestamps are never returned.
 
-Requests do not expire in the initial design. Persistent notifications, Realtime,
-push delivery, public profiles, the final navigation shell, shared lists, detailed
-audit history, and relationship-row account deletion/retention are outside this
-slice. The effects of relationship or block changes on existing shared resources
-remain unresolved.
+Requests do not expire in the initial design. A persistent notification may
+reference the exact pending relationship version but never becomes authoritative
+for its transition. Realtime, push delivery, public profiles, the final navigation
+shell, shared lists, detailed audit history, and relationship-row account
+deletion/retention remain outside the relationship record. The effects of
+relationship or block changes on existing shared resources remain unresolved.
 
 ## Active-list aggregate
 
@@ -323,21 +324,54 @@ deterministic output, invalid inputs, and relevant lifecycle corrections.
 
 ### Persistent notification
 
-A notification belongs to one recipient and conceptually stores its type, safe
-display/reference data, creation time, and read state. Notification types include:
+A notification belongs to one recipient. The accepted initial physical record is
+`public.user_notifications` and contains:
 
-- actionable friend request;
+- a database-generated UUID primary key;
+- non-cascading recipient and actor profile references;
+- a check-constrained type, initially only `friend_request`;
+- normalized low/high relationship participant IDs and a non-cascading composite
+  relationship reference;
+- the positive relationship version that caused the notification;
+- database-managed creation time and expiry exactly 180 days later;
+- nullable database-managed read time; and
+- nullable permanent suppression time.
+
+Named constraints require actor and recipient to differ, prove they are exactly
+the normalized relationship participants, require valid pair ordering and a
+positive version, preserve exact expiry, and prevent read/suppression timestamps
+from preceding creation. A unique recipient/type/pair/version constraint prevents
+duplicate creation. The row stores no username, display name, email, Auth metadata,
+arbitrary message, or independent action state.
+
+Every real transition into a new pending relationship version creates one
+notification for that recipient. A same-requester retry, crossed send into
+friendship, or historical relationship row creates none. A valid dormant reopening
+creates one for its new pending version.
+
+The RPC-only boundary lists the current recipient's visible rows newest first by
+deterministic `(created_at, id)` keyset, returns a matching unread count, and marks
+a bounded set of caller-owned displayed IDs read. Listing resolves only the actor's
+ID, username, and display name and projects `actionable`, `friends`, or generic
+`unavailable` from the current relationship. Only the exact matching pending
+version with the actor as requester and recipient as caller is actionable.
+
+Expired rows and permanently suppressed rows are excluded from listing and badge
+counts. Creating a block suppresses every existing pair notification in the same
+transaction, regardless of recipient direction; unblocking does not restore them.
+No scheduled or physical cleanup is introduced in this slice.
+
+Accepted future notification types remain:
+
 - actionable active-list invitation;
 - actionable sent template;
 - informational item assignment; and
 - informational note mention.
 
-Friend-request action state belongs to the versioned relationship row; invitation
-and sent-template action state belongs to those underlying records. A notification
-references the authoritative record and, for a relationship action, its expected
-version. Accept/Decline must remain safe under duplicate taps, retries, and a stale
-notification. Retention, archive/delete behavior, badge semantics, and payload
-localization are open.
+Invitation and sent-template action state will belong to their underlying records,
+as friend-request action state belongs to the relationship. Archive/delete and
+preference controls, future-type payload localization, physical cleanup, and
+account-lifecycle retention remain open.
 
 Push tokens and delivery attempts are future infrastructure for FCM/APNs and are
 outside the initial identity/profile schema. Device token ownership, rotation,
@@ -391,7 +425,8 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   idempotency keys.
 - Currency catalog, amount ranges, expense/settlement lifecycle, remainder and debt
   algorithms.
-- Notification payload schema, retention, localization, and push token tables.
+- Future notification-type payload/localization, archive/preferences, physical
+  cleanup, account-lifecycle retention, and push-token tables.
 - Optimistic concurrency/version fields, realtime publication, offline mutation
   identifiers, tombstones, and conflict resolution.
 - Reporting schema and moderation authorization.

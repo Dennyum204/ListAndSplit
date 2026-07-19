@@ -296,12 +296,32 @@ void main() {
     );
   });
 
-  test('maps every other backend error to a privacy-safe generic failure',
+  test('maps SQLSTATE 22023 to unavailable without matching error text',
       () async {
+    failure = const PostgrestException(
+      message: 'arbitrary private backend text',
+      code: '22023',
+      details: 'private details',
+      hint: 'private hint',
+    );
+
+    await expectLater(
+      repository.declineFriendRequest('profile-2', expectedVersion: 3),
+      throwsA(
+        isA<FriendshipFailure>().having(
+          (error) => error.code,
+          'code',
+          FriendshipFailureCode.unavailable,
+        ),
+      ),
+    );
+  });
+
+  test('maps arbitrary backend and transport errors to generic', () async {
     for (final backendFailure in <Object>[
       const PostgrestException(
         message: 'sensitive backend state',
-        code: '22023',
+        code: '57014',
         details: 'private details',
         hint: 'private hint',
       ),

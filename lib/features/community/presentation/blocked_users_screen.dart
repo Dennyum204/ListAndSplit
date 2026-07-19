@@ -6,6 +6,7 @@ import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/community/domain/community_profile.dart';
 import 'package:list_and_split/features/community/presentation/blocked_users_controller.dart';
 import 'package:list_and_split/features/community/presentation/community_ui.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class BlockedUsersScreen extends ConsumerWidget {
@@ -23,6 +24,7 @@ class BlockedUsersScreen extends ConsumerWidget {
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
         ),
         title: Text(localizations.blockedUsersTitle),
+        actions: const [NotificationBell()],
       ),
       body: SafeArea(
         child: Center(

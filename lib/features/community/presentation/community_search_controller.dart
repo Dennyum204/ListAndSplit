@@ -7,6 +7,7 @@ import 'package:list_and_split/features/community/domain/friendship_repository.d
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/community/presentation/community_providers.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/domain/profile_validation.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 
@@ -50,12 +51,15 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
     this._communityRepository,
     this._friendshipRepository, {
     void Function()? invalidateManagement,
+    void Function()? invalidateNotifications,
   })  : _invalidateManagement = invalidateManagement ?? _noop,
+        _invalidateNotifications = invalidateNotifications ?? _noop,
         super(const CommunitySearchState());
 
   final CommunityRepository _communityRepository;
   final FriendshipRepository _friendshipRepository;
   final void Function() _invalidateManagement;
+  final void Function() _invalidateNotifications;
   bool _externalRefreshPending = false;
 
   void clearResultForEditedQuery() {
@@ -227,6 +231,7 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
       await _communityRepository.blockProfile(result.id);
       if (!mounted) return false;
       _invalidateManagement();
+      _invalidateNotifications();
       state = const CommunitySearchState(
         message: CommunitySearchMessage.blocked,
       );
@@ -234,6 +239,7 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
     } catch (_) {
       if (!mounted) return false;
       _invalidateManagement();
+      _invalidateNotifications();
       await _refreshAfterAction(
         result,
         successMessage: CommunitySearchMessage.operationFailed,
@@ -261,6 +267,7 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
       await mutation();
       if (!mounted) return false;
       _invalidateManagement();
+      _invalidateNotifications();
       return _refreshAfterAction(
         result,
         successMessage: successMessage,
@@ -270,6 +277,7 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
       if (!mounted) return false;
       if (failure.code == FriendshipFailureCode.stale) {
         _invalidateManagement();
+        _invalidateNotifications();
         await _refreshAfterAction(
           result,
           successMessage: CommunitySearchMessage.relationshipChanged,
@@ -278,6 +286,7 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
         return false;
       }
       _invalidateManagement();
+      _invalidateNotifications();
       await _refreshAfterAction(
         result,
         successMessage: CommunitySearchMessage.operationFailed,
@@ -287,6 +296,7 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
     } catch (_) {
       if (!mounted) return false;
       _invalidateManagement();
+      _invalidateNotifications();
       await _refreshAfterAction(
         result,
         successMessage: CommunitySearchMessage.operationFailed,
@@ -371,6 +381,7 @@ final communitySearchControllerProvider = StateNotifierProvider.autoDispose<
     ref.watch(communityRepositoryProvider),
     ref.watch(friendshipRepositoryProvider),
     invalidateManagement: ref.watch(invalidateFriendshipManagementProvider),
+    invalidateNotifications: ref.watch(invalidateNotificationsProvider),
   );
   ref.listen<int>(communitySearchRefreshSignalProvider, (_, __) {
     controller.handleFriendshipInvalidation();
