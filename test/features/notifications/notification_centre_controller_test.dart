@@ -217,6 +217,250 @@ void main() {
     expect(searchInvalidations, 1);
   });
 
+  test(
+      'unavailable action reconciles automatically without fabricating success',
+      () async {
+    final actionable = notification(id: 'n-1');
+    notifications.queuedPages.addAll([
+      [actionable],
+      [
+        notification(
+          id: 'n-1',
+          actionStatus: NotificationActionStatus.unavailable,
+          expectedVersion: null,
+        ),
+      ],
+    ]);
+    friendships.mutationFailure =
+        const FriendshipFailure(FriendshipFailureCode.unavailable);
+    await controller.load();
+
+    expect(await controller.accept(actionable), isFalse);
+
+    expect(notifications.listCalls, hasLength(2));
+    expect(
+      controller.state.notifications.valueOrNull!.single.actionStatus,
+      NotificationActionStatus.unavailable,
+    );
+    expect(
+      controller.state.message,
+      NotificationCentreMessage.relationshipChanged,
+    );
+    expect(controller.state.busyNotificationIds, isEmpty);
+    expect(unreadRefreshes, 2);
+    expect(managementInvalidations, 1);
+    expect(searchInvalidations, 1);
+  });
+
+  test('generic action failure reports changed when reconciliation resolves it',
+      () async {
+    final actionable = notification(id: 'n-1');
+    notifications.queuedPages.addAll([
+      [actionable],
+      [
+        notification(
+          id: 'n-1',
+          actionStatus: NotificationActionStatus.unavailable,
+          expectedVersion: null,
+        ),
+      ],
+    ]);
+    friendships.mutationFailure =
+        const FriendshipFailure(FriendshipFailureCode.generic);
+    await controller.load();
+
+    expect(await controller.accept(actionable), isFalse);
+
+    expect(
+      controller.state.message,
+      NotificationCentreMessage.relationshipChanged,
+    );
+    expect(controller.state.busyNotificationIds, isEmpty);
+  });
+
+  test('generic action failure reports changed when the row disappears',
+      () async {
+    final actionable = notification(id: 'n-1');
+    notifications.queuedPages.addAll([
+      [actionable],
+      const [],
+    ]);
+    friendships.mutationFailure =
+        const FriendshipFailure(FriendshipFailureCode.generic);
+    await controller.load();
+
+    expect(await controller.accept(actionable), isFalse);
+
+    expect(controller.state.notifications.valueOrNull, isEmpty);
+    expect(
+      controller.state.message,
+      NotificationCentreMessage.relationshipChanged,
+    );
+  });
+
+  test('generic action failure reports changed for a newer actionable version',
+      () async {
+    final actionable = notification(id: 'n-1');
+    notifications.queuedPages.addAll([
+      [actionable],
+      [notification(id: 'n-1', expectedVersion: 5)],
+    ]);
+    friendships.mutationFailure =
+        const FriendshipFailure(FriendshipFailureCode.generic);
+    await controller.load();
+
+    expect(await controller.decline(actionable), isFalse);
+
+    expect(
+      controller
+          .state.notifications.valueOrNull!.single.expectedRelationshipVersion,
+      5,
+    );
+    expect(
+      controller.state.message,
+      NotificationCentreMessage.relationshipChanged,
+    );
+  });
+
+  test('generic action failure remains retryable when action is unchanged',
+      () async {
+    final actionable = notification(id: 'n-1');
+    notifications.queuedPages.addAll([
+      [actionable],
+      [actionable],
+    ]);
+    friendships.mutationFailure =
+        const FriendshipFailure(FriendshipFailureCode.generic);
+    await controller.load();
+
+    expect(await controller.decline(actionable), isFalse);
+
+    expect(
+      controller.state.notifications.valueOrNull!.single.actionStatus,
+      NotificationActionStatus.actionable,
+    );
+    expect(
+      controller.state.message,
+      NotificationCentreMessage.operationFailed,
+    );
+    expect(controller.state.busyNotificationIds, isEmpty);
+  });
+
+  test('failed reconciliation clears busy state and keeps generic feedback',
+      () async {
+    final actionable = notification(id: 'n-1');
+    notifications.notifications = [actionable];
+    friendships.mutationFailure = StateError('transport failed');
+    await controller.load();
+    notifications.listFailure = const NotificationFailure();
+
+    expect(await controller.accept(actionable), isFalse);
+
+    expect(controller.state.busyNotificationIds, isEmpty);
+    expect(
+      controller.state.message,
+      NotificationCentreMessage.operationFailed,
+    );
+    expect(unreadRefreshes, 2);
+    expect(managementInvalidations, 1);
+    expect(searchInvalidations, 1);
+  });
+
+  test('reconciliation refreshes unread count when marking read fails',
+      () async {
+    final actionable = notification(id: 'n-1');
+    notifications.queuedPages.addAll([
+      [actionable],
+      [
+        notification(
+          id: 'n-1',
+          actionStatus: NotificationActionStatus.unavailable,
+          expectedVersion: null,
+        ),
+      ],
+    ]);
+    friendships.mutationFailure =
+        const FriendshipFailure(FriendshipFailureCode.unavailable);
+    await controller.load();
+    notifications.markFailure = const NotificationFailure();
+
+    expect(await controller.accept(actionable), isFalse);
+
+    expect(unreadRefreshes, 2);
+    expect(
+      controller.state.message,
+      NotificationCentreMessage.relationshipChanged,
+    );
+    expect(controller.state.busyNotificationIds, isEmpty);
+  });
+
+  test('reconciliation preserves unrelated in-flight notification actions',
+      () async {
+    final first = notification(id: 'n-1');
+    final second = InAppNotification(
+      id: 'n-2',
+      type: first.type,
+      createdAt: first.createdAt.subtract(const Duration(minutes: 1)),
+      isRead: first.isRead,
+      actorProfileId: 'actor-2',
+      actorUsername: 'beta_user',
+      actorDisplayName: 'Beta User',
+      actionStatus: NotificationActionStatus.actionable,
+      expectedRelationshipVersion: 9,
+    );
+    notifications.queuedPages.addAll([
+      [first, second],
+      [
+        notification(
+          id: 'n-1',
+          actionStatus: NotificationActionStatus.unavailable,
+          expectedVersion: null,
+        ),
+        second,
+      ],
+      [
+        notification(
+          id: 'n-1',
+          actionStatus: NotificationActionStatus.unavailable,
+          expectedVersion: null,
+        ),
+        InAppNotification(
+          id: second.id,
+          type: second.type,
+          createdAt: second.createdAt,
+          isRead: true,
+          actorProfileId: second.actorProfileId,
+          actorUsername: second.actorUsername,
+          actorDisplayName: second.actorDisplayName,
+          actionStatus: NotificationActionStatus.unavailable,
+          expectedRelationshipVersion: null,
+        ),
+      ],
+    ]);
+    final firstMutation = Completer<void>();
+    final secondMutation = Completer<void>();
+    friendships.queuedMutationCompleters.addAll([
+      firstMutation,
+      secondMutation,
+    ]);
+    await controller.load();
+
+    final firstAction = controller.accept(first);
+    final secondAction = controller.decline(second);
+    expect(controller.state.busyNotificationIds, {'n-1', 'n-2'});
+
+    firstMutation.completeError(
+      const FriendshipFailure(FriendshipFailureCode.unavailable),
+    );
+    expect(await firstAction, isFalse);
+    expect(controller.state.busyNotificationIds, {'n-2'});
+
+    secondMutation.complete();
+    expect(await secondAction, isTrue);
+    expect(controller.state.busyNotificationIds, isEmpty);
+    expect(notifications.listCalls, hasLength(3));
+  });
+
   test('nonactionable and malformed local actions never call friendship RPCs',
       () async {
     final resolved = notification(

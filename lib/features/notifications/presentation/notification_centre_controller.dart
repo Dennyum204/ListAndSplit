@@ -205,6 +205,7 @@ class NotificationCentreController
       return;
     }
 
+    _externalRefreshPending = false;
     final generation = ++_loadGeneration;
     state = NotificationCentreState(
       notifications: const AsyncLoading(),
@@ -239,14 +240,16 @@ class NotificationCentreController
 
   Future<void> _markDisplayedRead(
     List<String> notificationIds,
-    int generation,
-  ) async {
-    if (notificationIds.isEmpty) {
-      await _refreshUnreadCount();
-      return;
-    }
-
+    int generation, {
+    NotificationCentreMessage? failureMessage,
+    bool refreshUnreadOnFailure = false,
+  }) async {
     try {
+      if (notificationIds.isEmpty) {
+        await _refreshUnreadCount();
+        return;
+      }
+
       await _notificationRepository.markRead(notificationIds);
       if (!mounted || generation != _loadGeneration) return;
       final displayedIds = notificationIds.toSet();
@@ -268,8 +271,15 @@ class NotificationCentreController
     } catch (_) {
       if (!mounted || generation != _loadGeneration) return;
       state = state.copyWith(
-        message: NotificationCentreMessage.readUpdateFailed,
+        message: failureMessage ?? NotificationCentreMessage.readUpdateFailed,
       );
+      if (refreshUnreadOnFailure) {
+        try {
+          await _refreshUnreadCount();
+        } catch (_) {
+          // Keep the action result stable when the independent badge refresh fails.
+        }
+      }
     }
   }
 
@@ -299,38 +309,97 @@ class NotificationCentreController
       );
       if (!mounted) return false;
       _invalidateFriendshipState();
-      state = state.copyWith(busyNotificationIds: const {});
+      state = state.copyWith(
+        busyNotificationIds: _withoutBusy(notification.id),
+      );
       await _loadFirstPage(message: successMessage);
       return true;
     } on FriendshipFailure catch (failure) {
       if (!mounted) return false;
-      if (failure.code == FriendshipFailureCode.stale) {
-        _invalidateFriendshipState();
-        state = state.copyWith(busyNotificationIds: const {});
-        await _loadFirstPage(
-          message: NotificationCentreMessage.relationshipChanged,
-        );
-        return false;
-      }
-      _finishActionFailure(notification.id);
+      _invalidateFriendshipState();
+      await _reconcileActionFailure(
+        notification,
+        relationshipChanged: failure.code == FriendshipFailureCode.stale ||
+            failure.code == FriendshipFailureCode.unavailable,
+      );
       return false;
     } catch (_) {
       if (!mounted) return false;
-      _finishActionFailure(notification.id);
+      _invalidateFriendshipState();
+      await _reconcileActionFailure(
+        notification,
+        relationshipChanged: false,
+      );
       return false;
     }
   }
 
-  void _finishActionFailure(String notificationId) {
+  Future<void> _reconcileActionFailure(
+    InAppNotification original, {
+    required bool relationshipChanged,
+  }) async {
+    _externalRefreshPending = false;
+    final generation = ++_loadGeneration;
+    final remainingBusy = _withoutBusy(original.id);
     state = state.copyWith(
-      busyNotificationIds: {
+      busyNotificationIds: remainingBusy,
+      paginationFailed: false,
+      message: null,
+    );
+
+    try {
+      final page = await _notificationRepository.listNotifications(
+        limit: _notificationPageSize,
+      );
+      if (!mounted || generation != _loadGeneration) return;
+
+      InAppNotification? refreshed;
+      for (final item in page) {
+        if (item.id == original.id) {
+          refreshed = item;
+          break;
+        }
+      }
+      final actionStillCurrent = refreshed != null &&
+          refreshed.actionStatus == NotificationActionStatus.actionable &&
+          refreshed.expectedRelationshipVersion ==
+              original.expectedRelationshipVersion;
+      final message = relationshipChanged || !actionStillCurrent
+          ? NotificationCentreMessage.relationshipChanged
+          : NotificationCentreMessage.operationFailed;
+      state = NotificationCentreState(
+        notifications: AsyncData(page),
+        cursor: page.isEmpty ? null : page.last.cursor,
+        hasMore: page.length == _notificationPageSize,
+        busyNotificationIds: remainingBusy,
+        message: message,
+      );
+      await _markDisplayedRead(
+        page.map((item) => item.id).toList(growable: false),
+        generation,
+        failureMessage: message,
+        refreshUnreadOnFailure: true,
+      );
+      _drainExternalRefresh();
+    } catch (_) {
+      if (!mounted || generation != _loadGeneration) return;
+      state = state.copyWith(
+        busyNotificationIds: remainingBusy,
+        message: NotificationCentreMessage.operationFailed,
+      );
+      try {
+        await _refreshUnreadCount();
+      } catch (_) {
+        // The generic action failure remains retryable even if badge refresh fails.
+      }
+      _drainExternalRefresh();
+    }
+  }
+
+  Set<String> _withoutBusy(String notificationId) => {
         for (final id in state.busyNotificationIds)
           if (id != notificationId) id,
-      },
-      message: NotificationCentreMessage.operationFailed,
-    );
-    _drainExternalRefresh();
-  }
+      };
 
   void _invalidateFriendshipState() {
     _invalidateFriendshipManagement();

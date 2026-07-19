@@ -1040,6 +1040,92 @@ void main() {
     expect(find.text('3'), findsNothing);
     await auth.close();
   });
+
+  testWidgets('stale notification action reconciles without manual refresh',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final actionable = InAppNotification(
+      id: 'notification-1',
+      type: InAppNotificationType.friendRequest,
+      createdAt: DateTime.utc(2026, 7, 19, 8),
+      isRead: false,
+      actorProfileId: 'profile-2',
+      actorUsername: 'beta_user',
+      actorDisplayName: 'Beta User',
+      actionStatus: NotificationActionStatus.actionable,
+      expectedRelationshipVersion: 7,
+    );
+    final notifications = FakeNotificationRepository()
+      ..unreadCount = 1
+      ..queuedPages.addAll([
+        [actionable],
+        [
+          InAppNotification(
+            id: actionable.id,
+            type: actionable.type,
+            createdAt: actionable.createdAt,
+            isRead: true,
+            actorProfileId: actionable.actorProfileId,
+            actorUsername: actionable.actorUsername,
+            actorDisplayName: actionable.actorDisplayName,
+            actionStatus: NotificationActionStatus.unavailable,
+            expectedRelationshipVersion: null,
+          ),
+        ],
+      ]);
+    final friendships = FakeFriendshipRepository()
+      ..mutationFailure =
+          const FriendshipFailure(FriendshipFailureCode.unavailable);
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      friendships: friendships,
+      notifications: notifications,
+    );
+
+    expect(
+      find.bySemanticsLabel('1 unread notification'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('notificationBellButton')));
+    await tester.pumpAndSettle();
+    notifications.unreadCount = 0;
+
+    await tester.tap(
+      find.byKey(const Key('acceptNotification-notification-1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'This relationship changed elsewhere. The latest state is shown.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('This request is no longer available.'), findsOneWidget);
+    expect(
+      find.byKey(const Key('acceptNotification-notification-1')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('declineNotification-notification-1')),
+      findsNothing,
+    );
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(notifications.listCalls, hasLength(2));
+    expect(friendships.mutationCalls, hasLength(1));
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(
+      find.bySemanticsLabel('1 unread notification'),
+      findsNothing,
+    );
+    await auth.close();
+  });
 }
 
 Future<void> _pumpConfiguredApp(

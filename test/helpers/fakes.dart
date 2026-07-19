@@ -234,6 +234,7 @@ class FakeFriendshipRepository implements FriendshipRepository {
   Completer<FriendshipSummary>? summaryCompleter;
   Completer<List<FriendshipSummary>>? friendshipListCompleter;
   Completer<void>? mutationCompleter;
+  final List<Completer<void>> queuedMutationCompleters = [];
   final List<List<FriendshipSummary>> queuedRelationshipLists = [];
 
   String? lastSummaryProfileId;
@@ -311,6 +312,10 @@ class FakeFriendshipRepository implements FriendshipRepository {
       FriendshipMutationCall(operation, profileId, expectedVersion),
     );
     if (mutationFailure != null) throw mutationFailure!;
+    if (queuedMutationCompleters.isNotEmpty) {
+      await queuedMutationCompleters.removeAt(0).future;
+      return;
+    }
     await mutationCompleter?.future;
   }
 }
