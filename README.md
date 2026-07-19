@@ -6,8 +6,9 @@ The repository provides the runnable Flutter foundation and current Phase 1
 identity/community slices: verified email/password authentication, session
 routing, password recovery, owner-only profile onboarding, secure exact-username
 discovery, directional block management, versioned friend requests, and mutual
-friendship management. Lists, templates, persistent notifications, and the
-expense ledger remain planned work.
+friendship management. The persistent friend-request notification contract is
+accepted for the next Phase 1 slice but is not yet implemented. Lists, templates,
+other notifications, and the expense ledger remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
@@ -210,7 +211,8 @@ SQL into the Dashboard.
 The current slices do not implement unrestricted profile/directory search,
 avatars, lists, templates, persistent notifications, reporting, Realtime,
 server-side ledger logic, SQLite caching/offline synchronization, push delivery,
-Firebase setup, account deletion/export, or a production backend. Effects of
-blocks or friendship changes on future shared resources remain open. Other open
-product and architecture choices are recorded in the project documentation and
-must be decided before their implementation slices.
+Firebase setup, account deletion/export, or a production backend. The accepted
+friend-request notification contract remains planned until its migration, client,
+and tests exist. Effects of blocks or friendship changes on future shared resources
+remain open. Other open product and architecture choices are recorded in the
+project documentation and must be decided before their implementation slices.

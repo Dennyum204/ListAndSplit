@@ -64,18 +64,21 @@ Candidate slices:
   send/cancel/accept/decline/end transitions, caller-relative active lists, strict
   reopening control, expected-version conflict protection, and the versioned
   one-current-state-per-unordered-pair mutual friendship contract.
-- Introduce the persistent in-app notification infrastructure for friend requests.
+- Introduce RPC-only persistent in-app friend-request notifications with atomic
+  creation/suppression, block-aware keyset listing, read state, a bell badge, and
+  exact 180-day logical expiry.
 - Resolve and implement the Phase 1 account deletion/export lifecycle.
 - Add RLS and database-function tests for every relationship transition.
 
 The friend relationship schema gate O-A09 is resolved: one current row uses the
 five accepted states, deterministic pair locking, monotonic versions, server-owned
-state-change time, and no detailed event log. The relationship slice does not
-include persistent notifications, Realtime, push delivery, public profiles, shared
-lists, or the final navigation shell. Shared-resource block effects must be
-resolved before shared lists ship. Resolve the immutable-username support/admin
-correction path, avatar storage lifecycle, and account deletion/export/retention
-behavior before the later slices that encode them.
+state-change time, and no detailed event log. The subsequent notification slice
+references that row without replacing its action authority and still excludes
+Realtime, push delivery, other notification types, public profiles, shared lists,
+and the final navigation shell. Shared-resource block effects must be resolved
+before shared lists ship. Resolve the immutable-username support/admin correction
+path, avatar storage lifecycle, and account deletion/export/retention behavior
+before the later slices that encode them.
 
 ## Phase 2 — Active/shared lists (planned)
 
@@ -190,8 +193,8 @@ future, explicit task with environment and cost approval.
 ## Sequencing decisions still open
 
 - Whether basic templates should precede full collaborative lists.
-- Which minimum persistent-notification capability belongs in each action-producing
-  phase.
+- Which minimum persistent-notification capability belongs in later
+  action-producing phases beyond the accepted friend-request foundation.
 - When the accepted compile-time configuration should expand into a full
   development/staging/production flavor model.
 - Whether offline read caching can ship safely before offline mutations.

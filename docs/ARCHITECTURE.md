@@ -150,9 +150,9 @@ recovery, and onboarding gates as the foundation and profile destinations. This
 does not introduce the planned four-tab root shell.
 
 Friendship management and request actions use those same gates and are reachable
-from Community. Their delivery does not introduce persistent notifications,
-Realtime, push delivery, public profiles, shared lists, or the final four-tab
-shell.
+from Community. The notification centre uses the same gates and opens from a bell
+rather than a fifth destination. This does not introduce Realtime, push delivery,
+feature deep links, public profiles, shared lists, or the final four-tab shell.
 
 ## Backend architecture
 
@@ -300,6 +300,56 @@ email/Auth metadata, block direction, raw
 declined/ended state to the non-controller, the reopening-controller column,
 unrelated relationships, or unnecessary internal timestamps.
 
+### Friend-request notification boundary
+
+Friend-request notifications extend the repository boundary without becoming a
+second relationship state machine. A notification repository calls only three
+reviewed authenticated RPCs: bounded keyset listing, unread count, and bounded
+caller-owned mark-read. Flutter receives a domain model with minimal actor profile
+data and caller-relative `actionable`, `friends`, or `unavailable` presentation;
+it never reads or mutates notification rows directly.
+
+The physical `public.user_notifications` table is initially constrained to
+`friend_request`. It records a generated UUID, recipient and actor profile IDs,
+normalized relationship participants, the positive relationship version that
+created the notification, database-owned creation and exact 180-day expiry,
+nullable read time, and nullable permanent suppression time. Profile and
+relationship foreign keys do not cascade while account deletion remains open. A
+unique recipient/type/pair/version boundary makes notification creation
+idempotent without storing copied profile text, email, Auth metadata, or arbitrary
+messages.
+
+The table is RPC-only: RLS is enabled at creation, all direct privileges are
+revoked from `PUBLIC`, `anon`, `authenticated`, and `service_role`, and one
+restrictive `FOR ALL` policy rejects both client roles. The public RPC signatures
+derive identity only from `auth.uid()`, require a verified fully onboarded caller,
+pin an empty `search_path`, fully qualify every object, revoke default execution,
+and grant only exact signatures to `authenticated`.
+
+Listing orders by `(created_at, id)` newest first with an exclusive cursor and a
+safe server maximum. It excludes expired, suppressed, and either-direction-blocked
+rows and resolves only actor ID, username, and display name. A row is actionable
+only while the current relationship remains the exact pending version with that
+actor as requester and the caller as recipient; friendship is projected as
+`friends`, and every other visible state is generically `unavailable`. Count uses
+the same visibility boundary. Mark-read accepts only a bounded ID array, updates
+only caller-owned visible rows, and never accepts a caller identity or client
+timestamp.
+
+`send_friend_request(uuid,bigint)` creates the notification in the same locked
+transaction only for a real transition into pending. `block_profile(uuid)`
+permanently suppresses all unsuppressed pair notifications in the same locked
+block transaction. Their public signatures and existing friendship/block
+semantics remain unchanged; unblocking never reverses suppression.
+
+Riverpod owns paginated centre state, badge state, in-flight actions, refresh, and
+session identity. Opening the centre, pull-to-refresh, app resume, relevant local
+friendship actions, and notification actions refresh the appropriate state.
+Provider reconstruction on sign-out or identity replacement clears pages,
+cursors, actor projections, badge counts, errors, and in-flight actions. A scoped
+widget lifecycle observer drives resume refresh without a global observer or
+continuous polling.
+
 ### Client configuration
 
 The Flutter client receives its public Supabase configuration at build/run time
@@ -402,4 +452,7 @@ reconciliation, not as direct UI mutations.
 - Avatar and other Storage use cases, upload validation, object policies, and
   retention.
 - Logging, analytics, crash reporting, performance budgets, and privacy controls.
-- FCM/APNs registration, token lifecycle, and notification deep links.
+- Notification archive/delete/preferences, future-type payload/localization,
+  physical cleanup, and account-lifecycle retention.
+- FCM/APNs registration, token lifecycle, push-safe content, and notification deep
+  links.

@@ -2,7 +2,7 @@
 
 ## Record semantics
 
-This log captures decisions agreed for List & Split as of 2026-07-18. **Accepted**
+This log captures decisions agreed for List & Split as of 2026-07-19. **Accepted**
 means the direction is agreed; it does not mean the behavior is implemented. Check
 code, tests, migrations, and pull requests for implementation status.
 
@@ -40,6 +40,8 @@ and data-model documents in the same pull request.
 | P-022 | Initial discovery is exact canonical-username lookup only. It trims/lowercases input, excludes self, incomplete profiles, and either-direction blocks, and returns at most one profile ID, username, and display name. | No directory, prefix, substring, fuzzy, recommendation, unrestricted profile read, email, Auth metadata, timestamp, or onboarding-state disclosure is permitted. |
 | P-023 | Friend requests and friendships use one persistent, versioned current row per unordered profile pair, separate from directional blocks. Physical states are `pending`, `friends`, `cancelled`, `declined`, and `ended`; no separate request/friendship tables or relationship event log are introduced. The most recent requester remains available internally after transition. | Duplicate sends and repeated completed caller-authorized actions are idempotent, crossed requests become friendship, senders cancel, recipients accept/decline, either friend may end, and stale conflicting actions cannot overwrite newer state. A reopened pending send accepts the immediately prior dormant version for its retry or opposite crossed send, while older values remain stale. Every real transition increments version and updates a server-owned state-change time; no-op retries change neither. |
 | P-024 | Reopening is controlled by the prior outcome: either participant may resend after cancellation; only the decliner may resend after decline; only the friendship ender may resend after ending. Blocking pending changes it to cancelled, blocking friends changes it to ended with the blocker controlling reopening, dormant states do not transition, and unblocking restores nothing. Client projections use caller-relative `can-send`, `incoming-pending`, `outgoing-pending`, `friends`, or `unavailable` status without revealing raw declined/ended state or the reopening controller to the other participant. | `unavailable` protects dormant decline/end reopening details, while an active either-direction block suppresses the relationship/profile summary entirely. Active blocks are rechecked inside every protected transition. Only the current row, version, creation/state-change times, requester, and reopening controller are retained; account deletion/retention remains open. Persistent notifications, Realtime, push delivery, public profiles, shared lists, and the final shell remain separate slices. |
+| P-025 | Every real friend-request transition into `pending` creates one persistent in-app notification for its recipient and relationship version. Duplicate sends and crossed sends create no additional notification; an eligible dormant reopening creates one for the new version, and existing relationship history is not backfilled. The versioned relationship row remains the only action authority. | Notification Accept/Decline reuses the exact version-checked friendship boundary, so duplicate taps, retries, and stale rows are safe. Notification records contain references rather than copied profile, email, Auth, or message content. |
+| P-026 | Friend-request notifications are newest-first with bounded deterministic keyset pagination. Opening a successfully loaded page marks only its displayed IDs read; reads are caller-owned and idempotent. The badge counts the caller's unread, visible, unexpired notifications. Active either-direction blocks permanently suppress existing pair notifications, and notifications expire exactly 180 days after creation. | Suppressed and expired rows are absent from listing and badge counts; unblocking restores nothing. User-facing archive, delete, mark-unread, preferences, physical cleanup, other notification types, push delivery, and account-lifecycle retention remain outside this slice. |
 
 ### Architecture and delivery
 
@@ -67,6 +69,8 @@ and data-model documents in the same pull request.
 | A-020 | Active directional blocks use a narrowly scoped application table with RLS and RPC-only client access. Exact discovery and outgoing-block management use minimal privileged projections derived exclusively from `auth.uid()`, without broadening owner-only profile SELECT. | Privileged functions pin an empty `search_path`, fully qualify objects, validate completed profiles, revoke default execution, grant only exact authenticated signatures, and return only approved fields. |
 | A-021 | `public.user_relationships` has normalized low/high profile participants as its composite key, check-constrained text state, participant-constrained requester/reopening controller, positive `bigint` version, and server-owned creation/state-change timestamps. Participant foreign keys do not cascade while account deletion remains open. | The creating migration enables RLS, revokes table privileges from `PUBLIC`, `anon`, `authenticated`, and `service_role`, adds a restrictive `FOR ALL` anon/authenticated policy with both predicates false, preserves owner-only profile policies, and adds only the reverse-participant index justified by high-participant relationship listings. |
 | A-022 | Relationship data is accessible only through exact authenticated RPCs for one caller-relative summary, active incoming/outgoing/friend lists, send, cancel, accept, decline, and end. Relationship and block mutations share deterministic pair normalization and transaction-level locking and recheck blocks in the critical section. Non-send mutations require the exact expected version; send accepts nullable expected version, allowing null only for first/duplicate/crossed pending behavior, requiring exact version for dormant-state reopening, and accepting the immediately prior dormant version for a resulting pending retry/cross. | Functions derive identity only from `auth.uid()`, require a verified fully onboarded caller and an onboarded target, reject self-pairs, fully qualify objects, pin an empty `search_path` when privileged, revoke execution from `PUBLIC`, `anon`, and `service_role`, grant only exact authenticated signatures, and return minimal caller-relative projections. Privacy-safe dormant `unavailable` results omit version and state-change metadata; active blocks return no summary row or profile fields. Concurrent first/crossed sends and block transitions remain atomic; stale reopening cannot overwrite dormant state. |
+| A-023 | `public.user_notifications` is an RPC-only, RLS-enabled table initially constrained to `friend_request`. It stores database-generated identity/times, non-cascading recipient and actor profile references, the normalized relationship pair and positive creating version, nullable read/suppression times, exact 180-day expiry, and a uniqueness boundary for one recipient/type/pair/version. | Direct table privileges are revoked from `PUBLIC`, `anon`, `authenticated`, and `service_role`; a restrictive `FOR ALL` policy explicitly rejects `anon` and `authenticated`. Only justified recipient listing/badge indexes are added, and notification rows never duplicate profile text, email, Auth metadata, or arbitrary messages. |
+| A-024 | Exact authenticated RPCs list a minimal block-aware notification projection with bounded `(created_at, id)` keyset pagination, return the caller's unread visible count, and mark a bounded caller-owned ID array read. The existing `send_friend_request(uuid,bigint)` and `block_profile(uuid)` signatures are replaced only in an additive migration to create and suppress notifications under the established pair lock. | The RPCs derive the caller from `auth.uid()`, require a verified fully onboarded profile, use hardened definer-rights boundaries with empty `search_path`, explicit object qualification, revoked defaults, and exact authenticated grants. Send and block behavior, comments, ownership, concurrency, and public signatures remain otherwise unchanged. |
 
 ## Deferred but accepted direction
 
@@ -76,8 +80,9 @@ These items are part of the agreed direction but intentionally deferred:
 - Supabase Realtime integration after repository reconciliation rules exist.
 - FCM and APNs push delivery; Firebase project creation requires separate explicit
   authorization.
-- Persistent friend-request notifications after the relationship slice;
-  shared-resource block effects and reporting/moderation remain deferred.
+- Persistent notification types beyond friend requests, plus Realtime and push
+  delivery after their payload and reconciliation rules are accepted.
+- Shared-resource block effects and reporting/moderation remain deferred.
 - Production backend/environment creation under a separate explicit authorization.
 
 ## Open product decisions
@@ -95,7 +100,7 @@ These items are part of the agreed direction but intentionally deferred:
 | O-P09 | Which currencies are supported, can currency change after ledger use, and what amount ranges/zero rules apply? |
 | O-P10 | How is an equal-split remainder allocated deterministically; may the payer be excluded; and how are exact shares validated? |
 | O-P11 | What are expense correction/deletion, member-removal, settlement direction/reversal, and debt-simplification/display rules? |
-| O-P12 | What are notification read/archive/retention/badge/preferences rules and what content is safe for push? |
+| O-P12 | What archive/delete/preferences controls, future notification types, push-safe content, physical cleanup, and account-lifecycle retention rules apply beyond the accepted friend-request notification slice? |
 | O-P13 | What are the reporting, moderation, evidence-retention, and appeal workflows? |
 | O-P14 | Which operations work offline, how are conflicts presented, and what promise can the UI make while disconnected? |
 | O-P15 | What are the account deletion/export, data-retention, re-registration, and related identity-lifecycle rules, and which additional locales ship first? |
@@ -115,7 +120,7 @@ These items are part of the agreed direction but intentionally deferred:
 | O-A08 | What physical identifiers, audit timestamps, archival/soft-delete conventions, indexes, and enum/check-constraint strategy should later aggregates use beyond the accepted profile and relationship records? |
 | O-A10 | What is the mention-storage model and which layer owns parsing? |
 | O-A11 | What server algorithm and stable output contract calculate balances and debts, and are derived results computed on demand or projected? |
-| O-A12 | What notification payload, localization, retention, push-token, and delivery-attempt schema is needed? |
+| O-A12 | What payload/localization contracts for future notification types and what push-token and delivery-attempt schema are needed? |
 | O-A13 | Which Storage use cases exist and what object lifecycle/policies follow their parent records? |
 | O-A14 | Which logging, analytics, crash reporting, privacy controls, and performance budgets are appropriate? |
 | O-A15 | What extended automated environment will exercise Realtime, Storage, and later cross-service integration tests beyond the accepted local/CI migration, database-function, and RLS coverage? |
@@ -125,6 +130,13 @@ These items are part of the agreed direction but intentionally deferred:
 | ID | Resolution |
 | --- | --- |
 | O-A09 | Closed on 2026-07-18 by P-023, P-024, A-021, and A-022: one RPC-only normalized current relationship row, five check-constrained states, version-checked deterministic transitions, minimal caller-relative projections, and no detailed audit log. |
+
+## Partially resolved decision references
+
+| ID | Resolution |
+| --- | --- |
+| O-P12 | Partially resolved on 2026-07-19 by P-025 and P-026 for friend-request persistence, read state, badge semantics, blocking, and 180-day logical expiry. The narrowed question above remains open. |
+| O-A12 | Partially resolved on 2026-07-19 by A-023 and A-024 for the friend-request table and RPC boundary. Future types, push payloads/tokens, and delivery attempts remain open. |
 
 ## Decision discipline
 
