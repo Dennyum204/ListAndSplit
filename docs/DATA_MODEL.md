@@ -49,9 +49,8 @@ Profile --receives--> List Invitation / Sent Template
 A profile represents a user in product surfaces and supports lookup through a
 unique username. The initial physical record is `public.profiles`; its `id` is a
 primary key and foreign key to `auth.users(id)`. The foreign key prevents orphaned
-profile records. Automatic deletion is not yet encoded: the accepted future hard-
-deletion direction requires one reviewed deletion slice to replace current
-non-cascading behavior across every implemented aggregate atomically.
+profiles and cascades only when the Auth identity is hard-deleted through the
+reviewed account-deletion boundary.
 
 A server-owned creation mechanism creates one profile for each Auth identity.
 `username` and `display_name` may remain null until a verified user completes
@@ -101,13 +100,43 @@ tokens, sessions, incoming blocks, dormant relationship internals, hidden actors
 and future aggregate data are outside the contract. Later schema versions must add
 future list/template/ledger sections deliberately and compatibly.
 
-The accepted future deletion model is immediate permanent hard deletion, followed
-by a 30-day reservation of a completed canonical username that stores neither
-email nor user ID. Re-registration creates an unrelated identity and restores
-nothing. This direction does not alter current foreign keys: cascade cleanup,
-reservation schema, privileged deletion execution, and session invalidation are
-planned for the later deletion migration and must cover every aggregate that
-exists at that time.
+### Permanent deletion and username reservation
+
+Immediate hard deletion of `auth.users` is the account aggregate's atomic root.
+The profile foreign key cascades from Auth; both block participant references,
+both normalized relationship participant references, notification recipient and
+actor references, and the notification relationship reference cascade from the
+profile/relationship rows they protect. This removes every currently implemented
+application record involving the deleted account in the same root transaction,
+while unrelated rows remain unchanged.
+
+Before a completed profile disappears, a trigger upserts
+`private.deleted_username_reservations` with exactly two fields:
+
+- `canonical_username text` as the primary key; and
+- `reserved_until timestamptz`, exactly 30 days after profile deletion.
+
+No email, Auth user ID, profile ID, display name, timestamps beyond expiry, or
+copied profile data is retained. Incomplete profiles create no reservation. The
+profile write boundary locks a conflicting active canonical username before
+checking the private reservation, preventing concurrent deletion/onboarding from
+bypassing the hold. An active reservation rejects onboarding with the existing
+username-unavailable contract; an expired reservation permits reuse even before
+the once-daily 03:17 UTC `pg_cron` cleanup physically deletes it. A repeated later
+reservation for the same username keeps the later expiry.
+
+The private table is owned by `postgres`, has RLS enabled as defense in depth, and
+has no access for `PUBLIC`, `anon`, `authenticated`, or `service_role`. Its trigger,
+availability, and cleanup functions use empty `search_path`, fully qualified
+objects, revoked default execution, and no client grants.
+
+The authenticated validation RPC accepts only exact confirmation text, derives
+the caller from `auth.uid()` and the session from `auth.jwt()` `session_id`, and
+returns only `true`. It requires one confirmed Auth user, one profile, and that
+exact user's `auth.sessions` row with an actual creation time no older than ten
+minutes. Completed profiles compare the canonical username; incomplete profiles
+compare Auth email. It never mutates or deletes. Re-registration after deletion
+creates a new UUID and restores nothing.
 
 ### Active directional block
 
@@ -129,9 +158,9 @@ time through their account export; interactive outgoing-block management retains
 its existing narrower projection. Incoming-only and unrelated blocks are never
 disclosed. An active block in either direction makes the separate
 relationship-summary RPC return no row and no target profile fields. Account
-shared-resource effects remain open. Current foreign keys remain non-cascading
-until the accepted future hard-deletion direction is implemented atomically; the
-block model still does not select active-list membership behavior.
+shared-resource effects remain open. Both block foreign keys cascade only through
+the reviewed account-deletion root; the block model still does not select
+active-list membership behavior.
 
 ### Versioned friend request and friendship relationship
 
@@ -141,9 +170,10 @@ request and friendship tables and no detailed relationship event log.
 
 The accepted physical record contains:
 
-- `profile_low_id` and `profile_high_id`, both non-cascading references to
-  `public.profiles`, as a composite primary key; fully onboarded participation is
-  an RPC precondition rather than a foreign-key property;
+- `profile_low_id` and `profile_high_id`, both references to `public.profiles`
+  that cascade only through account deletion, as a composite primary key; fully
+  onboarded participation is an RPC precondition rather than a foreign-key
+  property;
 - a named ordering constraint requiring `profile_low_id < profile_high_id`;
 - check-constrained text `state` with exactly `pending`, `friends`, `cancelled`,
   `declined`, and `ended`;
@@ -159,8 +189,8 @@ The low/high normalization makes pair identity deterministic. The primary-key
 order supports low-participant lookup; a justified reverse-participant index
 supports listing rows where the caller is `profile_high_id`. Requester and
 reopening-controller values need no redundant foreign keys because their named
-constraints prove that they equal a participant. Account deletion and retention
-remain unresolved, so participant foreign keys do not cascade.
+constraints prove that they equal a participant. Their participant foreign keys
+cascade only through the reviewed account-deletion root.
 
 Accepted transition invariants are:
 
@@ -210,9 +240,9 @@ unnecessary internal timestamps are never returned.
 Requests do not expire in the initial design. A persistent notification may
 reference the exact pending relationship version but never becomes authoritative
 for its transition. Realtime, push delivery, public profiles, the final navigation
-shell, shared lists, detailed audit history, and relationship-row account
-deletion cleanup remain outside the relationship record and are planned for the
-accepted future hard-deletion slice. The effects of
+shell, shared lists, and detailed audit history remain outside the relationship
+record. Current relationship-row account deletion cleanup is implemented by the
+Auth-root cascade. The effects of
 relationship or block changes on existing shared resources remain unresolved.
 
 ## Active-list aggregate
@@ -359,10 +389,10 @@ A notification belongs to one recipient. The accepted initial physical record is
 `public.user_notifications` and contains:
 
 - a database-generated UUID primary key;
-- non-cascading recipient and actor profile references;
+- recipient and actor profile references that cascade through account deletion;
 - a check-constrained type, initially only `friend_request`;
-- normalized low/high relationship participant IDs and a non-cascading composite
-  relationship reference;
+- normalized low/high relationship participant IDs and a composite relationship
+  reference that cascades when account deletion removes the relationship;
 - the positive relationship version that caused the notification;
 - database-managed creation time and expiry exactly 180 days later;
 - nullable database-managed read time; and
@@ -402,7 +432,7 @@ Accepted future notification types remain:
 Invitation and sent-template action state will belong to their underlying records,
 as friend-request action state belongs to the relationship. Archive/delete and
 preference controls, future-type payload localization, physical cleanup, and
-retention beyond the accepted future account hard-deletion direction remain open.
+retention beyond the implemented current-aggregate account deletion remain open.
 
 Push tokens and delivery attempts are future infrastructure for FCM/APNs and are
 outside the initial identity/profile schema. Device token ownership, rotation,
@@ -448,8 +478,8 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   later aggregates beyond the accepted profile and relationship records.
 - Support/administrator correction and audit rules for immutable usernames.
 - Avatar Storage, validation, replacement, retention, and deletion lifecycle.
-- Block effects on existing shared resources; account deletion cascade mechanics
-  remain to be implemented in the later accepted lifecycle slice.
+- Block effects on existing shared resources beyond the implemented current
+  aggregate account-deletion cascade.
 - List role model and membership lifecycle.
 - Quantity/unit types and ordering strategy.
 - Mention representation and parser ownership.

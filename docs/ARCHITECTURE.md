@@ -234,22 +234,61 @@ temporary/cache storage and invokes the Android/iOS native share sheet with a
 privacy-safe UTC filename and JSON MIME type. It never falls back to public shared
 storage or promises guaranteed cache deletion.
 
-Permanent account deletion remains a later, separate vertical slice. Its accepted
-direction is immediate hard deletion after exact profile/email confirmation,
-current-password reauthentication, and a session age of at most ten minutes,
-through an authenticated `delete-account` Edge Function with a server-only admin
-client. That future slice must add reviewed cascade cleanup and a 30-day
-username-only reservation without retaining email or user ID. It must also revoke
-other sessions on subsequent validation. No deletion, cascade, reservation, Edge
-Function, or Auth setting is introduced by the export boundary.
+### Permanent account-deletion boundary
+
+Permanent account deletion remains separate from export but is available from the
+same completed Profile and verified incomplete Onboarding surfaces. Flutter owns a
+session-scoped account-deletion repository/controller boundary. It compares the
+stored username or Auth email exactly, collects the current password only in the
+local obscured field, reauthenticates directly with Supabase Auth without changing
+either value, makes the returned session active, and invokes `delete-account` with
+only the confirmation. Passwords never enter Riverpod state, an Edge Function,
+database call, log, analytic, or error payload.
+
+`delete-account` is a POST-only authenticated Edge Function. The platform JWT
+check remains enabled and the pinned `@supabase/server` `auth: 'user'` wrapper
+builds both the caller-scoped client and a server-only admin client from
+platform-injected publishable/secret-key configuration. The handler accepts one
+bounded exact `confirmation` string, first calls the authenticated validation RPC,
+and only then calls Auth Admin hard deletion with `shouldSoftDelete: false` for the
+wrapper-authenticated caller ID. It never accepts a target identity or exposes a
+secret to Flutter.
+
+The narrow `validate_account_deletion(text)` RPC derives user identity from
+`auth.uid()` and session identity only from `auth.jwt()`'s `session_id`. A hardened
+`postgres`-owned definer boundary verifies one confirmed Auth user, one profile,
+and the matching `auth.sessions(id, user_id)` row. Freshness is based only on that
+row's actual `created_at`, which must be no more than ten minutes old; JWT `iat`,
+token refresh timestamps, and `auth.users.last_sign_in_at` are deliberately
+ignored. The RPC compares the completed profile's canonical username or incomplete
+profile's Auth email exactly, returns only `true`, and never deletes or mutates.
+
+Auth Admin deletion of `auth.users` is the single atomic database root. Cascading
+foreign keys remove the profile, either direction of blocks, either relationship
+participant, notification recipient/actor rows, and notifications whose
+relationship disappears. A `BEFORE DELETE` profile trigger reserves only a
+completed canonical username in `private.deleted_username_reservations` with an
+expiry exactly 30 days after deletion. A hardened availability helper coordinates
+concurrent profile deletion/onboarding, active reservations reject claims, and
+expired reservations do not. Migration-managed `pg_cron` physically removes only
+expired reservations once daily at 03:17 UTC.
+
+On confirmed success Flutter invalidates session-scoped account, profile,
+community, friendship, and notification state, removes the local Auth session, and
+routes to sign-in. A lost response triggers authoritative `getUser`
+reconciliation: confirmed absence becomes local success, confirmed continued
+existence permits a retry, and transient/offline failure preserves the account and
+session. The smallest app-resume boundary performs the same authoritative
+validation so other devices sign out after deletion without polling or
+deletion-specific Realtime.
 
 ### Blocking and discovery boundary
 
 Active blocks are directional rows between two fully onboarded profiles, with one
 active row per direction, a self-block constraint, and a database-managed creation
 timestamp. They remain separate from the friendship relationship state.
-The accepted future hard-deletion direction is not implemented yet, so block
-foreign keys do not silently select cascading deletion semantics.
+Both block participant foreign keys cascade only from the reviewed profile/Auth
+account-deletion root. This changes no interactive block behavior.
 
 The block table is not a general client-readable or client-writable Data API
 surface. Authenticated application access uses narrowly granted functions for:
@@ -287,8 +326,9 @@ composite identity. It stores one check-constrained text state (`pending`,
 `friends`, `cancelled`, `declined`, or `ended`), the most recent requester, an
 optional reopening controller, a positive monotonic version, a server-owned
 creation time, and a server-owned state-change time. Only declined and ended rows
-have a reopening controller. Participant foreign keys remain non-cascading until
-the accepted future hard-deletion slice implements aggregate cleanup atomically.
+have a reopening controller. Participant foreign keys cascade only from the
+reviewed profile/Auth account-deletion root, so either participant's account
+removal deletes the current relationship atomically.
 
 The relationship table is RPC-only. Its creating migration enables RLS, revokes
 table privileges from `PUBLIC`, `anon`, `authenticated`, and `service_role`, and
@@ -356,8 +396,8 @@ The physical `public.user_notifications` table is initially constrained to
 normalized relationship participants, the positive relationship version that
 created the notification, database-owned creation and exact 180-day expiry,
 nullable read time, and nullable permanent suppression time. Profile and
-relationship foreign keys remain non-cascading until the accepted future hard-
-deletion slice implements aggregate cleanup atomically. A
+relationship foreign keys cascade only from the reviewed account-deletion root,
+including notifications removed through a deleted relationship. A
 unique recipient/type/pair/version boundary makes notification creation
 idempotent without storing copied profile text, email, Auth metadata, or arbitrary
 messages.
@@ -483,8 +523,8 @@ reconciliation, not as direct UI mutations.
 ## Open architecture decisions
 
 - Shared-resource ownership/deletion, administrator deletion, moderation/legal
-  retention, Storage cleanup, and compliance obligations beyond the accepted
-  current-aggregate account export and planned deletion lifecycle.
+  retention, Storage cleanup, and compliance obligations beyond the implemented
+  current-aggregate account lifecycle.
 - Precise feature folder layering and whether Riverpod code generation is used.
 - Final authenticated route topology, state restoration, notification links, and
   non-Auth feature deep links.
