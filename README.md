@@ -8,7 +8,9 @@ routing, password recovery, owner-only profile onboarding, secure exact-username
 discovery, directional block management, versioned friend requests, and mutual
 friendship management. Persistent in-app friend-request notifications include an
 unread badge, deterministic pagination, safe versioned actions, and block-aware
-suppression. Lists, templates, other notification types, and the expense ledger
+suppression. A versioned, allowlist-only account-data export is available to
+authenticated email-verified users from completed Profile or incomplete
+Onboarding. Lists, templates, other notification types, and the expense ledger
 remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
@@ -186,8 +188,8 @@ expired, suppressed, or block-hidden rows, and block creation permanently
 suppresses existing pair notifications in the same transaction.
 
 The accepted account lifecycle separates versioned account-data export from
-permanent deletion. Export is planned as a parameterless, allowlist-only RPC for
-any authenticated email-verified user, including before onboarding, followed by a
+permanent deletion. Export uses a parameterless, allowlist-only RPC for any
+authenticated email-verified user, including before onboarding, followed by a
 validated UTF-8 JSON file in app-scoped temporary cache and the native share
 sheet. The server retains no export file. A later deletion slice, after export is
 merged and manually verified, will implement the accepted hard-deletion,
@@ -231,7 +233,7 @@ The current slices do not implement unrestricted profile/directory search,
 avatars, lists, templates, notification types beyond friend requests,
 notification archive/preferences or physical cleanup, reporting, Realtime,
 server-side ledger logic, SQLite caching/offline synchronization, push delivery,
-Firebase setup, account export implementation, account deletion, or a production
+Firebase setup, account deletion, or a production
 backend. Effects of blocks or friendship changes on future shared resources
 remain open. Other open
 product and architecture choices are recorded in the project documentation and

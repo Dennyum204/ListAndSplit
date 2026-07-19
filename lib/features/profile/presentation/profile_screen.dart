@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
+import 'package:list_and_split/features/account/presentation/account_data_export_action.dart';
+import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/features/profile/presentation/profile_controller.dart';
@@ -48,6 +50,8 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(profileControllerProvider);
+    final exportState = ref.watch(accountDataExportControllerProvider);
+    final isBusy = state.isSubmitting || exportState.isBusy;
     final displayNameError = state.fieldErrors[ProfileField.displayName];
     return FormPageFrame(
       title: localizations.profileTitle,
@@ -81,7 +85,7 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
           TextField(
             key: const Key('profileDisplayName'),
             controller: _displayName,
-            enabled: !state.isSubmitting,
+            enabled: !isBusy,
             autofillHints: const [AutofillHints.name],
             textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.done,
@@ -102,8 +106,9 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
           SubmissionButton(
             label: localizations.saveChangesButton,
             isSubmitting: state.isSubmitting,
-            onPressed: _submit,
+            onPressed: exportState.isBusy ? null : _submit,
           ),
+          AccountDataExportAction(enabled: !state.isSubmitting),
         ],
       ),
     );

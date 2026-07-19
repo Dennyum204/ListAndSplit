@@ -67,8 +67,8 @@ Candidate slices:
 - Introduce RPC-only persistent in-app friend-request notifications with atomic
   creation/suppression, block-aware keyset listing, read state, a bell badge, and
   exact 180-day logical expiry.
-- Implement the accepted versioned account-data export as its own vertical slice,
-  then merge and manually verify it before beginning the separate accepted account
+- The accepted versioned account-data export vertical slice is implemented. Merge
+  and manually verify it before beginning the separate accepted account
   hard-deletion slice.
 - Add RLS and database-function tests for every relationship transition.
 

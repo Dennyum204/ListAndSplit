@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
+import 'package:list_and_split/features/account/presentation/account_data_export_action.dart';
+import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
 import 'package:list_and_split/features/profile/domain/profile_validation.dart';
 import 'package:list_and_split/features/profile/presentation/profile_controller.dart';
 import 'package:list_and_split/features/profile/presentation/profile_ui.dart';
@@ -32,7 +34,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(profileControllerProvider);
-    final isBusy = state.isSubmitting || _isSigningOut;
+    final exportState = ref.watch(accountDataExportControllerProvider);
+    final isBusy = state.isSubmitting || _isSigningOut || exportState.isBusy;
     return FormPageFrame(
       title: localizations.onboardingTitle,
       description: localizations.onboardingDescription,
@@ -87,7 +90,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             SubmissionButton(
               label: localizations.finishProfileButton,
               isSubmitting: state.isSubmitting,
-              onPressed: _isSigningOut ? null : _submit,
+              onPressed: _isSigningOut || exportState.isBusy ? null : _submit,
+            ),
+            AccountDataExportAction(
+              enabled: !state.isSubmitting && !_isSigningOut,
             ),
             const SizedBox(height: 8),
             TextButton(
