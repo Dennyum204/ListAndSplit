@@ -1061,6 +1061,7 @@ select ok(
 );
 
 -- Pending recipient/requester authorization, accept, cancel, and active-list privacy.
+delete from public.user_notifications;
 delete from public.user_relationships;
 
 set local role authenticated;
@@ -1187,6 +1188,7 @@ select ok(
 );
 
 -- Cancellation is idempotent and either participant can reopen it.
+delete from public.user_notifications;
 delete from public.user_relationships;
 
 set local role authenticated;
@@ -1266,6 +1268,7 @@ select ok(
 );
 
 -- Decline privacy and decliner-only reopening.
+delete from public.user_notifications;
 delete from public.user_relationships;
 
 set local role authenticated;
@@ -1378,6 +1381,7 @@ select ok(
 );
 
 -- Friendship ending privacy, idempotency, and ender-only reopening.
+delete from public.user_notifications;
 delete from public.user_relationships;
 
 set local role authenticated;
@@ -1502,6 +1506,7 @@ select ok(
 );
 
 -- Blocking atomically deactivates active relationships and unblock never restores.
+delete from public.user_notifications;
 delete from public.user_relationships;
 delete from public.user_blocks;
 
