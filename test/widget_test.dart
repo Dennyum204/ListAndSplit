@@ -17,6 +17,8 @@ import 'package:list_and_split/features/community/domain/friendship_repository.d
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/community/presentation/community_providers.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
+import 'package:list_and_split/features/lists/domain/active_list.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/features/notifications/domain/in_app_notification.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
@@ -205,7 +207,7 @@ void main() {
     await tester.tap(find.text('Update password'));
     await tester.pumpAndSettle();
     expect(auth.updatePasswordCalls, 1);
-    expect(find.text('Welcome, Fernando'), findsOneWidget);
+    expect(find.text('No active lists yet'), findsOneWidget);
 
     auth.emit(verifiedSession);
     await tester.pumpAndSettle();
@@ -233,7 +235,7 @@ void main() {
     await auth.close();
   });
 
-  testWidgets('onboarding canonicalizes profile then reaches foundation',
+  testWidgets('onboarding canonicalizes profile then reaches Lists',
       (tester) async {
     final auth = FakeAuthRepository(session: verifiedSession);
     final profile = FakeProfileRepository();
@@ -253,7 +255,7 @@ void main() {
 
     expect(profile.lastUsername, 'fernando_1');
     expect(profile.lastDisplayName, 'Fernando');
-    expect(find.text('Welcome, Fernando'), findsOneWidget);
+    expect(find.text('No active lists yet'), findsOneWidget);
     await auth.close();
   });
 
@@ -341,6 +343,9 @@ void main() {
         notificationRepositoryProvider.overrideWithValue(
           FakeNotificationRepository(),
         ),
+        activeListRepositoryProvider.overrideWithValue(
+          FakeActiveListRepository(),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -359,7 +364,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(container.read(pendingVerificationEmailProvider), isNull);
-    expect(find.text('Welcome, Fernando'), findsOneWidget);
+    expect(find.text('No active lists yet'), findsOneWidget);
     await auth.close();
   });
 
@@ -384,6 +389,9 @@ void main() {
         profileRepositoryProvider.overrideWithValue(profile),
         notificationRepositoryProvider.overrideWithValue(
           FakeNotificationRepository(),
+        ),
+        activeListRepositoryProvider.overrideWithValue(
+          FakeActiveListRepository(),
         ),
       ],
     );
@@ -412,7 +420,7 @@ void main() {
     await auth.close();
   });
 
-  testWidgets('foundation stays honest and profile username is read-only',
+  testWidgets('shell replaces the foundation and profile username is read-only',
       (tester) async {
     final auth = FakeAuthRepository(session: verifiedSession);
     final profile = FakeProfileRepository(
@@ -420,15 +428,14 @@ void main() {
     );
     await _pumpConfiguredApp(tester, auth: auth, profile: profile);
 
-    expect(find.text('List & Split'), findsOneWidget);
-    expect(find.text('Welcome, Fernando'), findsOneWidget);
-    expect(
-      find.textContaining('collaborative lists arrive in a later phase'),
-      findsOneWidget,
-    );
-    expect(find.byIcon(Icons.checklist_rounded), findsOneWidget);
+    expect(find.text('No active lists yet'), findsOneWidget);
+    expect(find.byKey(const Key('listsDestination')), findsOneWidget);
+    expect(find.byKey(const Key('templatesDestination')), findsOneWidget);
+    expect(find.byKey(const Key('communityDestination')), findsOneWidget);
+    expect(find.byKey(const Key('profileDestination')), findsOneWidget);
+    expect(find.textContaining('collaborative lists arrive'), findsNothing);
 
-    await tester.tap(find.text('Edit profile'));
+    await tester.tap(find.byKey(const Key('profileDestination')));
     await tester.pumpAndSettle();
     final usernameField = tester.widget<EditableText>(
       find.descendant(
@@ -439,6 +446,48 @@ void main() {
     expect(usernameField.readOnly, isTrue);
     expect(find.text('fernando_1'), findsOneWidget);
     expect(find.textContaining('permanent after onboarding'), findsWidgets);
+    await auth.close();
+  });
+
+  testWidgets('four-tab shell preserves branch state and nested Android back',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+    );
+
+    expect(find.byKey(const Key('listsDestination')), findsOneWidget);
+    expect(find.byKey(const Key('templatesDestination')), findsOneWidget);
+    expect(find.byKey(const Key('communityDestination')), findsOneWidget);
+    expect(find.byKey(const Key('profileDestination')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('communityDestination')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('communityUsername')),
+      'draft_query',
+    );
+
+    await tester.tap(find.byKey(const Key('templatesDestination')));
+    await tester.pumpAndSettle();
+    expect(find.text('Reusable templates are planned'), findsOneWidget);
+    expect(find.byKey(const Key('notificationBellButton')), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('communityDestination')));
+    await tester.pumpAndSettle();
+    expect(find.text('draft_query'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('manageFriendshipsButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('Friendships'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('communityUsername')), findsOneWidget);
+    expect(find.text('draft_query'), findsOneWidget);
     await auth.close();
   });
 
@@ -460,8 +509,7 @@ void main() {
       community: community,
     );
 
-    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
-    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -541,8 +589,7 @@ void main() {
       friendships: friendships,
     );
 
-    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
-    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
@@ -566,6 +613,8 @@ void main() {
 
   testWidgets('friendship management groups actions and confirms removal',
       (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final auth = FakeAuthRepository(session: verifiedSession);
     final community = FakeCommunityRepository();
     final friendships = FakeFriendshipRepository()
@@ -605,14 +654,14 @@ void main() {
       friendships: friendships,
     );
 
-    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
-    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('manageFriendshipsButton')));
     await tester.pumpAndSettle();
 
     expect(find.text('Friends'), findsOneWidget);
     expect(find.text('Incoming requests'), findsOneWidget);
+    await tester.ensureVisible(find.text('Sent requests'));
     expect(find.text('Sent requests'), findsOneWidget);
     expect(find.text('Friend User'), findsOneWidget);
     await tester
@@ -671,8 +720,7 @@ void main() {
       friendships: friendships,
     );
 
-    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
-    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('manageFriendshipsButton')));
     await tester.pump();
@@ -718,8 +766,7 @@ void main() {
       friendships: friendships,
     );
 
-    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
-    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('manageFriendshipsButton')));
     await tester.pumpAndSettle();
@@ -765,8 +812,7 @@ void main() {
       friendships: friendships,
     );
 
-    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
-    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
@@ -811,8 +857,7 @@ void main() {
       friendships: friendships,
     );
 
-    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
-    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
@@ -843,8 +888,7 @@ void main() {
       community: community,
     );
 
-    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
-    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
@@ -881,8 +925,7 @@ void main() {
       community: community,
     );
 
-    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
-    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('manageBlockedUsersButton')));
     await tester.pumpAndSettle();
@@ -925,8 +968,7 @@ void main() {
       community: community,
     );
 
-    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
-    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('manageBlockedUsersButton')));
     await tester.pumpAndSettle();
@@ -958,8 +1000,7 @@ void main() {
       community: community,
     );
 
-    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
-    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
@@ -975,10 +1016,59 @@ void main() {
 
     auth.emit(verifiedSession);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const Key('findPeopleButton')));
-    await tester.tap(find.byKey(const Key('findPeopleButton')));
+    await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('communitySearchResult')), findsNothing);
+    await auth.close();
+  });
+
+  testWidgets('list cache is isolated when the authenticated identity changes',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final lists = FakeActiveListRepository()
+      ..activeLists = [
+        ActiveListSummary(
+          id: 'account-a-list',
+          title: 'Account A private list',
+          status: ActiveListStatus.active,
+          version: 1,
+          itemCount: 0,
+          completedItemCount: 0,
+          createdAt: DateTime.utc(2026, 7, 20, 8),
+          updatedAt: DateTime.utc(2026, 7, 20, 8),
+          archivedAt: null,
+        ),
+      ];
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      lists: lists,
+    );
+    expect(find.text('Account A private list'), findsOneWidget);
+
+    auth.emit(const AuthSessionState.signedOut());
+    await tester.pumpAndSettle();
+    lists.activeLists = [
+      ActiveListSummary(
+        id: 'account-b-list',
+        title: 'Account B private list',
+        status: ActiveListStatus.active,
+        version: 1,
+        itemCount: 0,
+        completedItemCount: 0,
+        createdAt: DateTime.utc(2026, 7, 20, 9),
+        updatedAt: DateTime.utc(2026, 7, 20, 9),
+        archivedAt: null,
+      ),
+    ];
+    auth.emit(verifiedSession);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Account A private list'), findsNothing);
+    expect(find.text('Account B private list'), findsOneWidget);
     await auth.close();
   });
 
@@ -992,6 +1082,8 @@ void main() {
       ),
     );
 
+    await tester.tap(find.byKey(const Key('profileDestination')));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Sign out'));
     await tester.tap(find.text('Sign out'));
     await tester.pumpAndSettle();
@@ -1143,6 +1235,7 @@ Future<void> _pumpConfiguredApp(
   FakeCommunityRepository? community,
   FakeFriendshipRepository? friendships,
   FakeNotificationRepository? notifications,
+  FakeActiveListRepository? lists,
 }) async {
   final defaultFriendships = FakeFriendshipRepository()
     ..summaryResult = const FriendshipSummary(
@@ -1175,6 +1268,9 @@ Future<void> _pumpConfiguredApp(
         ),
         notificationRepositoryProvider.overrideWithValue(
           notifications ?? FakeNotificationRepository(),
+        ),
+        activeListRepositoryProvider.overrideWithValue(
+          lists ?? FakeActiveListRepository(),
         ),
       ],
       child: const ListAndSplitApp(),

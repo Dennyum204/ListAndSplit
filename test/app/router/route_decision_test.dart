@@ -111,12 +111,15 @@ void main() {
   test('completed profile may use post-onboarding routes', () {
     final complete = decision();
     expect(complete.redirect(AppRoutes.foundation), isNull);
+    expect(complete.redirect(AppRoutes.lists), isNull);
+    expect(complete.redirect('${AppRoutes.lists}/list-1'), isNull);
+    expect(complete.redirect(AppRoutes.templates), isNull);
     expect(complete.redirect(AppRoutes.profile), isNull);
     expect(complete.redirect(AppRoutes.community), isNull);
     expect(complete.redirect(AppRoutes.friendships), isNull);
     expect(complete.redirect(AppRoutes.blockedUsers), isNull);
     expect(complete.redirect(AppRoutes.notifications), isNull);
-    expect(complete.redirect(AppRoutes.signIn), AppRoutes.foundation);
+    expect(complete.redirect(AppRoutes.signIn), AppRoutes.lists);
   });
 
   test('community routes preserve verification and onboarding gates', () {

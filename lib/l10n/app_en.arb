@@ -694,5 +694,118 @@
   "tryAgainButton": "Try again",
   "@tryAgainButton": {
     "description": "Generic retry button."
-  }
+  },
+  "shellListsTab": "Lists",
+  "shellTemplatesTab": "Templates",
+  "shellCommunityTab": "Community",
+  "shellProfileTab": "Profile",
+  "templatesTitle": "Templates",
+  "templatesPlaceholderTitle": "Reusable templates are planned",
+  "templatesPlaceholderDescription": "Templates will make it easier to start recurring lists. They are not available in this version yet.",
+  "listsTitle": "Lists",
+  "listsActiveFilter": "Active",
+  "listsArchivedFilter": "Archived",
+  "listsCreateButton": "Create list",
+  "listsCreateTitle": "Create a list",
+  "listsTitleLabel": "List title",
+  "listsTitleHelper": "1–80 characters. Duplicate titles are allowed.",
+  "listsInvalidTitleMessage": "Enter a title between 1 and 80 characters.",
+  "listsCreatedMessage": "List created.",
+  "listsLoadingLabel": "Loading lists",
+  "listsEmptyActiveTitle": "No active lists yet",
+  "listsEmptyActiveDescription": "Create a list to start adding items.",
+  "listsEmptyArchivedTitle": "No archived lists",
+  "listsEmptyArchivedDescription": "Lists you archive will remain readable here.",
+  "listsLoadFailedTitle": "We couldn't load your lists",
+  "listsLoadFailedDescription": "Check your connection and try again.",
+  "listsLoadMoreButton": "Load more",
+  "listsLoadingMoreLabel": "Loading more lists",
+  "listsItemCount": "{count, plural, =0{No items} =1{1 item} other{{count} items}}",
+  "@listsItemCount": {
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "listsCompletedCount": "{completed} of {total} complete",
+  "@listsCompletedCount": {
+    "placeholders": {
+      "completed": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "listsUpdatedAt": "Updated {date} at {time}",
+  "@listsUpdatedAt": {
+    "placeholders": {
+      "date": {"type": "String"},
+      "time": {"type": "String"}
+    }
+  },
+  "listsArchivedAt": "Archived {date} at {time}",
+  "@listsArchivedAt": {
+    "placeholders": {
+      "date": {"type": "String"},
+      "time": {"type": "String"}
+    }
+  },
+  "listDetailLoadingLabel": "Loading list",
+  "listDetailUnavailableTitle": "This list is unavailable",
+  "listDetailUnavailableDescription": "It may have been deleted or you may no longer have access.",
+  "listRenameButton": "Rename",
+  "listRenameTitle": "Rename list",
+  "listArchiveButton": "Archive",
+  "listRestoreButton": "Restore",
+  "listDeleteButton": "Delete permanently",
+  "listDeleteTitle": "Delete this list permanently?",
+  "listDeleteDescription": "The list and all of its current items will be deleted. This cannot be undone.",
+  "listDeleteConfirmButton": "Delete list",
+  "listArchivedBanner": "Archived lists are read-only. Restore this list to make changes.",
+  "listRenamedMessage": "List renamed.",
+  "listArchivedMessage": "List archived.",
+  "listRestoredMessage": "List restored.",
+  "listStaleMessage": "This list changed elsewhere. The latest version is shown.",
+  "listInvalidInputMessage": "Check the entered values and try again.",
+  "listUnavailableMessage": "This list is no longer available.",
+  "listReadOnlyMessage": "Restore this archived list before making changes.",
+  "listProgress": "{completed} of {total} items complete",
+  "@listProgress": {
+    "placeholders": {
+      "completed": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "itemsEmptyTitle": "No items yet",
+  "itemsEmptyDescription": "Add the first item to this list.",
+  "itemAddButton": "Add item",
+  "itemAddTitle": "Add item",
+  "itemEditButton": "Edit",
+  "itemEditTitle": "Edit item",
+  "itemDeleteButton": "Delete item",
+  "itemDeleteTitle": "Delete this item?",
+  "itemDeleteDescription": "The item will be permanently removed from this list.",
+  "itemNameLabel": "Item name",
+  "itemNameHelper": "1–120 characters. Duplicate names are allowed.",
+  "itemQuantityLabel": "Quantity",
+  "itemQuantityHelper": "Use up to three decimal places, from 0.001 to 999999.999.",
+  "itemUnitLabel": "Unit (optional)",
+  "itemNoUnit": "No unit",
+  "itemSaveButton": "Save item",
+  "itemCreatedMessage": "Item added.",
+  "itemUpdatedMessage": "Item updated.",
+  "itemDeletedMessage": "Item deleted.",
+  "itemOrderUpdatedMessage": "Item order updated.",
+  "itemMarkComplete": "Mark {name} complete",
+  "@itemMarkComplete": {"placeholders": {"name": {"type": "String"}}},
+  "itemReopen": "Reopen {name}",
+  "@itemReopen": {"placeholders": {"name": {"type": "String"}}},
+  "itemReorder": "Reorder {name}",
+  "@itemReorder": {"placeholders": {"name": {"type": "String"}}},
+  "saveButton": "Save",
+  "unitPiece": "piece",
+  "unitKilogram": "kg",
+  "unitGram": "g",
+  "unitLitre": "l",
+  "unitMillilitre": "ml",
+  "unitPack": "pack",
+  "unitBox": "box",
+  "unitBottle": "bottle",
+  "unitCan": "can",
+  "unitBag": "bag"
 }

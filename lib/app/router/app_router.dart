@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/app/screens/account_error_screen.dart';
+import 'package:list_and_split/app/screens/authenticated_shell.dart';
 import 'package:list_and_split/app/screens/configuration_screen.dart';
-import 'package:list_and_split/app/screens/foundation_screen.dart';
 import 'package:list_and_split/app/screens/loading_screen.dart';
 import 'package:list_and_split/core/config/configuration_provider.dart';
 import 'package:list_and_split/features/auth/domain/auth_session.dart';
@@ -20,11 +20,20 @@ import 'package:list_and_split/features/auth/presentation/verification_screen.da
 import 'package:list_and_split/features/community/presentation/blocked_users_screen.dart';
 import 'package:list_and_split/features/community/presentation/community_screen.dart';
 import 'package:list_and_split/features/community/presentation/friendship_management_screen.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
+import 'package:list_and_split/features/lists/presentation/active_lists_screen.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_centre_screen.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 import 'package:list_and_split/features/profile/presentation/onboarding_screen.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_screen.dart';
+import 'package:list_and_split/features/templates/presentation/templates_screen.dart';
+
+final _rootNavigatorKey = GlobalKey<NavigatorState>();
+final _listsNavigatorKey = GlobalKey<NavigatorState>();
+final _templatesNavigatorKey = GlobalKey<NavigatorState>();
+final _communityNavigatorKey = GlobalKey<NavigatorState>();
+final _profileNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshListenable = _RouterRefreshListenable();
@@ -67,7 +76,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   }
 
   final router = GoRouter(
-    initialLocation: AppRoutes.foundation,
+    navigatorKey: _rootNavigatorKey,
+    initialLocation: AppRoutes.lists,
     refreshListenable: refreshListenable,
     redirect: (context, state) {
       final decision = _routeDecision(ref);
@@ -123,27 +133,73 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.foundation,
-        name: 'foundation',
-        builder: (context, state) => const FoundationScreen(),
+        redirect: (_, __) => AppRoutes.lists,
       ),
-      GoRoute(
-        path: AppRoutes.profile,
-        builder: (context, state) => const ProfileScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.community,
-        builder: (context, state) => const CommunityScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.friendships,
-        builder: (context, state) => const FriendshipManagementScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.blockedUsers,
-        builder: (context, state) => const BlockedUsersScreen(),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) => AuthenticatedShell(
+          navigationShell: navigationShell,
+        ),
+        branches: [
+          StatefulShellBranch(
+            navigatorKey: _listsNavigatorKey,
+            routes: [
+              GoRoute(
+                path: AppRoutes.lists,
+                builder: (context, state) => const ActiveListsScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':listId',
+                    builder: (context, state) => ActiveListDetailScreen(
+                      listId: state.pathParameters['listId']!,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _templatesNavigatorKey,
+            routes: [
+              GoRoute(
+                path: AppRoutes.templates,
+                builder: (context, state) => const TemplatesScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _communityNavigatorKey,
+            routes: [
+              GoRoute(
+                path: AppRoutes.community,
+                builder: (context, state) => const CommunityScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'friendships',
+                    builder: (context, state) =>
+                        const FriendshipManagementScreen(),
+                  ),
+                  GoRoute(
+                    path: 'blocked',
+                    builder: (context, state) => const BlockedUsersScreen(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _profileNavigatorKey,
+            routes: [
+              GoRoute(
+                path: AppRoutes.profile,
+                builder: (context, state) => const ProfileScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: AppRoutes.notifications,
+        parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const NotificationCentreScreen(),
       ),
     ],
