@@ -43,10 +43,10 @@ select is(
     from pg_catalog.pg_constraint
     where conrelid = 'public.user_blocks'::regclass
       and contype = 'f'
-      and confdeltype = 'a'
+      and confdeltype = 'c'
   ),
   2::bigint,
-  'both profile foreign keys use non-cascading deletion semantics'
+  'both profile foreign keys use account-deletion cascade semantics'
 );
 
 select ok(

@@ -105,10 +105,10 @@ select is(
     from pg_catalog.pg_constraint
     where conrelid = 'public.user_notifications'::regclass
       and contype = 'f'
-      and confdeltype = 'a'
+      and confdeltype = 'c'
   ),
   3::bigint,
-  'all profile and relationship foreign keys are non-cascading'
+  'all profile and relationship foreign keys use account-deletion cascades'
 );
 
 select is(

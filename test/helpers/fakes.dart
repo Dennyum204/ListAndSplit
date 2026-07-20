@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:list_and_split/features/account/domain/account_data_export.dart';
 import 'package:list_and_split/features/account/domain/account_data_export_repository.dart';
 import 'package:list_and_split/features/account/domain/account_data_export_share_service.dart';
+import 'package:list_and_split/features/account/domain/account_deletion_repository.dart';
 import 'package:list_and_split/features/auth/domain/auth_repository.dart';
 import 'package:list_and_split/features/auth/domain/auth_session.dart';
 import 'package:list_and_split/features/community/domain/community_profile.dart';
@@ -53,6 +54,47 @@ class FakeAccountDataExportShareService
     final pending = completer;
     if (pending != null) return pending.future;
     return result;
+  }
+}
+
+class FakeAccountDeletionRepository implements AccountDeletionRepository {
+  Object? deletionFailure;
+  Completer<void>? deletionCompleter;
+  AuthoritativeAccountState validationResult = AuthoritativeAccountState.valid;
+  Completer<AuthoritativeAccountState>? validationCompleter;
+
+  String? lastEmail;
+  String? lastPassword;
+  String? lastConfirmation;
+  int deletionCalls = 0;
+  int validationCalls = 0;
+  int clearSessionCalls = 0;
+
+  @override
+  Future<void> deleteOwnAccount({
+    required String email,
+    required String password,
+    required String confirmation,
+  }) async {
+    deletionCalls += 1;
+    lastEmail = email;
+    lastPassword = password;
+    lastConfirmation = confirmation;
+    if (deletionFailure != null) throw deletionFailure!;
+    await deletionCompleter?.future;
+  }
+
+  @override
+  Future<AuthoritativeAccountState> validateCurrentAccount() async {
+    validationCalls += 1;
+    final pending = validationCompleter;
+    if (pending != null) return pending.future;
+    return validationResult;
+  }
+
+  @override
+  Future<void> clearLocalSession() async {
+    clearSessionCalls += 1;
   }
 }
 

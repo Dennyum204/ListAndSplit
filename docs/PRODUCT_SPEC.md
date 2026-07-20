@@ -59,9 +59,8 @@ are the evidence of implementation status.
 
 ### Account data export and deletion lifecycle
 
-- Account export and permanent account deletion are separate vertical slices.
-  Export ships first and deletion remains planned until export is merged and
-  manually verified.
+- Account export and permanent account deletion are separate capabilities. Export
+  was delivered and manually verified before deletion implementation began.
 - Any signed-in user with a verified email can download their data, including
   while profile onboarding is incomplete. The action is available from completed
   Profile and verified incomplete Onboarding; it does not weaken the existing
@@ -89,19 +88,51 @@ are the evidence of implementation status.
 - This is a product-level account-data download. It is not a claim of complete
   legal or regulatory data-portability compliance; those obligations remain open
   for explicit review.
-- A later deletion slice will implement immediate permanent hard deletion after
-  exact username confirmation for completed profiles or exact email confirmation
-  for incomplete profiles, current-password reauthentication, and proof of a
-  session no older than ten minutes. A future authenticated `delete-account` Edge
-  Function will use a server-only privileged client, cascade the currently
-  implemented profile/social/notification records, reserve a completed canonical
-  username for 30 days without retaining email or user ID, and invalidate other
-  sessions on subsequent validation.
-- Re-registration after deletion creates a new identity and restores no prior
-  data or relationships. Every future list, template, Storage, and ledger
-  aggregate must extend the reviewed deletion rules before it ships. Hosted
-  deletion QA will use a separately authorized disposable account and must never
-  delete Fernando or Susana.
+- Permanent account deletion is immediate and irreversible, with no grace period,
+  soft-deletion state, recovery window, or restoration. It is available to every
+  signed-in email-verified user, including while onboarding is incomplete. Export
+  is offered first but is never mandatory.
+- A completed profile must enter its exact stored canonical username. An
+  incomplete profile must enter its exact stored Auth email. Confirmation is
+  compared exactly without trimming, lowercasing, case folding, or other
+  transformation. The user must also give a final explicit acknowledgement of the
+  irreversible result.
+- The current password is required and is sent unchanged only to Supabase Auth for
+  `signInWithPassword` reauthentication using the current email. It is never sent
+  to the Edge Function or database, retained in Riverpod/global state, logged,
+  analyzed, or reported. The new exact session returned by reauthentication must
+  become the active client session.
+- The authenticated `delete-account` Edge Function receives only the exact
+  confirmation. Before invoking the server-only Auth Admin hard-delete operation
+  for the authenticated caller, it uses a narrow database RPC to require the JWT's
+  `session_id` to match that user's `auth.sessions` row whose actual `created_at`
+  is no more than ten minutes old. JWT `iat`, access-token refresh time, and
+  user-level `last_sign_in_at` are not freshness evidence.
+- Deleting the Auth user is the atomic root operation. Database cascades remove
+  the profile, incoming and outgoing blocks, relationships in either participant
+  position, notifications where the user is recipient or actor, and notifications
+  attached to a deleted relationship. No application cleanup transaction is
+  committed separately before the Auth deletion.
+- Deleting a completed profile reserves only its canonical username for exactly
+  30 days from deletion. The private reservation contains no email, Auth user ID,
+  profile ID, display name, or copied user data. Active reservations block
+  onboarding; expired reservations permit a claim and are physically removed once
+  daily at 03:17 UTC by migration-managed database Cron. Incomplete profiles
+  create no reservation.
+- Successful deletion clears all local session-bound state and returns to sign-in.
+  If a response is lost, the client authoritatively checks Auth: a confirmed
+  missing user is treated as local success, an existing user remains signed in
+  for safe retry, and an offline/transient validation failure neither claims
+  success nor signs out a valid user. On application resume, an authoritative
+  missing/invalid Auth user signs that device out; transient network failures
+  preserve its session.
+- Re-registration after deletion creates a new Auth UUID and restores no profile,
+  blocks, relationships, notifications, or other data. Every future list,
+  template, Storage, ledger, moderation/legal-retention, or administrator-deletion
+  aggregate must extend this contract before shipping. This product lifecycle is
+  not a claim of complete legal or regulatory compliance. Hosted deletion QA uses
+  separately authorized disposable accounts and must never delete or modify
+  Fernando or Susana.
 
 ### Active and shared lists
 

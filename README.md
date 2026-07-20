@@ -8,10 +8,10 @@ routing, password recovery, owner-only profile onboarding, secure exact-username
 discovery, directional block management, versioned friend requests, and mutual
 friendship management. Persistent in-app friend-request notifications include an
 unread badge, deterministic pagination, safe versioned actions, and block-aware
-suppression. A versioned, allowlist-only account-data export is available to
-authenticated email-verified users from completed Profile or incomplete
-Onboarding. Lists, templates, other notification types, and the expense ledger
-remain planned work.
+suppression. Versioned account-data export and immediate permanent self-service
+account deletion are available to authenticated email-verified users from
+completed Profile or incomplete Onboarding. Lists, templates, other notification
+types, and the expense ledger remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
@@ -187,15 +187,26 @@ duplicate and crossed sends create none. Listing and badge results exclude
 expired, suppressed, or block-hidden rows, and block creation permanently
 suppresses existing pair notifications in the same transaction.
 
-The accepted account lifecycle separates versioned account-data export from
-permanent deletion. Export uses a parameterless, allowlist-only RPC for any
-authenticated email-verified user, including before onboarding, followed by a
-validated UTF-8 JSON file in app-scoped temporary cache and the native share
-sheet. The server retains no export file. A later deletion slice, after export is
-merged and manually verified, will implement the accepted hard-deletion,
-reauthentication, fresh-session, cascade-cleanup, and 30-day username-reservation
-direction. These product directions are not a guarantee of legal/regulatory
-compliance, and the remaining obligations stay open in the decision log.
+The account lifecycle separates versioned account-data export from permanent
+deletion. Export uses a parameterless, allowlist-only RPC for any authenticated
+email-verified user, including before onboarding, followed by a validated UTF-8
+JSON file in app-scoped temporary cache and the native share sheet. The server
+retains no export file.
+
+Deletion is immediate and irreversible. Completed profiles confirm with their
+exact stored canonical username; incomplete profiles confirm with their exact
+Auth email. Flutter sends the current password unchanged only to Supabase Auth for
+reauthentication, then invokes the authenticated `delete-account` Edge Function
+with only the exact confirmation. A database validation RPC proves that the
+matching `auth.sessions` row was created no more than ten minutes earlier before a
+server-only admin client hard-deletes the caller's Auth user. That Auth deletion
+atomically cascades through the current profile, blocks, relationships, and
+notifications. A completed username is retained alone in a private 30-day
+reservation and expired reservations are physically removed daily at 03:17 UTC.
+No email, Auth/profile identifier, or copied former-user data enters the
+reservation. These product behaviors are not a guarantee of complete legal or
+regulatory compliance; extended lifecycle obligations remain open in the decision
+log.
 
 ### Hosted development Auth configuration
 
@@ -233,8 +244,8 @@ The current slices do not implement unrestricted profile/directory search,
 avatars, lists, templates, notification types beyond friend requests,
 notification archive/preferences or physical cleanup, reporting, Realtime,
 server-side ledger logic, SQLite caching/offline synchronization, push delivery,
-Firebase setup, account deletion, or a production
-backend. Effects of blocks or friendship changes on future shared resources
-remain open. Other open
+Firebase setup, administrator-initiated deletion, or a production backend.
+Effects of blocks or friendship changes on future shared resources remain open.
+Other open
 product and architecture choices are recorded in the project documentation and
 must be decided before their implementation slices.

@@ -5,6 +5,8 @@ import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/account/domain/account_data_export_share_service.dart';
 import 'package:list_and_split/features/account/presentation/account_data_export_action.dart';
 import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
+import 'package:list_and_split/features/account/presentation/account_deletion_providers.dart';
+import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/onboarding_screen.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
@@ -188,6 +190,11 @@ Future<void> _pumpScreen(
     ProviderScope(
       overrides: [
         verifiedUserIdProvider.overrideWithValue('user-1'),
+        authSessionProvider
+            .overrideWith((ref) => Stream.value(verifiedSession)),
+        accountDeletionRepositoryProvider.overrideWithValue(
+          FakeAccountDeletionRepository(),
+        ),
         ...overrides,
       ],
       child: MaterialApp(

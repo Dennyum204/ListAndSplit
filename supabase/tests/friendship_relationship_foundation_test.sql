@@ -118,10 +118,10 @@ select is(
     where conrelid = 'public.user_relationships'::regclass
       and contype = 'f'
       and confrelid = 'public.profiles'::regclass
-      and confdeltype = 'a'
+      and confdeltype = 'c'
   ),
   2::bigint,
-  'both participant foreign keys use non-cascading deletion semantics'
+  'both participant foreign keys use account-deletion cascade semantics'
 );
 
 select is(

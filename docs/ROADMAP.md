@@ -67,9 +67,12 @@ Candidate slices:
 - Introduce RPC-only persistent in-app friend-request notifications with atomic
   creation/suppression, block-aware keyset listing, read state, a bell badge, and
   exact 180-day logical expiry.
-- The accepted versioned account-data export vertical slice is implemented. Merge
-  and manually verify it before beginning the separate accepted account
-  hard-deletion slice.
+- The versioned account-data export slice is implemented and manually verified.
+  The separate permanent self-service deletion slice now implements exact
+  confirmation, password-only-to-Auth reauthentication, ten-minute
+  `auth.sessions` validation, Auth-root current-aggregate cascades, the private
+  30-day username reservation, daily physical cleanup, response-loss
+  reconciliation, and other-device resume validation.
 - Add RLS and database-function tests for every relationship transition.
 
 The friend relationship schema gate O-A09 is resolved: one current row uses the
@@ -82,7 +85,7 @@ before shared lists ship. Resolve the immutable-username support/admin correctio
 path and avatar storage lifecycle before the later slices that encode them.
 Shared-resource ownership/deletion, administrator deletion, moderation/legal
 retention, Storage cleanup, and compliance obligations remain open beyond the
-accepted current-aggregate account lifecycle.
+implemented self-service current-aggregate account lifecycle.
 
 ## Phase 2 — Active/shared lists (planned)
 
