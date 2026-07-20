@@ -251,6 +251,9 @@ Future<void> _pumpScreen(
       overrides: [
         authSessionProvider
             .overrideWith((ref) => Stream.value(verifiedSession)),
+        authRepositoryProvider.overrideWithValue(
+          FakeAuthRepository(session: verifiedSession),
+        ),
         ...overrides,
       ],
       child: MaterialApp(

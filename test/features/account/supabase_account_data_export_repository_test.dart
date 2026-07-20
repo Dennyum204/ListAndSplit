@@ -31,7 +31,8 @@ void main() {
   test('calls only the parameterless reviewed RPC', () async {
     final document = await repository.exportOwnAccountData();
 
-    expect(document.schemaVersion, 1);
+    expect(document.schemaVersion, 2);
+    expect(document.activeLists, hasLength(2));
     expect(calls, hasLength(1));
     expect(calls.single.functionName, 'export_own_account_data');
     expect(calls.single.params, isNull);
@@ -47,6 +48,7 @@ void main() {
 
     expect(document.profile.onboardingCompletedAt, isNull);
     expect(document.activeRelationships, isEmpty);
+    expect(document.activeLists, isEmpty);
   });
 
   test('rejects missing, mismatched, and replaced session identities',

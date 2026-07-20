@@ -48,7 +48,7 @@ class _NotificationCentreScreenState
             if (context.canPop()) {
               context.pop();
             } else {
-              context.go(AppRoutes.foundation);
+              context.go(AppRoutes.lists);
             }
           },
           icon: const Icon(Icons.arrow_back_rounded),

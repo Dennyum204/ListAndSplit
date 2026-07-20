@@ -3,10 +3,11 @@ import 'package:list_and_split/features/account/domain/account_data_export.dart'
 Map<String, dynamic> validAccountDataExportJson({
   bool incompleteProfile = false,
   bool emptyCollections = false,
+  int schemaVersion = 2,
 }) {
   return {
     'product': 'list_and_split',
-    'schema_version': 1,
+    'schema_version': schemaVersion,
     'exported_at': '2026-07-19T08:58:10.123Z',
     'auth_identity': {
       'id': '11111111-1111-4111-8111-111111111111',
@@ -64,17 +65,57 @@ Map<String, dynamic> validAccountDataExportJson({
               'expected_relationship_version': 4,
             },
           ],
+    if (schemaVersion == 2)
+      'active_lists': emptyCollections
+          ? <Object?>[]
+          : [
+              {
+                'id': '55555555-5555-4555-8555-555555555555',
+                'title': 'Groceries',
+                'status': 'active',
+                'version': 7,
+                'created_at': '2026-07-19T05:00:00.000Z',
+                'updated_at': '2026-07-19T08:00:00.000Z',
+                'archived_at': null,
+                'items': [
+                  {
+                    'id': '66666666-6666-4666-8666-666666666666',
+                    'name': 'Coffee',
+                    'quantity_thousandths': 1500,
+                    'unit_code': 'pack',
+                    'position': 1,
+                    'version': 2,
+                    'completed_at': '2026-07-19T08:00:00.000Z',
+                    'completed_by': '11111111-1111-4111-8111-111111111111',
+                    'created_at': '2026-07-19T05:30:00.000Z',
+                    'updated_at': '2026-07-19T08:00:00.000Z',
+                  },
+                ],
+              },
+              {
+                'id': '77777777-7777-4777-8777-777777777777',
+                'title': 'Previous trip',
+                'status': 'archived',
+                'version': 3,
+                'created_at': '2026-07-17T05:00:00.000Z',
+                'updated_at': '2026-07-18T08:00:00.000Z',
+                'archived_at': '2026-07-18T08:00:00.000Z',
+                'items': <Object?>[],
+              },
+            ],
   };
 }
 
 AccountDataExportDocument validAccountDataExportDocument({
   bool incompleteProfile = false,
   bool emptyCollections = false,
+  int schemaVersion = 2,
 }) {
   return AccountDataExportDocument.fromJson(
     validAccountDataExportJson(
       incompleteProfile: incompleteProfile,
       emptyCollections: emptyCollections,
+      schemaVersion: schemaVersion,
     ),
   );
 }

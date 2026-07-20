@@ -41,7 +41,7 @@ select is(
     'public.export_own_account_data()'::regprocedure,
     'pg_proc'
   ),
-  'Returns the verified caller''s versioned allowlisted account-data export without retaining or mutating data.',
+  'Returns the verified caller''s schema-version-2 allowlisted account export without persistence or mutation.',
   'the export boundary has a precise durable comment'
 );
 
@@ -84,6 +84,8 @@ select is(
     from pg_catalog.pg_tables
     where schemaname = 'public'
       and tablename in (
+        'active_list_items',
+        'active_lists',
         'profiles',
         'user_blocks',
         'user_notifications',
@@ -91,12 +93,14 @@ select is(
       )
   ),
   array[
+    'active_list_items',
+    'active_lists',
     'profiles',
     'user_blocks',
     'user_notifications',
     'user_relationships'
   ]::name[],
-  'the export migration adds no application table'
+  'the current export boundary sees only the six reviewed application tables'
 );
 
 select ok(
@@ -217,6 +221,42 @@ values
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab', '11111111-1111-4111-8111-111111111111', '66666666-6666-4666-8666-666666666666', 'friend_request', '11111111-1111-4111-8111-111111111111', '66666666-6666-4666-8666-666666666666', 9, now() - interval '4 hours', now() - interval '4 hours' + interval '180 days', null, null),
   ('99999999-9999-4999-8999-999999999998', '22222222-2222-4222-8222-222222222222', '11111111-1111-4111-8111-111111111111', 'friend_request', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 5, now() - interval '5 hours', now() - interval '5 hours' + interval '180 days', null, null);
 
+insert into public.active_lists (
+  id,
+  owner_id,
+  title,
+  status,
+  version,
+  creation_request_id,
+  created_at,
+  updated_at,
+  archived_at
+)
+values
+  ('10000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'Active export list', 'active', 4, '11000000-0000-4000-8000-000000000001', '2026-01-01 08:00:00+00', '2026-01-03 08:00:00+00', null),
+  ('10000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'Archived export list', 'archived', 7, '11000000-0000-4000-8000-000000000002', '2026-01-01 07:00:00+00', '2026-01-02 08:00:00+00', '2026-01-02 08:00:00+00'),
+  ('10000000-0000-4000-8000-000000000003', '22222222-2222-4222-8222-222222222222', 'Foreign list', 'active', 2, '11000000-0000-4000-8000-000000000003', '2026-01-01 06:00:00+00', '2026-01-04 08:00:00+00', null);
+
+insert into public.active_list_items (
+  id,
+  list_id,
+  name,
+  quantity_thousandths,
+  unit_code,
+  position,
+  version,
+  creation_request_id,
+  completed_at,
+  completed_by,
+  created_at,
+  updated_at
+)
+values
+  ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'Second position', 1500, 'kg', 2, 3, '21000000-0000-4000-8000-000000000001', null, null, '2026-01-01 08:02:00+00', '2026-01-03 08:00:00+00'),
+  ('20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', 'First position', 1, null, 1, 2, '21000000-0000-4000-8000-000000000002', '2026-01-03 07:00:00+00', '11111111-1111-4111-8111-111111111111', '2026-01-01 08:01:00+00', '2026-01-03 07:00:00+00'),
+  ('20000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000002', 'Archived item', 999999999, 'box', 1, 1, '21000000-0000-4000-8000-000000000003', null, null, '2026-01-01 07:01:00+00', '2026-01-01 07:01:00+00'),
+  ('20000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000003', 'Foreign item', 1000, 'piece', 1, 1, '21000000-0000-4000-8000-000000000004', null, null, '2026-01-01 06:01:00+00', '2026-01-01 06:01:00+00');
+
 -- Authorization failures are privacy-safe, including malformed identity input.
 set local role anon;
 
@@ -305,6 +345,7 @@ select ok(
       and document -> 'outgoing_blocks' = '[]'::jsonb
       and document -> 'active_relationships' = '[]'::jsonb
       and document -> 'visible_notifications' = '[]'::jsonb
+      and document -> 'active_lists' = '[]'::jsonb
     from account_export_documents
     where fixture = 'incomplete'
   ),
@@ -329,6 +370,7 @@ select is(
     where fixture = 'complete'
   ),
   array[
+    'active_lists',
     'active_relationships',
     'auth_identity',
     'exported_at',
@@ -338,20 +380,20 @@ select is(
     'schema_version',
     'visible_notifications'
   ]::text[],
-  'the export has exactly the eight accepted root keys'
+  'the export has exactly the nine schema-version-two root keys'
 );
 
 select ok(
   (
     select document ->> 'product' = 'list_and_split'
-      and document -> 'schema_version' = '1'::jsonb
+      and document -> 'schema_version' = '2'::jsonb
       and (document ->> 'exported_at')::timestamptz
         between pg_catalog.transaction_timestamp()
         and pg_catalog.clock_timestamp()
     from account_export_documents
     where fixture = 'complete'
   ),
-  'the root contains the product, schema version one, and server export time'
+  'the root contains the product, schema version two, and server export time'
 );
 
 select is(
@@ -561,6 +603,100 @@ select is(
   'visible notifications use only the eleven approved fields'
 );
 
+select is(
+  (
+    select pg_catalog.jsonb_array_length(document -> 'active_lists')
+    from account_export_documents
+    where fixture = 'complete'
+  ),
+  2,
+  'export includes both active and archived lists owned by the caller only'
+);
+
+select is(
+  (
+    select pg_catalog.array_agg(list_key order by list_key)
+    from account_export_documents
+    cross join lateral pg_catalog.jsonb_object_keys(
+      document -> 'active_lists' -> 0
+    ) as list_key
+    where fixture = 'complete'
+  ),
+  array[
+    'archived_at',
+    'created_at',
+    'id',
+    'items',
+    'status',
+    'title',
+    'updated_at',
+    'version'
+  ]::text[],
+  'exported lists use only the eight approved fields'
+);
+
+select ok(
+  (
+    select document #>> '{active_lists,0,id}' =
+        '10000000-0000-4000-8000-000000000001'
+      and document #>> '{active_lists,0,status}' = 'active'
+      and document #>> '{active_lists,1,id}' =
+        '10000000-0000-4000-8000-000000000002'
+      and document #>> '{active_lists,1,status}' = 'archived'
+      and not (document -> 'active_lists') @> pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'id',
+          '10000000-0000-4000-8000-000000000003'
+        )
+      )
+    from account_export_documents
+    where fixture = 'complete'
+  ),
+  'list export ordering is deterministic and excludes another owner aggregate'
+);
+
+select is(
+  (
+    select pg_catalog.array_agg(item_key order by item_key)
+    from account_export_documents
+    cross join lateral pg_catalog.jsonb_object_keys(
+      document -> 'active_lists' -> 0 -> 'items' -> 0
+    ) as item_key
+    where fixture = 'complete'
+  ),
+  array[
+    'completed_at',
+    'completed_by',
+    'created_at',
+    'id',
+    'name',
+    'position',
+    'quantity_thousandths',
+    'unit_code',
+    'updated_at',
+    'version'
+  ]::text[],
+  'exported items use only the ten approved fields'
+);
+
+select ok(
+  (
+    select document #>> '{active_lists,0,items,0,id}' =
+        '20000000-0000-4000-8000-000000000002'
+      and document #> '{active_lists,0,items,0,quantity_thousandths}' =
+        '1'::jsonb
+      and document #>> '{active_lists,0,items,1,id}' =
+        '20000000-0000-4000-8000-000000000001'
+      and document #> '{active_lists,0,items,1,quantity_thousandths}' =
+        '1500'::jsonb
+      and document #>> '{active_lists,1,items,0,quantity_thousandths}' =
+        '999999999'
+    from account_export_documents
+    where fixture = 'complete'
+  ),
+  'items are position ordered and quantities remain exact JSON integers'
+);
+
 create function pg_temp.contains_forbidden_json_key(
   document jsonb,
   forbidden_keys text[]
@@ -630,7 +766,10 @@ select ok(
       'reopen_by_id',
       'relationship_low_id',
       'relationship_high_id',
-      'suppressed_at'
+      'suppressed_at',
+      'creation_request_id',
+      'owner_id',
+      'list_id'
     ]::text[]
   ),
   'recursive JSON inspection finds no credential, Auth, or privacy-internal key'
@@ -665,6 +804,18 @@ select is(
   (select pg_catalog.count(*) from public.user_notifications),
   7::bigint,
   'export creates or deletes no notification'
+);
+
+select is(
+  (select pg_catalog.count(*) from public.active_lists),
+  3::bigint,
+  'export creates or deletes no active list'
+);
+
+select is(
+  (select pg_catalog.count(*) from public.active_list_items),
+  4::bigint,
+  'export creates or deletes no active list item'
 );
 
 select ok(

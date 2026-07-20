@@ -30,8 +30,10 @@ Auth User --1:1-- Profile
 Profile --blocks (directional)--> Profile
 Profile --< versioned Relationship state >-- Profile
 
-Profile --creates--> Active List --< List Member >-- Profile
-Active List --< List Item --< Item Assignment >-- List Member
+Profile --owns--> Active List --< List Item
+
+Future: Active List --< List Member >-- Profile
+Future: List Item --< Item Assignment >-- List Member
 Active List --< Expense --1 payer / many participant shares--> List Member
 Active List --< Settlement --from/to--> List Member
 
@@ -82,7 +84,7 @@ Export is governed by the non-persistent contract below.
 ### Versioned account export document
 
 The account export is a transient document, not a table or retained server record.
-Schema version `1` has exactly these root sections:
+Schema version `1` introduced these root sections:
 
 - `product`, `schema_version`, and server-generated `exported_at`;
 - `auth_identity`, containing only the caller's ID, email, confirmation time,
@@ -92,13 +94,20 @@ Schema version `1` has exactly these root sections:
 - deterministic `outgoing_blocks`, `active_relationships`, and
   `visible_notifications` arrays.
 
+Schema version `2` preserves those roots and adds exactly one `active_lists` array.
+It includes both active and archived lists owned by the caller. Each list contains
+an ordered `items` array. Explicit allowlists expose list/item IDs, title/name,
+status, versions, exact `quantity_thousandths`, nullable stable unit code, integer
+position, completion attribution/time, and approved timestamps; request
+idempotency keys and locking/authorization internals remain private.
+
 Every nested object is built from an explicit field allowlist. The social arrays
 apply the same directional-block, caller-relative active-relationship, recipient,
 suppression, expiry, and either-direction block filters as their existing RPC
 projections. Arrays are never null. Raw table rows, Auth metadata, credentials,
 tokens, sessions, incoming blocks, dormant relationship internals, hidden actors,
 and future aggregate data are outside the contract. Later schema versions must add
-future list/template/ledger sections deliberately and compatibly.
+future template/shared-membership/ledger sections deliberately and compatibly.
 
 ### Permanent deletion and username reservation
 
@@ -106,7 +115,8 @@ Immediate hard deletion of `auth.users` is the account aggregate's atomic root.
 The profile foreign key cascades from Auth; both block participant references,
 both normalized relationship participant references, notification recipient and
 actor references, and the notification relationship reference cascade from the
-profile/relationship rows they protect. This removes every currently implemented
+profile/relationship rows they protect. Owned-list and list-item foreign keys add
+the list aggregate to that same cascade. This removes every currently implemented
 application record involving the deleted account in the same root transaction,
 while unrelated rows remain unchanged.
 
@@ -247,17 +257,27 @@ relationship or block changes on existing shared resources remain unresolved.
 
 ## Active-list aggregate
 
-### Active list and membership
+### Implemented owner-only active list
 
-An active list is created by a user and has members. The conceptual record holds
-its identity, display attributes, general note, Payment Control enabled state, and
-one currency when Payment Control is enabled. A membership associates a profile
-with the list.
+`public.active_lists` has a UUID primary key, one non-null `owner_id` referencing
+`public.profiles(id) ON DELETE CASCADE`, a trimmed 1-80-character title, checked
+`active`/`archived` status, positive monotonic `bigint` version, a caller-generated
+creation request UUID used only for idempotency, and database-owned creation,
+update, and nullable archive timestamps. Status and archive time are constrained
+to agree. `(owner_id, creation_request_id)` is unique; duplicate titles remain
+valid.
 
-The creator/owner role is conceptually required to attribute creation, but the full
-role model and administrative permissions are open. Only accepted friends may be
-invited; existing membership and friendship are distinct relationships so a later
-friendship change does not silently rewrite historical list data.
+The owner can create, read, rename, archive, restore, and permanently delete the
+list. Archived rows remain readable but every mutation except restore is rejected
+inside the RPC boundary. Active listing orders by `(updated_at, id)` descending;
+archived listing orders by `(archived_at, id)` descending. Both use a bounded
+exclusive keyset cursor and aggregate item total/completed counts in the same
+projection.
+
+No membership table exists in this slice. The future full role model,
+administrative permissions, accepted-friend invitations, removal/leaving, and
+ownership transfer remain open. Membership and friendship will remain distinct so
+a later friendship change cannot silently rewrite historical list data.
 
 ### List invitation
 
@@ -267,15 +287,35 @@ accepted, and declined outcomes. Acceptance creates membership once and must be
 atomic/idempotent. Expiry, revocation, who may invite, and reinvitation rules remain
 open.
 
-### List item and assignment
+### Implemented owner-only list item
 
-A list item belongs to exactly one active list and conceptually includes item text,
-quantity, optional unit, completion state, and ordering information. An assignment
-join permits zero, one, or multiple list members to be assigned to the same item.
-The data layer must reject assignments to non-members.
+`public.active_list_items` has a UUID primary key, non-null `list_id` referencing
+the list `ON DELETE CASCADE`, trimmed 1-120-character name, positive integer
+`quantity_thousandths` from `1` through `999999999` (default `1000`), nullable
+checked unit code, positive deterministic integer `position`, positive monotonic
+`bigint` version, a creation request UUID, nullable completion time and actor, and
+database-owned creation/update times. `(list_id, creation_request_id)` and
+`(list_id, position)` are unique; duplicate names remain valid.
 
-Quantity representation, units, ordering, completion attribution/timestamps, and
-delete versus archive behavior are unresolved.
+Unit is null or exactly `piece`, `kg`, `g`, `l`, `ml`, `pack`, `box`, `bottle`,
+`can`, or `bag`. Flutter parses at most three decimal places directly into integer
+thousandths and formats without insignificant zeros; no authoritative boundary
+uses binary floating point. Initial position follows committed creation order.
+Reorder validates an exact unique current item-ID set, locks consistently, and
+writes contiguous positive positions atomically. Completion records server time
+and the authenticated owner; reopen clears both. The nullable actor reference uses
+`ON DELETE SET NULL`, allowing a retained completion time without deleting the
+item if a future actor identity disappears.
+
+List rename/archive/restore increments list version only. Item create/delete/
+reorder increments list version. Item edit/complete/reopen increments both list and
+item version. Real state changes update the corresponding server timestamps once;
+idempotent no-op retries update neither. Expected versions prevent stale overwrite
+with a stable `40001` conflict. Creation request UUIDs are checked against their
+payload for retry safety and never grant ownership.
+
+No assignment or item-event table exists yet. Multi-member assignment and its
+authorization/audit rules remain open with the collaborative-list phase.
 
 ### General note and mentions
 
@@ -457,8 +497,9 @@ anonymous denial unless public read is explicitly intended.
 | Profiles | Direct access remains authenticated owner-only select and approved-field update; exact cross-user discovery uses only the approved block-aware minimal projection |
 | Active blocks | RPC-only application access; the caller can create/remove/list only outgoing blocks, while incoming and unrelated rows remain private |
 | Friend relationships | RPC-only current-state access for the two participants through caller-relative summaries/lists and version-checked transitions; no direct table access or raw dormant-state disclosure |
-| Active lists and memberships | Current authorized members; invitees see only invitation-safe list data |
-| Items, assignments, notes, mentions | Authorized list members, with mutations limited by the final role model |
+| Owner-only active lists | RPC-only owner access; no direct table CRUD or caller-supplied ownership authority |
+| Owner-only list items | RPC-only through the owning-list boundary; archived lists reject mutations |
+| Future memberships, assignments, notes, mentions | Authorized list members, with mutations limited by the accepted future role model |
 | Invitations | Recipient and authorized inviters/list administrators |
 | Private templates/categories | Owner only |
 | Public templates | Readable according to approved public-profile policy; mutation remains owner-only |
@@ -475,13 +516,13 @@ explicit grants, protected search paths, and adversarial policy/function tests.
 ## Physical-model decisions still required
 
 - Identifier types, timestamp/audit conventions, soft delete, and archival for
-  later aggregates beyond the accepted profile and relationship records.
+  later aggregates beyond the accepted profile, relationship, notification, and
+  owner-list records.
 - Support/administrator correction and audit rules for immutable usernames.
 - Avatar Storage, validation, replacement, retention, and deletion lifecycle.
 - Block effects on existing shared resources beyond the implemented current
   aggregate account-deletion cascade.
 - List role model and membership lifecycle.
-- Quantity/unit types and ordering strategy.
 - Mention representation and parser ownership.
 - Template category cardinality, version/provenance representation, and copy
   idempotency keys.

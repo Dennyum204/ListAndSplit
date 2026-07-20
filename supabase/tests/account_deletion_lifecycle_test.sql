@@ -127,13 +127,25 @@ select is(
       'user_relationships_profile_high_fkey',
       'user_notifications_recipient_fkey',
       'user_notifications_actor_fkey',
-      'user_notifications_relationship_fkey'
+      'user_notifications_relationship_fkey',
+      'active_lists_owner_fkey',
+      'active_list_items_list_fkey'
     )
       and contype = 'f'
       and confdeltype = 'c'
   ),
-  8::bigint,
-  'all eight current account-root foreign keys cascade'
+  10::bigint,
+  'all ten current account-root and owned-aggregate foreign keys cascade'
+);
+
+select is(
+  (
+    select confdeltype
+    from pg_catalog.pg_constraint
+    where conname = 'active_list_items_completed_by_fkey'
+  ),
+  'n'::"char",
+  'completion actor deletion sets attribution null rather than deleting an item'
 );
 
 select ok(
@@ -333,6 +345,30 @@ values
   ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', '11111111-1111-4111-8111-111111111111', '33333333-3333-4333-8333-333333333333', 'friend_request', '11111111-1111-4111-8111-111111111111', '33333333-3333-4333-8333-333333333333', 4),
   ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', '33333333-3333-4333-8333-333333333333', '44444444-4444-4444-8444-444444444444', 'friend_request', '33333333-3333-4333-8333-333333333333', '44444444-4444-4444-8444-444444444444', 5);
 
+insert into public.active_lists (
+  id,
+  owner_id,
+  title,
+  creation_request_id
+)
+values
+  ('90000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'Deleted owner list', '91000000-0000-4000-8000-000000000001'),
+  ('90000000-0000-4000-8000-000000000002', '22222222-2222-4222-8222-222222222222', 'Surviving owner list', '91000000-0000-4000-8000-000000000002');
+
+insert into public.active_list_items (
+  id,
+  list_id,
+  name,
+  position,
+  creation_request_id,
+  completed_at,
+  completed_by
+)
+values
+  ('92000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-000000000001', 'Deleted item one', 1, '93000000-0000-4000-8000-000000000001', null, null),
+  ('92000000-0000-4000-8000-000000000002', '90000000-0000-4000-8000-000000000001', 'Deleted item two', 2, '93000000-0000-4000-8000-000000000002', now(), '11111111-1111-4111-8111-111111111111'),
+  ('92000000-0000-4000-8000-000000000003', '90000000-0000-4000-8000-000000000002', 'Surviving completed item', 1, '93000000-0000-4000-8000-000000000003', now(), '11111111-1111-4111-8111-111111111111');
+
 insert into auth.sessions (id, user_id, created_at, updated_at)
 values
   ('10000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', now() - interval '5 minutes', now()),
@@ -496,6 +532,12 @@ select is(
   'validation calls mutate no notifications'
 );
 
+select ok(
+  (select count(*) = 2 from public.active_lists)
+  and (select count(*) = 3 from public.active_list_items),
+  'validation calls mutate no list aggregate'
+);
+
 delete from auth.users
 where id = '11111111-1111-4111-8111-111111111111';
 
@@ -553,6 +595,37 @@ select ok(
     where id = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
   ),
   'an unrelated notification survives account deletion'
+);
+
+select ok(
+  not exists (
+    select 1
+    from public.active_lists
+    where id = '90000000-0000-4000-8000-000000000001'
+  )
+  and not exists (
+    select 1
+    from public.active_list_items
+    where list_id = '90000000-0000-4000-8000-000000000001'
+  ),
+  'Auth-root deletion cascades the owned list and every item'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.active_lists
+    where id = '90000000-0000-4000-8000-000000000002'
+      and owner_id = '22222222-2222-4222-8222-222222222222'
+  )
+  and exists (
+    select 1
+    from public.active_list_items
+    where id = '92000000-0000-4000-8000-000000000003'
+      and completed_at is not null
+      and completed_by is null
+  ),
+  'unrelated owner data survives while deleted completion attribution becomes null'
 );
 
 select is(

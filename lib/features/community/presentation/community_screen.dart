@@ -33,11 +33,6 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     return FormPageFrame(
       title: localizations.communityTitle,
       description: localizations.communityDescription,
-      leading: IconButton(
-        onPressed: () => context.go(AppRoutes.foundation),
-        icon: const Icon(Icons.arrow_back_rounded),
-        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-      ),
       actions: const [NotificationBell()],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

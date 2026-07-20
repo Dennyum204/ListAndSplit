@@ -7,6 +7,7 @@ import 'package:list_and_split/features/account/presentation/account_data_export
 import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
 import 'package:list_and_split/features/account/presentation/account_deletion_action.dart';
 import 'package:list_and_split/features/account/presentation/account_deletion_providers.dart';
+import 'package:list_and_split/features/auth/presentation/auth_actions_controller.dart';
 import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
@@ -56,18 +57,18 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
     final state = ref.watch(profileControllerProvider);
     final exportState = ref.watch(accountDataExportControllerProvider);
     final deletionState = ref.watch(accountDeletionControllerProvider);
+    final authActions = ref.watch(
+      authActionsControllerProvider(AuthActionFlow.session),
+    );
     final email = ref.watch(authSessionProvider).valueOrNull?.user?.email;
-    final isBusy =
-        state.isSubmitting || exportState.isBusy || deletionState.isSubmitting;
+    final isBusy = state.isSubmitting ||
+        exportState.isBusy ||
+        deletionState.isSubmitting ||
+        authActions.isSubmitting;
     final displayNameError = state.fieldErrors[ProfileField.displayName];
     return FormPageFrame(
       title: localizations.profileTitle,
       description: localizations.usernameImmutableHelper,
-      leading: IconButton(
-        onPressed: () => context.go('/'),
-        icon: const Icon(Icons.arrow_back_rounded),
-        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-      ),
       actions: const [NotificationBell()],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -76,6 +77,11 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
             message: state.message == null
                 ? null
                 : profileMessageText(localizations, state.message!),
+          ),
+          FormMessageBanner(
+            message: authActions.message == AuthActionMessage.operationFailed
+                ? localizations.operationFailedMessage
+                : null,
           ),
           TextFormField(
             key: const Key('profileUsername'),
@@ -127,6 +133,25 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
               enabled: !state.isSubmitting && !exportState.isBusy,
               onDeleted: () => context.go(AppRoutes.signIn),
             ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            key: const Key('profileSignOutButton'),
+            onPressed: isBusy
+                ? null
+                : () => ref
+                    .read(
+                      authActionsControllerProvider(AuthActionFlow.session)
+                          .notifier,
+                    )
+                    .signOut(),
+            icon: authActions.isSubmitting
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.logout_rounded),
+            label: Text(localizations.signOutButton),
+          ),
         ],
       ),
     );

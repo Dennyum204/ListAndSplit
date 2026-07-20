@@ -192,6 +192,9 @@ Future<void> _pumpScreen(
         verifiedUserIdProvider.overrideWithValue('user-1'),
         authSessionProvider
             .overrideWith((ref) => Stream.value(verifiedSession)),
+        authRepositoryProvider.overrideWithValue(
+          FakeAuthRepository(session: verifiedSession),
+        ),
         accountDeletionRepositoryProvider.overrideWithValue(
           FakeAccountDeletionRepository(),
         ),

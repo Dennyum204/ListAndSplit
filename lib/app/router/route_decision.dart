@@ -12,6 +12,8 @@ abstract final class AppRoutes {
   static const onboarding = '/onboarding';
   static const accountError = '/account-error';
   static const foundation = '/';
+  static const lists = '/lists';
+  static const templates = '/templates';
   static const profile = '/profile';
   static const community = '/community';
   static const friendships = '/community/friendships';
@@ -83,14 +85,14 @@ class AppRouteDecision {
     }
 
     if (currentPath == AppRoutes.foundation ||
+        _isPathWithin(currentPath, AppRoutes.lists) ||
+        currentPath == AppRoutes.templates ||
         currentPath == AppRoutes.profile ||
-        currentPath == AppRoutes.community ||
-        currentPath == AppRoutes.friendships ||
-        currentPath == AppRoutes.blockedUsers ||
+        _isPathWithin(currentPath, AppRoutes.community) ||
         currentPath == AppRoutes.notifications) {
       return null;
     }
-    return AppRoutes.foundation;
+    return AppRoutes.lists;
   }
 
   static bool _isSignedOutRoute(String path) =>
@@ -100,4 +102,7 @@ class AppRouteDecision {
 
   static String? _unlessCurrent(String current, String target) =>
       current == target ? null : target;
+
+  static bool _isPathWithin(String path, String root) =>
+      path == root || path.startsWith('$root/');
 }
