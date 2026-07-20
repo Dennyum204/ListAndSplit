@@ -33,6 +33,9 @@ select is(
     'expires_at:timestamp with time zone',
     'read_at:timestamp with time zone',
     'suppressed_at:timestamp with time zone'
+    ,'active_list_id:uuid'
+    ,'access_participant_id:uuid'
+    ,'access_version:bigint'
   ],
   'notification columns contain only the accepted reference and lifecycle data'
 );
@@ -45,8 +48,11 @@ select is(
       and table_name = 'user_notifications'
       and is_nullable = 'YES'
   ),
-  array['read_at', 'suppressed_at']::information_schema.sql_identifier[],
-  'only read and suppression timestamps are nullable'
+  array[
+    'relationship_low_id','relationship_high_id','relationship_version',
+    'read_at','suppressed_at','active_list_id','access_participant_id','access_version'
+  ]::information_schema.sql_identifier[],
+  'type-specific references plus read and suppression timestamps are nullable'
 );
 
 select is(
@@ -93,6 +99,7 @@ select is(
     'user_notifications_pair_participants_check',
     'user_notifications_positive_version_check',
     'user_notifications_read_time_check',
+    'user_notifications_reference_scope_check',
     'user_notifications_suppression_time_check',
     'user_notifications_type_check'
   ]::name[],
@@ -107,8 +114,8 @@ select is(
       and contype = 'f'
       and confdeltype = 'c'
   ),
-  3::bigint,
-  'all profile and relationship foreign keys use account-deletion cascades'
+  5::bigint,
+  'all profile, relationship, list, and participant foreign keys cascade'
 );
 
 select is(
@@ -144,12 +151,14 @@ select is(
       and tablename = 'user_notifications'
   ),
   array[
+    'user_notifications_access_version_key',
+    'user_notifications_active_list_idx',
     'user_notifications_pair_version_key',
     'user_notifications_pkey',
     'user_notifications_recipient_unread_expiry_idx',
     'user_notifications_recipient_visible_created_idx'
   ]::name[],
-  'only required identity, uniqueness, listing, and badge indexes exist'
+  'only required friend/list identity, uniqueness, listing, and badge indexes exist'
 );
 
 select ok(
@@ -291,7 +300,7 @@ select is(
   pg_catalog.pg_get_function_result(
     'public.list_notifications(integer,timestamptz,uuid)'::regprocedure
   ),
-  'TABLE(notification_id uuid, notification_type text, created_at timestamp with time zone, is_read boolean, actor_profile_id uuid, actor_username text, actor_display_name text, action_status text, expected_relationship_version bigint)'::text,
+  'TABLE(notification_id uuid, notification_type text, created_at timestamp with time zone, is_read boolean, actor_profile_id uuid, actor_username text, actor_display_name text, action_status text, expected_relationship_version bigint, active_list_id uuid, active_list_title text, active_list_status text, expected_access_version bigint)'::text,
   'listing returns only the minimal Flutter projection and cursor fields'
 );
 
@@ -408,8 +417,8 @@ select ok(
   and pg_catalog.obj_description(
     'public.block_profile(uuid)'::regprocedure,
     'pg_proc'
-  ) = 'Idempotently creates the caller''s outgoing block and atomically deactivates an active relationship.',
-  'the replaced send and block functions preserve their reviewed comments'
+  ) = 'Creates one directional block and atomically applies privacy-safe relationship, notification, and shared-list separation.',
+  'the replaced send and block functions retain current explanatory comments'
 );
 
 -- Verified/onboarded, verified/incomplete, and unverified fixtures.
@@ -1291,7 +1300,7 @@ select throws_like(
       1
     )
   $$,
-  '%user_notifications_type_check%',
+  '%violates check constraint%',
   'unsupported notification types are rejected'
 );
 
