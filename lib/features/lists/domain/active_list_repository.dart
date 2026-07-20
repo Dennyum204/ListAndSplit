@@ -7,6 +7,7 @@ enum ActiveListFailureCode {
   stale,
   retryConflict,
   archived,
+  transport,
   generic,
 }
 

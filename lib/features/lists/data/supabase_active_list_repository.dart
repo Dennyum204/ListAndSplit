@@ -379,7 +379,7 @@ class SupabaseActiveListRepository implements ActiveListRepository {
         },
       );
     }
-    return const ActiveListFailure(ActiveListFailureCode.generic);
+    return const ActiveListFailure(ActiveListFailureCode.transport);
   }
 
   static final _uuidPattern = RegExp(

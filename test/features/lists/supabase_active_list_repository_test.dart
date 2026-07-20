@@ -179,6 +179,32 @@ void main() {
     }
   });
 
+  test('maps non-PostgREST request failures to transport reconciliation',
+      () async {
+    failure = StateError('private network detail');
+
+    await expectLater(
+      repository.renameList(
+        '11111111-1111-4111-8111-111111111111',
+        'Renamed',
+        expectedVersion: 1,
+      ),
+      throwsA(
+        isA<ActiveListFailure>()
+            .having(
+              (value) => value.code,
+              'code',
+              ActiveListFailureCode.transport,
+            )
+            .having(
+              (value) => value.toString(),
+              'message',
+              isNot(contains('private network detail')),
+            ),
+      ),
+    );
+  });
+
   test('rejects malformed, expanded, or inconsistent projections', () async {
     response = [
       _summaryRow()..['completed_item_count'] = 3,

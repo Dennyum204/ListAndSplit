@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
+import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
@@ -257,6 +258,282 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.activeLists, hasLength(1));
   });
+
+  testWidgets(
+      'stale rename closes before delayed recovery and shows authoritative title',
+      (tester) async {
+    final repository = _StaleRenameWidgetRepository();
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('listActionsButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('renameListTitle')),
+      'Old Device Name',
+    );
+    await tester.tap(find.byKey(const Key('confirmRenameListButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('renameListTitle')), findsNothing);
+    expect(
+      tester
+          .widget<PopupMenuButton<dynamic>>(
+            find.byKey(const Key('listActionsButton')),
+          )
+          .enabled,
+      isTrue,
+    );
+    expect(find.text('Checking the current list after the requestâ€¦'),
+        findsOneWidget);
+    expect(repository.recovery.isCompleted, isFalse);
+
+    repository.recovery.complete(repository.activeLists.single);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Weekend Shopping Updated'), findsOneWidget);
+    expect(find.text('Old Device Name'), findsNothing);
+    expect(
+      find.text(
+        'This list changed on another device. The latest version was loaded.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('failed stale recovery enables a visible retry action',
+      (tester) async {
+    final repository = _StaleRenameWidgetRepository();
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('listActionsButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('renameListTitle')),
+      'Stale draft',
+    );
+    await tester.tap(find.byKey(const Key('confirmRenameListButton')));
+    await tester.pump();
+    repository.recovery.completeError(StateError('offline'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('renameListTitle')), findsNothing);
+    expect(
+      find.text(
+        "We couldn't load the current list. Try again before making more changes.",
+      ),
+      findsOneWidget,
+    );
+    expect(
+        find.byKey(const Key('retryListDetailRecoveryButton')), findsOneWidget);
+    expect(
+      tester
+          .widget<PopupMenuButton<dynamic>>(
+            find.byKey(const Key('listActionsButton')),
+          )
+          .enabled,
+      isTrue,
+    );
+
+    await tester.tap(find.byKey(const Key('retryListDetailRecoveryButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('Weekend Shopping Updated'), findsOneWidget);
+    expect(
+        find.byKey(const Key('retryListDetailRecoveryButton')), findsNothing);
+  });
+
+  testWidgets('stale item editor closes and discards its draft',
+      (tester) async {
+    final repository = _StaleItemWidgetRepository();
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('itemActions-item-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('itemNameField')), 'Old item');
+    await tester.tap(find.byKey(const Key('saveItemButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('itemNameField')), findsNothing);
+    expect(repository.recovery.isCompleted, isFalse);
+
+    repository.recovery.complete(repository.activeLists.single);
+    await tester.pumpAndSettle();
+    expect(find.text('Tea'), findsOneWidget);
+    expect(find.text('Old item'), findsNothing);
+    expect(
+      find.text(
+        'This list changed on another device. The latest version was loaded.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('rename dialog shows bounded write progress', (tester) async {
+    final repository = _DelayedRenameWidgetRepository();
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('listActionsButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('renameListTitle')), 'Weekend');
+    await tester.tap(find.byKey(const Key('confirmRenameListButton')));
+    await tester.pump();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('confirmRenameListButton')),
+        matching: find.byType(CircularProgressIndicator),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('confirmRenameListButton')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<TextButton>(
+            find
+                .ancestor(
+                  of: find.text('Cancel').last,
+                  matching: find.byType(TextButton),
+                )
+                .last,
+          )
+          .onPressed,
+      isNull,
+    );
+
+    repository.completeRename('Weekend');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('renameListTitle')), findsNothing);
+    expect(find.text('Weekend'), findsOneWidget);
+  });
+}
+
+class _StaleRenameWidgetRepository extends FakeActiveListRepository {
+  _StaleRenameWidgetRepository() {
+    activeLists = [_summary(title: 'Weekend Shopping')];
+  }
+
+  final recovery = Completer<ActiveListSummary>();
+  var _delayNextGet = true;
+
+  @override
+  Future<ActiveListSummary> getList(String listId) {
+    if (_delayNextGet && activeLists.single.version > 3) {
+      _delayNextGet = false;
+      return recovery.future;
+    }
+    return super.getList(listId);
+  }
+
+  @override
+  Future<ActiveListSummary> renameList(
+    String listId,
+    String title, {
+    required int expectedVersion,
+  }) async {
+    mutationCalls += 1;
+    activeLists = [
+      _summary(
+        title: 'Weekend Shopping Updated',
+        version: expectedVersion + 1,
+      ),
+    ];
+    throw const ActiveListFailure(ActiveListFailureCode.stale);
+  }
+}
+
+class _StaleItemWidgetRepository extends FakeActiveListRepository {
+  _StaleItemWidgetRepository() {
+    activeLists = [_summary()];
+    itemsByList['list-1'] = [_item()];
+  }
+
+  final recovery = Completer<ActiveListSummary>();
+  var _delayNextGet = true;
+
+  @override
+  Future<ActiveListSummary> getList(String listId) {
+    if (_delayNextGet && activeLists.single.version > 3) {
+      _delayNextGet = false;
+      return recovery.future;
+    }
+    return super.getList(listId);
+  }
+
+  @override
+  Future<ActiveListItem> updateItem(
+    String listId,
+    String itemId,
+    String name, {
+    required ListQuantity quantity,
+    required ListUnit? unit,
+    required int expectedListVersion,
+    required int expectedItemVersion,
+  }) async {
+    mutationCalls += 1;
+    activeLists = [_summary(version: expectedListVersion + 1)];
+    itemsByList[listId] = [
+      _item(name: 'Tea', version: expectedItemVersion + 1),
+    ];
+    throw const ActiveListFailure(ActiveListFailureCode.stale);
+  }
+}
+
+class _DelayedRenameWidgetRepository extends FakeActiveListRepository {
+  _DelayedRenameWidgetRepository() {
+    activeLists = [_summary()];
+  }
+
+  final _rename = Completer<ActiveListSummary>();
+
+  @override
+  Future<ActiveListSummary> renameList(
+    String listId,
+    String title, {
+    required int expectedVersion,
+  }) {
+    mutationCalls += 1;
+    return _rename.future;
+  }
+
+  void completeRename(String title) {
+    final updated = _summary(title: title, version: 4);
+    activeLists = [updated];
+    _rename.complete(updated);
+  }
 }
 
 Future<void> _pump(
@@ -291,12 +568,13 @@ ActiveListSummary _summary({
   String title = 'Groceries',
   ActiveListStatus status = ActiveListStatus.active,
   DateTime? archivedAt,
+  int version = 3,
 }) {
   return ActiveListSummary(
     id: id,
     title: title,
     status: status,
-    version: 3,
+    version: version,
     itemCount: 2,
     completedItemCount: 1,
     createdAt: DateTime.utc(2026, 7, 20, 9),
@@ -305,14 +583,14 @@ ActiveListSummary _summary({
   );
 }
 
-ActiveListItem _item() {
+ActiveListItem _item({String name = 'Coffee', int version = 2}) {
   return ActiveListItem(
     id: 'item-1',
-    name: 'Coffee',
+    name: name,
     quantity: ListQuantity.fromThousandths(1500),
     unit: ListUnit.pack,
     position: 1,
-    version: 2,
+    version: version,
     completedAt: null,
     completedBy: null,
     createdAt: DateTime.utc(2026, 7, 20, 9),

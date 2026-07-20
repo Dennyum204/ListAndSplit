@@ -148,17 +148,22 @@ class ActiveListDetailScreen extends ConsumerWidget {
                 onPressed: state.isMutating
                     ? null
                     : () async {
-                        final renamed = await dialogRef
+                        final outcome = await dialogRef
                             .read(
                               activeListDetailControllerProvider(listId)
                                   .notifier,
                             )
                             .rename(title);
-                        if (renamed && dialogContext.mounted) {
+                        if (outcome.dismissesEditor && dialogContext.mounted) {
                           Navigator.of(dialogContext).pop();
                         }
                       },
-                child: Text(localizations.saveButton),
+                child: state.isMutating
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(localizations.saveButton),
               ),
             ],
           );
@@ -188,10 +193,12 @@ class ActiveListDetailScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    final deleted = await ref
+    final outcome = await ref
         .read(activeListDetailControllerProvider(listId).notifier)
         .deleteList();
-    if (deleted && context.mounted) context.pop();
+    if (outcome == ActiveListMutationOutcome.succeeded && context.mounted) {
+      context.pop();
+    }
   }
 
   Future<void> _showItemDialog(
@@ -247,6 +254,25 @@ class _DetailBody extends ConsumerWidget {
           FormMessageBanner(
             message: _detailMessageText(localizations, state.message),
           ),
+          if (state.message == ActiveListDetailMessage.recoveryFailed ||
+              state.message == ActiveListDetailMessage.refreshFailed)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: FilledButton.tonal(
+                  key: const Key('retryListDetailRecoveryButton'),
+                  onPressed: state.isMutating
+                      ? null
+                      : () => ref
+                          .read(
+                            activeListDetailControllerProvider(listId).notifier,
+                          )
+                          .load(),
+                  child: Text(localizations.tryAgainButton),
+                ),
+              ),
+            ),
           Text(
             localizations.listProgress(completed, detail.items.length),
             style: Theme.of(context).textTheme.titleMedium,
@@ -304,7 +330,14 @@ class _DetailBody extends ConsumerWidget {
       ActiveListDetailMessage.itemDeleted => localizations.itemDeletedMessage,
       ActiveListDetailMessage.orderUpdated =>
         localizations.itemOrderUpdatedMessage,
+      ActiveListDetailMessage.recoveryInProgress =>
+        localizations.listRecoveryInProgressMessage,
       ActiveListDetailMessage.staleRefreshed => localizations.listStaleMessage,
+      ActiveListDetailMessage.reconciled => localizations.listReconciledMessage,
+      ActiveListDetailMessage.recoveryFailed =>
+        localizations.listRecoveryFailedMessage,
+      ActiveListDetailMessage.refreshFailed =>
+        localizations.listRefreshFailedMessage,
       ActiveListDetailMessage.invalidInput =>
         localizations.listInvalidInputMessage,
       ActiveListDetailMessage.archivedReadOnly =>
@@ -578,7 +611,7 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
     }
     final controller =
         ref.read(activeListDetailControllerProvider(widget.listId).notifier);
-    final saved = widget.item == null
+    final outcome = widget.item == null
         ? await controller.createItem(
             _name.text,
             quantity: quantity,
@@ -590,7 +623,7 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
             quantity: quantity,
             unit: _unit,
           );
-    if (saved && mounted) Navigator.of(context).pop();
+    if (outcome.dismissesEditor && mounted) Navigator.of(context).pop();
   }
 }
 

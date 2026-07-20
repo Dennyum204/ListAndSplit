@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
@@ -12,11 +14,37 @@ enum ActiveListDetailMessage {
   itemUpdated,
   itemDeleted,
   orderUpdated,
+  recoveryInProgress,
   staleRefreshed,
+  reconciled,
+  recoveryFailed,
+  refreshFailed,
   invalidInput,
   archivedReadOnly,
   unavailable,
   operationFailed,
+}
+
+enum ActiveListMutationOutcome {
+  succeeded,
+  stale,
+  reconciling,
+  invalid,
+  unavailable,
+  failed,
+}
+
+extension ActiveListMutationOutcomePresentation on ActiveListMutationOutcome {
+  bool get dismissesEditor => switch (this) {
+        ActiveListMutationOutcome.succeeded ||
+        ActiveListMutationOutcome.stale ||
+        ActiveListMutationOutcome.reconciling ||
+        ActiveListMutationOutcome.unavailable =>
+          true,
+        ActiveListMutationOutcome.invalid ||
+        ActiveListMutationOutcome.failed =>
+          false,
+      };
 }
 
 class ActiveListDetailState {
@@ -42,20 +70,42 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
     this.listId, {
     void Function()? invalidateLists,
     CreationRequestIdGenerator requestIdGenerator = secureCreationRequestId,
+    Duration requestTimeout = const Duration(seconds: 15),
+    Duration reconciliationDelay = const Duration(milliseconds: 300),
   })  : _invalidateLists = invalidateLists ?? _noop,
         _requestIdGenerator = requestIdGenerator,
+        _requestTimeout = requestTimeout,
+        _reconciliationDelay = reconciliationDelay,
+        assert(requestTimeout > Duration.zero),
+        assert(reconciliationDelay >= Duration.zero),
         super(const ActiveListDetailState.loading());
 
   final ActiveListRepository _repository;
   final String listId;
   final void Function() _invalidateLists;
   final CreationRequestIdGenerator _requestIdGenerator;
+  final Duration _requestTimeout;
+  final Duration _reconciliationDelay;
   int _loadGeneration = 0;
   String? _pendingItemPayload;
   String? _pendingItemRequestId;
 
   Future<void> load({ActiveListDetailMessage? message}) async {
-    final generation = ++_loadGeneration;
+    await _load(
+      successMessage: message,
+      failureMessage: ActiveListDetailMessage.operationFailed,
+    );
+  }
+
+  Future<bool> _load({
+    required ActiveListDetailMessage? successMessage,
+    required ActiveListDetailMessage failureMessage,
+    int? scheduledGeneration,
+  }) async {
+    final generation = scheduledGeneration ?? ++_loadGeneration;
+    if (scheduledGeneration != null && generation != _loadGeneration) {
+      return false;
+    }
     final existing = state.detail.valueOrNull;
     if (existing == null) {
       state = const ActiveListDetailState.loading();
@@ -64,8 +114,8 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
       final results = await Future.wait<Object>([
         _repository.getList(listId),
         _repository.listItems(listId),
-      ]);
-      if (!mounted || generation != _loadGeneration) return;
+      ]).timeout(_requestTimeout);
+      if (!mounted || generation != _loadGeneration) return false;
       state = ActiveListDetailState(
         detail: AsyncData(
           ActiveListDetail(
@@ -73,10 +123,11 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
             items: results[1] as List<ActiveListItem>,
           ),
         ),
-        message: message,
+        message: successMessage,
       );
+      return true;
     } catch (error, stackTrace) {
-      if (!mounted || generation != _loadGeneration) return;
+      if (!mounted || generation != _loadGeneration) return false;
       state = ActiveListDetailState(
         detail: existing == null
             ? AsyncError(error, stackTrace)
@@ -84,18 +135,19 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
         message: error is ActiveListFailure &&
                 error.code == ActiveListFailureCode.unavailable
             ? ActiveListDetailMessage.unavailable
-            : ActiveListDetailMessage.operationFailed,
+            : failureMessage,
       );
+      return false;
     }
   }
 
-  Future<bool> rename(String title) async {
+  Future<ActiveListMutationOutcome> rename(String title) async {
     final detail = _startMutable();
     final normalized = title.trim();
-    if (detail == null) return false;
+    if (detail == null) return ActiveListMutationOutcome.failed;
     if (normalized.isEmpty || normalized.length > 80) {
       _finish(ActiveListDetailMessage.invalidInput);
-      return false;
+      return ActiveListMutationOutcome.invalid;
     }
     return _run(
       () => _repository.renameList(
@@ -107,9 +159,11 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
     );
   }
 
-  Future<bool> setArchived(bool archived) {
+  Future<ActiveListMutationOutcome> setArchived(bool archived) {
     final detail = state.detail.valueOrNull;
-    if (detail == null || state.isMutating) return Future.value(false);
+    if (detail == null || state.isMutating) {
+      return Future.value(ActiveListMutationOutcome.failed);
+    }
     _markMutating();
     return _run(
       () => _repository.setArchived(
@@ -123,38 +177,43 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
     );
   }
 
-  Future<bool> deleteList() async {
+  Future<ActiveListMutationOutcome> deleteList() async {
     final detail = _startMutable();
-    if (detail == null) return false;
+    if (detail == null) return ActiveListMutationOutcome.failed;
     try {
-      await _repository.deleteList(
-        listId,
-        expectedVersion: detail.summary.version,
-      );
-      if (!mounted) return false;
+      await _repository
+          .deleteList(
+            listId,
+            expectedVersion: detail.summary.version,
+          )
+          .timeout(_requestTimeout);
+      if (!mounted) return ActiveListMutationOutcome.failed;
+      _finish(null);
       _invalidateLists();
-      return true;
+      return ActiveListMutationOutcome.succeeded;
+    } on TimeoutException {
+      if (!mounted) return ActiveListMutationOutcome.failed;
+      return _beginUncertainRecovery();
     } on ActiveListFailure catch (failure) {
-      if (!mounted) return false;
-      await _handleFailure(failure);
-      return false;
+      if (!mounted) return ActiveListMutationOutcome.failed;
+      return _handleFailure(failure);
     } catch (_) {
-      if (mounted) _finish(ActiveListDetailMessage.operationFailed);
-      return false;
+      if (!mounted) return ActiveListMutationOutcome.failed;
+      return _beginUncertainRecovery();
     }
   }
 
-  Future<bool> createItem(
+  Future<ActiveListMutationOutcome> createItem(
     String name, {
     required ListQuantity quantity,
     required ListUnit? unit,
   }) async {
     final detail = _startMutable();
     final normalized = name.trim();
-    if (detail == null) return false;
+    if (detail == null) return ActiveListMutationOutcome.failed;
     if (normalized.isEmpty || normalized.length > 120) {
       _finish(ActiveListDetailMessage.invalidInput);
-      return false;
+      return ActiveListMutationOutcome.invalid;
     }
     final payload =
         '$normalized\u0000${quantity.thousandths}\u0000${unit?.code ?? ''}';
@@ -174,14 +233,14 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
       ),
       ActiveListDetailMessage.itemCreated,
     );
-    if (created) {
+    if (created == ActiveListMutationOutcome.succeeded) {
       _pendingItemPayload = null;
       _pendingItemRequestId = null;
     }
     return created;
   }
 
-  Future<bool> updateItem(
+  Future<ActiveListMutationOutcome> updateItem(
     ActiveListItem item,
     String name, {
     required ListQuantity quantity,
@@ -189,10 +248,10 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
   }) async {
     final detail = _startMutable();
     final normalized = name.trim();
-    if (detail == null) return false;
+    if (detail == null) return ActiveListMutationOutcome.failed;
     if (normalized.isEmpty || normalized.length > 120) {
       _finish(ActiveListDetailMessage.invalidInput);
-      return false;
+      return ActiveListMutationOutcome.invalid;
     }
     return _run(
       () => _repository.updateItem(
@@ -208,9 +267,12 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
     );
   }
 
-  Future<bool> setItemCompleted(ActiveListItem item, bool completed) async {
+  Future<ActiveListMutationOutcome> setItemCompleted(
+    ActiveListItem item,
+    bool completed,
+  ) async {
     final detail = _startMutable();
-    if (detail == null) return false;
+    if (detail == null) return ActiveListMutationOutcome.failed;
     return _run(
       () => _repository.setItemCompleted(
         listId,
@@ -223,9 +285,9 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
     );
   }
 
-  Future<bool> deleteItem(ActiveListItem item) async {
+  Future<ActiveListMutationOutcome> deleteItem(ActiveListItem item) async {
     final detail = _startMutable();
-    if (detail == null) return false;
+    if (detail == null) return ActiveListMutationOutcome.failed;
     return _run(
       () => _repository.deleteItem(
         listId,
@@ -237,9 +299,12 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
     );
   }
 
-  Future<bool> reorder(int oldIndex, int newIndex) async {
+  Future<ActiveListMutationOutcome> reorder(
+    int oldIndex,
+    int newIndex,
+  ) async {
     final detail = _startMutable();
-    if (detail == null) return false;
+    if (detail == null) return ActiveListMutationOutcome.failed;
     final reordered = [...detail.items];
     if (newIndex > oldIndex) newIndex -= 1;
     if (oldIndex == newIndex ||
@@ -248,7 +313,7 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
         newIndex < 0 ||
         newIndex >= reordered.length) {
       _finish(null);
-      return false;
+      return ActiveListMutationOutcome.failed;
     }
     final item = reordered.removeAt(oldIndex);
     reordered.insert(newIndex, item);
@@ -274,48 +339,124 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
   }
 
   void _markMutating() {
+    ++_loadGeneration;
     state = ActiveListDetailState(
       detail: state.detail,
       isMutating: true,
     );
   }
 
-  Future<bool> _run(
+  Future<ActiveListMutationOutcome> _run(
     Future<Object?> Function() mutation,
     ActiveListDetailMessage successMessage,
   ) async {
     try {
-      await mutation();
-      if (!mounted) return false;
-      _invalidateLists();
-      await load(message: successMessage);
-      return true;
+      await mutation().timeout(_requestTimeout);
+      if (!mounted) return ActiveListMutationOutcome.failed;
+      _finish(null);
+      _refreshInBackground(
+        successMessage: successMessage,
+        failureMessage: ActiveListDetailMessage.refreshFailed,
+      );
+      return ActiveListMutationOutcome.succeeded;
+    } on TimeoutException {
+      if (!mounted) return ActiveListMutationOutcome.failed;
+      return _beginUncertainRecovery();
     } on ActiveListFailure catch (failure) {
-      if (!mounted) return false;
-      await _handleFailure(failure);
-      return false;
+      if (!mounted) return ActiveListMutationOutcome.failed;
+      return _handleFailure(failure);
     } catch (_) {
-      if (mounted) _finish(ActiveListDetailMessage.operationFailed);
-      return false;
+      if (!mounted) return ActiveListMutationOutcome.failed;
+      return _beginUncertainRecovery();
     }
   }
 
-  Future<void> _handleFailure(ActiveListFailure failure) async {
+  ActiveListMutationOutcome _handleFailure(ActiveListFailure failure) {
     switch (failure.code) {
       case ActiveListFailureCode.stale:
-        _invalidateLists();
-        await load(message: ActiveListDetailMessage.staleRefreshed);
+        return _beginStaleRecovery(ActiveListDetailMessage.staleRefreshed);
       case ActiveListFailureCode.archived:
-        _invalidateLists();
-        await load(message: ActiveListDetailMessage.archivedReadOnly);
+        return _beginStaleRecovery(ActiveListDetailMessage.archivedReadOnly);
       case ActiveListFailureCode.unavailable:
-        _finish(ActiveListDetailMessage.unavailable);
+        return _finishWithOutcome(
+          ActiveListDetailMessage.unavailable,
+          ActiveListMutationOutcome.unavailable,
+        );
       case ActiveListFailureCode.invalid:
       case ActiveListFailureCode.retryConflict:
-        _finish(ActiveListDetailMessage.invalidInput);
+        return _finishWithOutcome(
+          ActiveListDetailMessage.invalidInput,
+          ActiveListMutationOutcome.invalid,
+        );
+      case ActiveListFailureCode.transport:
+        return _beginUncertainRecovery();
       case ActiveListFailureCode.generic:
-        _finish(ActiveListDetailMessage.operationFailed);
+        return _finishWithOutcome(
+          ActiveListDetailMessage.operationFailed,
+          ActiveListMutationOutcome.failed,
+        );
     }
+  }
+
+  ActiveListMutationOutcome _beginStaleRecovery(
+    ActiveListDetailMessage successMessage,
+  ) {
+    _finish(ActiveListDetailMessage.recoveryInProgress);
+    _refreshInBackground(
+      successMessage: successMessage,
+      failureMessage: ActiveListDetailMessage.recoveryFailed,
+    );
+    return ActiveListMutationOutcome.stale;
+  }
+
+  ActiveListMutationOutcome _beginUncertainRecovery() {
+    _finish(ActiveListDetailMessage.recoveryInProgress);
+    _refreshInBackground(
+      successMessage: ActiveListDetailMessage.reconciled,
+      failureMessage: ActiveListDetailMessage.recoveryFailed,
+      delay: _reconciliationDelay,
+    );
+    return ActiveListMutationOutcome.reconciling;
+  }
+
+  ActiveListMutationOutcome _finishWithOutcome(
+    ActiveListDetailMessage message,
+    ActiveListMutationOutcome outcome,
+  ) {
+    _finish(message);
+    return outcome;
+  }
+
+  void _refreshInBackground({
+    required ActiveListDetailMessage successMessage,
+    required ActiveListDetailMessage failureMessage,
+    Duration delay = Duration.zero,
+  }) {
+    _invalidateLists();
+    final generation = ++_loadGeneration;
+    unawaited(
+      _recover(
+        successMessage: successMessage,
+        failureMessage: failureMessage,
+        delay: delay,
+        generation: generation,
+      ),
+    );
+  }
+
+  Future<void> _recover({
+    required ActiveListDetailMessage successMessage,
+    required ActiveListDetailMessage failureMessage,
+    required Duration delay,
+    required int generation,
+  }) async {
+    if (delay > Duration.zero) await Future<void>.delayed(delay);
+    if (!mounted || generation != _loadGeneration) return;
+    await _load(
+      successMessage: successMessage,
+      failureMessage: failureMessage,
+      scheduledGeneration: generation,
+    );
   }
 
   void _finish(ActiveListDetailMessage? message) {
