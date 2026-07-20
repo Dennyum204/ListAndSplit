@@ -266,6 +266,8 @@ class _DetailBody extends ConsumerWidget {
                     buildDefaultDragHandles: false,
                     padding: const EdgeInsets.only(bottom: 96),
                     itemCount: detail.items.length,
+                    // Keep the callback supported by the Flutter 3.19 floor.
+                    // ignore: deprecated_member_use
                     onReorder: archived || state.isMutating
                         ? (_, __) {}
                         : (oldIndex, newIndex) => ref
@@ -522,6 +524,8 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
             const SizedBox(height: 8),
             DropdownButtonFormField<ListUnit?>(
               key: const Key('itemUnitField'),
+              // Keep the initializer supported by the Flutter 3.19 floor.
+              // ignore: deprecated_member_use
               value: _unit,
               decoration:
                   InputDecoration(labelText: localizations.itemUnitLabel),
