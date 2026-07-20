@@ -12,23 +12,28 @@ class AccountDataExportDocument {
     required List<AccountOutgoingBlock> outgoingBlocks,
     required List<AccountActiveRelationship> activeRelationships,
     required List<AccountVisibleNotification> visibleNotifications,
+    required List<AccountActiveListExport> activeLists,
   })  : outgoingBlocks = List.unmodifiable(outgoingBlocks),
         activeRelationships = List.unmodifiable(activeRelationships),
-        visibleNotifications = List.unmodifiable(visibleNotifications) {
+        visibleNotifications = List.unmodifiable(visibleNotifications),
+        activeLists = List.unmodifiable(activeLists) {
     if (product != supportedProduct ||
-        schemaVersion != supportedSchemaVersion ||
+        !supportedSchemaVersions.contains(schemaVersion) ||
         authIdentity.id != profile.id) {
       throw const AccountDataExportFailure();
     }
   }
 
   factory AccountDataExportDocument.fromJson(Map<String, dynamic> json) {
-    _expectExactKeys(json, _rootKeys);
     final product = _requiredString(json, 'product');
     final schemaVersion = _requiredInt(json, 'schema_version');
-    if (schemaVersion != supportedSchemaVersion) {
+    if (!supportedSchemaVersions.contains(schemaVersion)) {
       throw const AccountDataExportFailure();
     }
+    _expectExactKeys(
+      json,
+      schemaVersion == 1 ? _schemaOneRootKeys : _schemaTwoRootKeys,
+    );
 
     return AccountDataExportDocument(
       product: product,
@@ -49,12 +54,18 @@ class AccountDataExportDocument {
       visibleNotifications: _requiredObjects(json, 'visible_notifications')
           .map(AccountVisibleNotification.fromJson)
           .toList(growable: false),
+      activeLists: schemaVersion == 1
+          ? const []
+          : _requiredObjects(json, 'active_lists')
+              .map(AccountActiveListExport.fromJson)
+              .toList(growable: false),
     );
   }
 
   static const supportedProduct = 'list_and_split';
-  static const supportedSchemaVersion = 1;
-  static const _rootKeys = {
+  static const supportedSchemaVersion = 2;
+  static const supportedSchemaVersions = {1, supportedSchemaVersion};
+  static const _schemaOneRootKeys = {
     'product',
     'schema_version',
     'exported_at',
@@ -63,6 +74,10 @@ class AccountDataExportDocument {
     'outgoing_blocks',
     'active_relationships',
     'visible_notifications',
+  };
+  static const _schemaTwoRootKeys = {
+    ..._schemaOneRootKeys,
+    'active_lists',
   };
 
   final String product;
@@ -73,6 +88,7 @@ class AccountDataExportDocument {
   final List<AccountOutgoingBlock> outgoingBlocks;
   final List<AccountActiveRelationship> activeRelationships;
   final List<AccountVisibleNotification> visibleNotifications;
+  final List<AccountActiveListExport> activeLists;
 
   Map<String, dynamic> toJson() => {
         'product': product,
@@ -89,6 +105,10 @@ class AccountDataExportDocument {
         'visible_notifications': visibleNotifications
             .map((notification) => notification.toJson())
             .toList(growable: false),
+        if (schemaVersion == 2)
+          'active_lists': activeLists
+              .map((activeList) => activeList.toJson())
+              .toList(growable: false),
       };
 }
 
@@ -392,6 +412,181 @@ class AccountVisibleNotification {
       };
 }
 
+enum AccountActiveListStatus {
+  active('active'),
+  archived('archived');
+
+  const AccountActiveListStatus(this.wireValue);
+
+  final String wireValue;
+}
+
+class AccountActiveListExport {
+  AccountActiveListExport({
+    required this.id,
+    required this.title,
+    required this.status,
+    required this.version,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.archivedAt,
+    required List<AccountActiveListItemExport> items,
+  }) : items = List.unmodifiable(items);
+
+  factory AccountActiveListExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, _keys);
+    final title = _requiredString(json, 'title');
+    if (title != title.trim() || title.length > 80) {
+      throw const AccountDataExportFailure();
+    }
+    final status = _activeListStatus(_requiredString(json, 'status'));
+    final archivedAt = _nullableUtcDateTime(json, 'archived_at');
+    if ((status == AccountActiveListStatus.archived) != (archivedAt != null)) {
+      throw const AccountDataExportFailure();
+    }
+    return AccountActiveListExport(
+      id: _requiredUuid(json, 'id'),
+      title: title,
+      status: status,
+      version: _requiredPositiveInt(json, 'version'),
+      createdAt: _requiredUtcDateTime(json, 'created_at'),
+      updatedAt: _requiredUtcDateTime(json, 'updated_at'),
+      archivedAt: archivedAt,
+      items: _requiredObjects(json, 'items')
+          .map(AccountActiveListItemExport.fromJson)
+          .toList(growable: false),
+    );
+  }
+
+  static const _keys = {
+    'id',
+    'title',
+    'status',
+    'version',
+    'created_at',
+    'updated_at',
+    'archived_at',
+    'items',
+  };
+
+  final String id;
+  final String title;
+  final AccountActiveListStatus status;
+  final int version;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? archivedAt;
+  final List<AccountActiveListItemExport> items;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'status': status.wireValue,
+        'version': version,
+        'created_at': _encodeDateTime(createdAt),
+        'updated_at': _encodeDateTime(updatedAt),
+        'archived_at': _encodeNullableDateTime(archivedAt),
+        'items': items.map((item) => item.toJson()).toList(growable: false),
+      };
+}
+
+class AccountActiveListItemExport {
+  AccountActiveListItemExport({
+    required this.id,
+    required this.name,
+    required this.quantityThousandths,
+    required this.unitCode,
+    required this.position,
+    required this.version,
+    required this.completedAt,
+    required this.completedBy,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory AccountActiveListItemExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, _keys);
+    final name = _requiredString(json, 'name');
+    if (name != name.trim() || name.length > 120) {
+      throw const AccountDataExportFailure();
+    }
+    final quantity = _requiredPositiveInt(json, 'quantity_thousandths');
+    if (quantity > 999999999) throw const AccountDataExportFailure();
+    final unitCode = _nullableString(json, 'unit_code');
+    if (unitCode != null && !_unitCodes.contains(unitCode)) {
+      throw const AccountDataExportFailure();
+    }
+    final completedAt = _nullableUtcDateTime(json, 'completed_at');
+    final completedBy = json['completed_by'] == null
+        ? null
+        : _requiredUuid(json, 'completed_by');
+    if (completedAt == null && completedBy != null) {
+      throw const AccountDataExportFailure();
+    }
+    return AccountActiveListItemExport(
+      id: _requiredUuid(json, 'id'),
+      name: name,
+      quantityThousandths: quantity,
+      unitCode: unitCode,
+      position: _requiredPositiveInt(json, 'position'),
+      version: _requiredPositiveInt(json, 'version'),
+      completedAt: completedAt,
+      completedBy: completedBy,
+      createdAt: _requiredUtcDateTime(json, 'created_at'),
+      updatedAt: _requiredUtcDateTime(json, 'updated_at'),
+    );
+  }
+
+  static const _keys = {
+    'id',
+    'name',
+    'quantity_thousandths',
+    'unit_code',
+    'position',
+    'version',
+    'completed_at',
+    'completed_by',
+    'created_at',
+    'updated_at',
+  };
+  static const _unitCodes = {
+    'piece',
+    'kg',
+    'g',
+    'l',
+    'ml',
+    'pack',
+    'box',
+    'bottle',
+    'can',
+    'bag',
+  };
+
+  final String id;
+  final String name;
+  final int quantityThousandths;
+  final String? unitCode;
+  final int position;
+  final int version;
+  final DateTime? completedAt;
+  final String? completedBy;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'quantity_thousandths': quantityThousandths,
+        'unit_code': unitCode,
+        'position': position,
+        'version': version,
+        'completed_at': _encodeNullableDateTime(completedAt),
+        'completed_by': completedBy,
+        'created_at': _encodeDateTime(createdAt),
+        'updated_at': _encodeDateTime(updatedAt),
+      };
+}
+
 final _uuidPattern = RegExp(
   r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
 );
@@ -499,6 +694,13 @@ AccountRelationshipStatus _relationshipStatus(String value) {
 
 AccountNotificationActionStatus _notificationStatus(String value) {
   return AccountNotificationActionStatus.values.firstWhere(
+    (status) => status.wireValue == value,
+    orElse: () => throw const AccountDataExportFailure(),
+  );
+}
+
+AccountActiveListStatus _activeListStatus(String value) {
+  return AccountActiveListStatus.values.firstWhere(
     (status) => status.wireValue == value,
     orElse: () => throw const AccountDataExportFailure(),
   );
