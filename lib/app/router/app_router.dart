@@ -21,6 +21,7 @@ import 'package:list_and_split/features/community/presentation/blocked_users_scr
 import 'package:list_and_split/features/community/presentation/community_screen.dart';
 import 'package:list_and_split/features/community/presentation/friendship_management_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_members_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_lists_screen.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_centre_screen.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
@@ -152,6 +153,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     builder: (context, state) => ActiveListDetailScreen(
                       listId: state.pathParameters['listId']!,
                     ),
+                    routes: [
+                      GoRoute(
+                        path: 'members',
+                        builder: (context, state) => ActiveListMembersScreen(
+                          listId: state.pathParameters['listId']!,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

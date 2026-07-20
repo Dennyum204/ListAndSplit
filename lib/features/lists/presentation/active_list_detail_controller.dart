@@ -14,6 +14,7 @@ enum ActiveListDetailMessage {
   itemUpdated,
   itemDeleted,
   orderUpdated,
+  left,
   recoveryInProgress,
   staleRefreshed,
   reconciled,
@@ -144,7 +145,10 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
   Future<ActiveListMutationOutcome> rename(String title) async {
     final detail = _startMutable();
     final normalized = title.trim();
-    if (detail == null) return ActiveListMutationOutcome.failed;
+    if (detail == null || !detail.summary.isOwner) {
+      if (detail != null) _finish(ActiveListDetailMessage.unavailable);
+      return ActiveListMutationOutcome.unavailable;
+    }
     if (normalized.isEmpty || normalized.length > 80) {
       _finish(ActiveListDetailMessage.invalidInput);
       return ActiveListMutationOutcome.invalid;
@@ -161,7 +165,7 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
 
   Future<ActiveListMutationOutcome> setArchived(bool archived) {
     final detail = state.detail.valueOrNull;
-    if (detail == null || state.isMutating) {
+    if (detail == null || state.isMutating || !detail.summary.isOwner) {
       return Future.value(ActiveListMutationOutcome.failed);
     }
     _markMutating();
@@ -178,6 +182,9 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
   }
 
   Future<ActiveListMutationOutcome> deleteList() async {
+    if (state.detail.valueOrNull?.summary.isOwner != true) {
+      return ActiveListMutationOutcome.unavailable;
+    }
     final detail = _startMutable();
     if (detail == null) return ActiveListMutationOutcome.failed;
     try {
@@ -327,6 +334,33 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
     );
   }
 
+  Future<ActiveListMutationOutcome> leaveList() async {
+    final detail = state.detail.valueOrNull;
+    final accessVersion = detail?.summary.callerAccessVersion;
+    if (detail == null ||
+        detail.summary.isOwner ||
+        accessVersion == null ||
+        state.isMutating) {
+      return ActiveListMutationOutcome.unavailable;
+    }
+    _markMutating();
+    try {
+      await _repository
+          .leaveList(listId, expectedAccessVersion: accessVersion)
+          .timeout(_requestTimeout);
+      if (!mounted) return ActiveListMutationOutcome.failed;
+      _finish(ActiveListDetailMessage.left);
+      _invalidateLists();
+      return ActiveListMutationOutcome.succeeded;
+    } on ActiveListFailure catch (failure) {
+      if (!mounted) return ActiveListMutationOutcome.failed;
+      return _handleFailure(failure);
+    } catch (_) {
+      if (!mounted) return ActiveListMutationOutcome.failed;
+      return _beginUncertainRecovery();
+    }
+  }
+
   ActiveListDetail? _startMutable() {
     final detail = state.detail.valueOrNull;
     if (detail == null || state.isMutating) return null;
@@ -384,6 +418,7 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
         );
       case ActiveListFailureCode.invalid:
       case ActiveListFailureCode.retryConflict:
+      case ActiveListFailureCode.capacity:
         return _finishWithOutcome(
           ActiveListDetailMessage.invalidInput,
           ActiveListMutationOutcome.invalid,

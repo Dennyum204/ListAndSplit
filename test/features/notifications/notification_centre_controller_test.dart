@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/features/community/domain/friendship_repository.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
+import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
 import 'package:list_and_split/features/notifications/domain/in_app_notification.dart';
 import 'package:list_and_split/features/notifications/domain/notification_repository.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_centre_controller.dart';
@@ -473,6 +474,102 @@ void main() {
     expect(friendships.mutationCalls, isEmpty);
   });
 
+  test('list invitation accept uses exact access version and invalidates lists',
+      () async {
+    final actionable = listInvitation();
+    notifications.queuedPages.addAll([
+      [actionable],
+      [
+        listInvitation(
+          actionStatus: NotificationActionStatus.accepted,
+          expectedAccessVersion: null,
+        ),
+      ],
+    ]);
+    final lists = _NotificationListRepository();
+    var listInvalidations = 0;
+    final listController = NotificationCentreController(
+      notifications,
+      friendships,
+      refreshUnreadCount: () async => unreadRefreshes += 1,
+      activeListRepository: lists,
+      invalidateLists: () => listInvalidations += 1,
+    );
+    addTearDown(listController.dispose);
+    await listController.load();
+
+    expect(await listController.accept(actionable), isTrue);
+
+    expect(lists.acceptedVersion, 6);
+    expect(lists.acceptedListId, 'list-1');
+    expect(listInvalidations, 1);
+    expect(listController.state.busyNotificationIds, isEmpty);
+    expect(
+      listController.state.message,
+      NotificationCentreMessage.invitationAccepted,
+    );
+    expect(
+      listController.state.notifications.requireValue.single.actionStatus,
+      NotificationActionStatus.accepted,
+    );
+  });
+
+  test('stale list invitation action refreshes instead of staying busy',
+      () async {
+    final actionable = listInvitation();
+    notifications.queuedPages.addAll([
+      [actionable],
+      [
+        listInvitation(
+          actionStatus: NotificationActionStatus.unavailable,
+          expectedAccessVersion: null,
+        ),
+      ],
+    ]);
+    final lists = _NotificationListRepository()
+      ..mutationFailure = const ActiveListFailure(ActiveListFailureCode.stale);
+    final listController = NotificationCentreController(
+      notifications,
+      friendships,
+      refreshUnreadCount: () async {},
+      activeListRepository: lists,
+    );
+    addTearDown(listController.dispose);
+    await listController.load();
+
+    expect(await listController.decline(actionable), isFalse);
+
+    expect(lists.declinedVersion, 6);
+    expect(listController.state.busyNotificationIds, isEmpty);
+    expect(
+      listController.state.message,
+      NotificationCentreMessage.relationshipChanged,
+    );
+    expect(
+      listController.state.notifications.requireValue.single.actionStatus,
+      NotificationActionStatus.unavailable,
+    );
+  });
+
+  test('malformed list invitation never reaches the list repository', () async {
+    final lists = _NotificationListRepository();
+    final listController = NotificationCentreController(
+      notifications,
+      friendships,
+      refreshUnreadCount: () async {},
+      activeListRepository: lists,
+    );
+    addTearDown(listController.dispose);
+
+    expect(
+      await listController.accept(
+        listInvitation(expectedAccessVersion: null),
+      ),
+      isFalse,
+    );
+    expect(lists.mutationCalls, 0);
+  });
+
   test('mark-read failure preserves unread UI and exposes retryable feedback',
       () async {
     notifications.notifications = [notification(id: 'n-1')];
@@ -592,6 +689,57 @@ InAppNotification notification({
     actionStatus: actionStatus,
     expectedRelationshipVersion: expectedVersion,
   );
+}
+
+InAppNotification listInvitation({
+  NotificationActionStatus actionStatus = NotificationActionStatus.actionable,
+  int? expectedAccessVersion = 6,
+}) {
+  return InAppNotification(
+    id: 'list-n-1',
+    type: InAppNotificationType.listInvitation,
+    createdAt: DateTime.utc(2026, 7, 20, 8),
+    isRead: false,
+    actorProfileId: 'owner-1',
+    actorUsername: 'owner_user',
+    actorDisplayName: 'Owner User',
+    actionStatus: actionStatus,
+    expectedRelationshipVersion: null,
+    activeListId: 'list-1',
+    activeListTitle: 'Shared trip',
+    activeListStatus: 'active',
+    expectedAccessVersion: expectedAccessVersion,
+  );
+}
+
+class _NotificationListRepository extends FakeActiveListRepository {
+  Object? mutationFailure;
+  String? acceptedListId;
+  int? acceptedVersion;
+  int? declinedVersion;
+
+  @override
+  Future<int> acceptInvitation(
+    String listId, {
+    required int expectedAccessVersion,
+  }) async {
+    mutationCalls += 1;
+    acceptedListId = listId;
+    acceptedVersion = expectedAccessVersion;
+    if (mutationFailure != null) throw mutationFailure!;
+    return expectedAccessVersion + 1;
+  }
+
+  @override
+  Future<int> declineInvitation(
+    String listId, {
+    required int expectedAccessVersion,
+  }) async {
+    mutationCalls += 1;
+    declinedVersion = expectedAccessVersion;
+    if (mutationFailure != null) throw mutationFailure!;
+    return expectedAccessVersion + 1;
+  }
 }
 
 Future<void> flushAsync() async {

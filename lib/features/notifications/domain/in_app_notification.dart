@@ -1,6 +1,13 @@
-enum InAppNotificationType { friendRequest }
+enum InAppNotificationType {
+  friendRequest,
+  listInvitation,
+  listInvitationAccepted,
+  listInvitationDeclined,
+  listMemberLeft,
+  listMemberRemoved,
+}
 
-enum NotificationActionStatus { actionable, friends, unavailable }
+enum NotificationActionStatus { actionable, friends, accepted, unavailable }
 
 class NotificationCursor {
   const NotificationCursor({required this.createdAt, required this.id});
@@ -20,6 +27,10 @@ class InAppNotification {
     required this.actorDisplayName,
     required this.actionStatus,
     required this.expectedRelationshipVersion,
+    this.activeListId,
+    this.activeListTitle,
+    this.activeListStatus,
+    this.expectedAccessVersion,
   });
 
   final String id;
@@ -31,6 +42,10 @@ class InAppNotification {
   final String actorDisplayName;
   final NotificationActionStatus actionStatus;
   final int? expectedRelationshipVersion;
+  final String? activeListId;
+  final String? activeListTitle;
+  final String? activeListStatus;
+  final int? expectedAccessVersion;
 
   NotificationCursor get cursor => NotificationCursor(
         createdAt: createdAt,
@@ -48,6 +63,10 @@ class InAppNotification {
       actorDisplayName: actorDisplayName,
       actionStatus: actionStatus,
       expectedRelationshipVersion: expectedRelationshipVersion,
+      activeListId: activeListId,
+      activeListTitle: activeListTitle,
+      activeListStatus: activeListStatus,
+      expectedAccessVersion: expectedAccessVersion,
     );
   }
 }

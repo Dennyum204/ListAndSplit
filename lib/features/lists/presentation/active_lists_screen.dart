@@ -278,6 +278,17 @@ class _ActiveListCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
+                  summary.isOwner
+                      ? localizations.listOwnedByYouLabel
+                      : localizations.listSharedByLabel(
+                          summary.ownerDisplayName ?? '',
+                        ),
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
                   '${localizations.listsItemCount(summary.itemCount)} · '
                   '${localizations.listsCompletedCount(summary.completedItemCount, summary.itemCount)}',
                 ),

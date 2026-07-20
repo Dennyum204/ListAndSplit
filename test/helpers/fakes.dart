@@ -469,6 +469,9 @@ class FakeActiveListRepository implements ActiveListRepository {
   List<ActiveListSummary> activeLists = [];
   List<ActiveListSummary> archivedLists = [];
   final Map<String, List<ActiveListItem>> itemsByList = {};
+  final Map<String, List<ActiveListParticipant>> participantsByList = {};
+  final Map<String, List<ActiveListAccessProfile>> pendingByList = {};
+  final Map<String, List<ActiveListAccessProfile>> eligibleByList = {};
   Object? failure;
   Completer<ActiveListPage>? pageCompleter;
   Completer<ActiveListSummary>? createCompleter;
@@ -516,6 +519,48 @@ class FakeActiveListRepository implements ActiveListRepository {
   Future<List<ActiveListItem>> listItems(String listId) async {
     if (failure != null) throw failure!;
     return List.unmodifiable(itemsByList[listId] ?? const []);
+  }
+
+  @override
+  Future<List<ActiveListParticipant>> listParticipants(String listId) async {
+    if (failure != null) throw failure!;
+    return List.unmodifiable(participantsByList[listId] ?? const []);
+  }
+
+  @override
+  Future<List<ActiveListAccessProfile>> listPendingInvitations(
+    String listId,
+  ) async {
+    if (failure != null) throw failure!;
+    return List.unmodifiable(pendingByList[listId] ?? const []);
+  }
+
+  @override
+  Future<List<ActiveListAccessProfile>> listEligibleInvitees(
+    String listId,
+  ) async {
+    if (failure != null) throw failure!;
+    return List.unmodifiable(eligibleByList[listId] ?? const []);
+  }
+
+  @override
+  Future<ActiveListInvitation> getInvitation(String listId) async {
+    if (failure != null) throw failure!;
+    final summary = _find(listId);
+    return ActiveListInvitation(
+      listId: listId,
+      listTitle: summary.title,
+      listStatus: summary.status,
+      owner: ActiveListParticipant(
+        profileId: summary.ownerProfileId ?? 'owner-1',
+        username: summary.ownerUsername ?? 'owner',
+        displayName: summary.ownerDisplayName ?? 'Owner',
+        isOwner: true,
+      ),
+      accessVersion: summary.callerAccessVersion ?? 1,
+      createdAt: summary.createdAt,
+      stateChangedAt: summary.updatedAt,
+    );
   }
 
   @override
@@ -706,6 +751,74 @@ class FakeActiveListRepository implements ActiveListRepository {
     final byId = {for (final item in itemsByList[listId]!) item.id: item};
     itemsByList[listId] = [for (final id in orderedItemIds) byId[id]!];
     return expectedListVersion + 1;
+  }
+
+  @override
+  Future<int> inviteMember(
+    String listId,
+    String profileId, {
+    int? expectedAccessVersion,
+  }) async {
+    mutationCalls += 1;
+    if (failure != null) throw failure!;
+    return (expectedAccessVersion ?? 0) + 1;
+  }
+
+  @override
+  Future<int> cancelInvitation(
+    String listId,
+    String profileId, {
+    required int expectedAccessVersion,
+  }) async {
+    mutationCalls += 1;
+    if (failure != null) throw failure!;
+    pendingByList[listId]?.removeWhere((entry) => entry.profileId == profileId);
+    return expectedAccessVersion + 1;
+  }
+
+  @override
+  Future<int> acceptInvitation(
+    String listId, {
+    required int expectedAccessVersion,
+  }) async {
+    mutationCalls += 1;
+    if (failure != null) throw failure!;
+    return expectedAccessVersion + 1;
+  }
+
+  @override
+  Future<int> declineInvitation(
+    String listId, {
+    required int expectedAccessVersion,
+  }) async {
+    mutationCalls += 1;
+    if (failure != null) throw failure!;
+    return expectedAccessVersion + 1;
+  }
+
+  @override
+  Future<int> removeMember(
+    String listId,
+    String profileId, {
+    required int expectedAccessVersion,
+  }) async {
+    mutationCalls += 1;
+    if (failure != null) throw failure!;
+    participantsByList[listId]
+        ?.removeWhere((entry) => entry.profileId == profileId);
+    return expectedAccessVersion + 1;
+  }
+
+  @override
+  Future<int> leaveList(
+    String listId, {
+    required int expectedAccessVersion,
+  }) async {
+    mutationCalls += 1;
+    if (failure != null) throw failure!;
+    activeLists.removeWhere((entry) => entry.id == listId);
+    archivedLists.removeWhere((entry) => entry.id == listId);
+    return expectedAccessVersion + 1;
   }
 }
 

@@ -26,6 +26,8 @@ final resetSessionStateProvider = Provider<void Function()>((ref) {
     ref.invalidate(blockedUsersControllerProvider);
     ref.invalidate(friendshipManagementControllerProvider);
     ref.invalidate(activeListsControllerProvider);
+    ref.invalidate(activeListDetailControllerProvider);
+    ref.invalidate(activeListMembersControllerProvider);
     ref.invalidate(notificationUnreadCountControllerProvider);
     ref.invalidate(notificationCentreControllerProvider);
   };

@@ -81,17 +81,49 @@ class SupabaseNotificationRepository implements NotificationRepository {
     try {
       final status = _mapActionStatus(json['action_status']! as String);
       final expectedVersion = json['expected_relationship_version'] as int?;
-      if ((status == NotificationActionStatus.actionable &&
-              (expectedVersion == null || expectedVersion <= 0)) ||
-          (status != NotificationActionStatus.actionable &&
-              expectedVersion != null)) {
+      final type = _mapType(json['notification_type']! as String);
+      final expectedAccessVersion = json['expected_access_version'] as int?;
+      final isFriendAction = type == InAppNotificationType.friendRequest &&
+          status == NotificationActionStatus.actionable;
+      final isListAction = type == InAppNotificationType.listInvitation &&
+          status == NotificationActionStatus.actionable;
+      final isListType = type != InAppNotificationType.friendRequest;
+      final activeListId = json['active_list_id'] as String?;
+      final activeListTitle = json['active_list_title'] as String?;
+      final activeListStatus = json['active_list_status'] as String?;
+      if ((isFriendAction != (expectedVersion != null)) ||
+          (expectedVersion != null && expectedVersion <= 0) ||
+          (isListAction != (expectedAccessVersion != null)) ||
+          (expectedAccessVersion != null && expectedAccessVersion <= 0) ||
+          (isListType &&
+              (activeListId == null ||
+                  activeListTitle == null ||
+                  activeListStatus == null)) ||
+          (!isListType &&
+              (activeListId != null ||
+                  activeListTitle != null ||
+                  activeListStatus != null)) ||
+          (activeListTitle != null &&
+              (activeListTitle.isEmpty ||
+                  activeListTitle.trim() != activeListTitle ||
+                  activeListTitle.length > 80)) ||
+          (activeListStatus != null &&
+              activeListStatus != 'active' &&
+              activeListStatus != 'archived') ||
+          (type == InAppNotificationType.friendRequest &&
+              status == NotificationActionStatus.accepted) ||
+          (type == InAppNotificationType.listInvitation &&
+              status == NotificationActionStatus.friends) ||
+          (type != InAppNotificationType.friendRequest &&
+              type != InAppNotificationType.listInvitation &&
+              status != NotificationActionStatus.unavailable)) {
         throw const FormatException();
       }
 
       final createdAt = DateTime.parse(json['created_at']! as String);
       return InAppNotification(
         id: json['notification_id']! as String,
-        type: _mapType(json['notification_type']! as String),
+        type: type,
         createdAt: createdAt,
         isRead: json['is_read']! as bool,
         actorProfileId: json['actor_profile_id']! as String,
@@ -99,6 +131,10 @@ class SupabaseNotificationRepository implements NotificationRepository {
         actorDisplayName: json['actor_display_name']! as String,
         actionStatus: status,
         expectedRelationshipVersion: expectedVersion,
+        activeListId: activeListId,
+        activeListTitle: activeListTitle,
+        activeListStatus: activeListStatus,
+        expectedAccessVersion: expectedAccessVersion,
       );
     } catch (_) {
       throw const NotificationFailure();
@@ -107,12 +143,20 @@ class SupabaseNotificationRepository implements NotificationRepository {
 
   InAppNotificationType _mapType(String type) => switch (type) {
         'friend_request' => InAppNotificationType.friendRequest,
+        'list_invitation' => InAppNotificationType.listInvitation,
+        'list_invitation_accepted' =>
+          InAppNotificationType.listInvitationAccepted,
+        'list_invitation_declined' =>
+          InAppNotificationType.listInvitationDeclined,
+        'list_member_left' => InAppNotificationType.listMemberLeft,
+        'list_member_removed' => InAppNotificationType.listMemberRemoved,
         _ => throw const NotificationFailure(),
       };
 
   NotificationActionStatus _mapActionStatus(String status) => switch (status) {
         'actionable' => NotificationActionStatus.actionable,
         'friends' => NotificationActionStatus.friends,
+        'accepted' => NotificationActionStatus.accepted,
         'unavailable' => NotificationActionStatus.unavailable,
         _ => throw const NotificationFailure(),
       };

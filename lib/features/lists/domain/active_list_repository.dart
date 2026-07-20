@@ -7,6 +7,7 @@ enum ActiveListFailureCode {
   stale,
   retryConflict,
   archived,
+  capacity,
   transport,
   generic,
 }
@@ -26,6 +27,10 @@ abstract interface class ActiveListRepository {
 
   Future<ActiveListSummary> getList(String listId);
   Future<List<ActiveListItem>> listItems(String listId);
+  Future<List<ActiveListParticipant>> listParticipants(String listId);
+  Future<List<ActiveListAccessProfile>> listPendingInvitations(String listId);
+  Future<List<ActiveListAccessProfile>> listEligibleInvitees(String listId);
+  Future<ActiveListInvitation> getInvitation(String listId);
   Future<ActiveListSummary> createList(
     String title, {
     required String requestId,
@@ -83,5 +88,33 @@ abstract interface class ActiveListRepository {
     String listId,
     List<String> orderedItemIds, {
     required int expectedListVersion,
+  });
+
+  Future<int> inviteMember(
+    String listId,
+    String profileId, {
+    int? expectedAccessVersion,
+  });
+  Future<int> cancelInvitation(
+    String listId,
+    String profileId, {
+    required int expectedAccessVersion,
+  });
+  Future<int> acceptInvitation(
+    String listId, {
+    required int expectedAccessVersion,
+  });
+  Future<int> declineInvitation(
+    String listId, {
+    required int expectedAccessVersion,
+  });
+  Future<int> removeMember(
+    String listId,
+    String profileId, {
+    required int expectedAccessVersion,
+  });
+  Future<int> leaveList(
+    String listId, {
+    required int expectedAccessVersion,
   });
 }

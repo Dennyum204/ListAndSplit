@@ -133,7 +133,8 @@ returns table (
   profile_id uuid,
   username text,
   display_name text,
-  is_owner boolean
+  is_owner boolean,
+  access_version bigint
 )
 language plpgsql
 stable
@@ -154,13 +155,14 @@ begin
     profile_record.id,
     profile_record.username,
     profile_record.display_name,
-    participant.is_owner
+    participant.is_owner,
+    participant.access_version
   from (
-    select list_record.owner_id as profile_id, true as is_owner
+    select list_record.owner_id as profile_id, true as is_owner, null::bigint as access_version
     from public.active_lists as list_record
     where list_record.id = target_list_id
     union all
-    select access_record.participant_profile_id, false
+    select access_record.participant_profile_id, false, access_record.version
     from public.active_list_participants as access_record
     where access_record.list_id = target_list_id
       and access_record.state = 'member'

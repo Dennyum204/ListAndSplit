@@ -6,6 +6,7 @@ import 'package:list_and_split/features/lists/data/supabase_active_list_reposito
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
 import 'package:list_and_split/features/lists/presentation/active_lists_controller.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_controller.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_members_controller.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 
 final activeListRepositoryProvider = Provider<ActiveListRepository>(
@@ -38,6 +39,20 @@ final activeListDetailControllerProvider = StateNotifierProvider.autoDispose
   (ref, listId) {
     final userId = ref.watch(verifiedUserIdProvider);
     final controller = ActiveListDetailController(
+      ref.watch(activeListRepositoryProvider),
+      listId,
+      invalidateLists: ref.watch(invalidateActiveListsProvider),
+    );
+    if (userId != null) unawaited(controller.load());
+    return controller;
+  },
+);
+
+final activeListMembersControllerProvider = StateNotifierProvider.autoDispose
+    .family<ActiveListMembersController, ActiveListMembersState, String>(
+  (ref, listId) {
+    final userId = ref.watch(verifiedUserIdProvider);
+    final controller = ActiveListMembersController(
       ref.watch(activeListRepositoryProvider),
       listId,
       invalidateLists: ref.watch(invalidateActiveListsProvider),

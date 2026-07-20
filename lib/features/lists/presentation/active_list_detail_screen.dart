@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
@@ -9,7 +10,7 @@ import 'package:list_and_split/features/lists/presentation/active_list_providers
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
-enum _ListAction { rename, archive, restore, delete }
+enum _ListAction { rename, archive, restore, delete, leave }
 
 class ActiveListDetailScreen extends ConsumerWidget {
   const ActiveListDetailScreen({required this.listId, super.key});
@@ -22,12 +23,37 @@ class ActiveListDetailScreen extends ConsumerWidget {
     final localizations = AppLocalizations.of(context);
     final detail = state.detail.valueOrNull;
     final archived = detail?.summary.status == ActiveListStatus.archived;
+    ref.listen<ActiveListDetailState>(
+      activeListDetailControllerProvider(listId),
+      (previous, next) {
+        if (next.message == ActiveListDetailMessage.unavailable &&
+            previous?.message != ActiveListDetailMessage.unavailable) {
+          context.go(AppRoutes.lists);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(localizations.listAccessRevokedMessage)),
+          );
+        }
+      },
+    );
     return Scaffold(
       appBar: AppBar(
         title: Text(detail?.summary.title ?? localizations.listsTitle),
         actions: [
           const NotificationBell(),
           if (detail != null)
+            IconButton(
+              key: const Key('listMembersButton'),
+              onPressed: state.isMutating
+                  ? null
+                  : () => context.push(
+                        '${AppRoutes.lists}/$listId/members',
+                      ),
+              tooltip: detail.summary.isOwner
+                  ? localizations.listManageMembersButton
+                  : localizations.listViewMembersButton,
+              icon: const Icon(Icons.group_outlined),
+            ),
+          if (detail != null && detail.summary.isOwner)
             PopupMenuButton<_ListAction>(
               key: const Key('listActionsButton'),
               enabled: !state.isMutating,
@@ -51,6 +77,18 @@ class ActiveListDetailScreen extends ConsumerWidget {
                     value: _ListAction.delete,
                     child: Text(localizations.listDeleteButton),
                   ),
+              ],
+            ),
+          if (detail != null && !detail.summary.isOwner)
+            PopupMenuButton<_ListAction>(
+              key: const Key('memberListActionsButton'),
+              enabled: !state.isMutating,
+              onSelected: (action) => _handleAction(context, ref, action),
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: _ListAction.leave,
+                  child: Text(localizations.listLeaveButton),
+                ),
               ],
             ),
         ],
@@ -107,6 +145,40 @@ class ActiveListDetailScreen extends ConsumerWidget {
         await controller.setArchived(false);
       case _ListAction.delete:
         await _confirmDeleteList(context, ref);
+      case _ListAction.leave:
+        await _confirmLeaveList(context, ref);
+    }
+  }
+
+  Future<void> _confirmLeaveList(BuildContext context, WidgetRef ref) async {
+    final localizations = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(localizations.listLeaveTitle),
+        content: Text(localizations.listLeaveDescription),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(localizations.cancelButton),
+          ),
+          FilledButton(
+            key: const Key('confirmLeaveListButton'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(localizations.listLeaveButton),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final outcome = await ref
+        .read(activeListDetailControllerProvider(listId).notifier)
+        .leaveList();
+    if (outcome == ActiveListMutationOutcome.succeeded && context.mounted) {
+      context.go(AppRoutes.lists);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(localizations.listLeftMessage)),
+      );
     }
   }
 
@@ -330,6 +402,7 @@ class _DetailBody extends ConsumerWidget {
       ActiveListDetailMessage.itemDeleted => localizations.itemDeletedMessage,
       ActiveListDetailMessage.orderUpdated =>
         localizations.itemOrderUpdatedMessage,
+      ActiveListDetailMessage.left => localizations.listLeftMessage,
       ActiveListDetailMessage.recoveryInProgress =>
         localizations.listRecoveryInProgressMessage,
       ActiveListDetailMessage.staleRefreshed => localizations.listStaleMessage,

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
@@ -63,6 +64,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Previous trip'), findsOneWidget);
     expect(find.byKey(const Key('createListButton')), findsNothing);
+  });
+
+  testWidgets('overview distinguishes a shared list and approved owner',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary(isOwner: false)];
+    await _pump(tester,
+        repository: repository, child: const ActiveListsScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Shared by Owner User'), findsOneWidget);
+    expect(find.text('@owner_user'), findsNothing);
   });
 
   testWidgets('create validates input, preserves it, and blocks duplicate taps',
@@ -439,6 +452,133 @@ void main() {
     expect(find.byKey(const Key('renameListTitle')), findsNothing);
     expect(find.text('Weekend'), findsOneWidget);
   });
+
+  testWidgets('member detail hides owner controls and confirms leaving',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary(isOwner: false)]
+      ..itemsByList['list-1'] = [_item()];
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('listActionsButton')), findsNothing);
+    expect(find.byKey(const Key('memberListActionsButton')), findsOneWidget);
+    expect(find.byKey(const Key('listMembersButton')), findsOneWidget);
+    expect(find.byKey(const Key('addItemButton')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('memberListActionsButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Leave list').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Leave this list?'), findsOneWidget);
+    await tester.tap(find.text('Cancel').last);
+    await tester.pumpAndSettle();
+    expect(repository.mutationCalls, 0);
+  });
+
+  testWidgets(
+      'archived member keeps leave access while content stays read-only',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..archivedLists = [
+        _summary(
+          isOwner: false,
+          status: ActiveListStatus.archived,
+          archivedAt: DateTime.utc(2026, 7, 20, 11),
+        ),
+      ]
+      ..itemsByList['list-1'] = [_item()];
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('memberListActionsButton')), findsOneWidget);
+    expect(find.byKey(const Key('addItemButton')), findsNothing);
+    expect(
+      tester
+          .widget<Checkbox>(find.byKey(const Key('completeItem-item-1')))
+          .onChanged,
+      isNull,
+    );
+  });
+
+  testWidgets('revoked member mutation returns safely to Lists',
+      (tester) async {
+    final repository = _RevokedAccessRepository();
+    final router = GoRouter(
+      initialLocation: '/lists/list-1',
+      routes: [
+        GoRoute(
+          path: '/lists',
+          builder: (_, __) => const Scaffold(body: Text('Lists landing')),
+          routes: [
+            GoRoute(
+              path: ':listId',
+              builder: (_, state) => ActiveListDetailScreen(
+                listId: state.pathParameters['listId']!,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          verifiedUserIdProvider.overrideWithValue('user-1'),
+          activeListRepositoryProvider.overrideWithValue(repository),
+          notificationRepositoryProvider.overrideWithValue(
+            FakeNotificationRepository(),
+          ),
+        ],
+        child: MaterialApp.router(
+          theme: AppTheme.light,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('completeItem-item-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Lists landing'), findsOneWidget);
+    expect(
+      find.text(
+        'Your access to this list changed. The latest Lists view was loaded.',
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+}
+
+class _RevokedAccessRepository extends FakeActiveListRepository {
+  _RevokedAccessRepository() {
+    activeLists = [_summary(isOwner: false)];
+    itemsByList['list-1'] = [_item()];
+  }
+
+  @override
+  Future<ActiveListItem> setItemCompleted(
+    String listId,
+    String itemId, {
+    required bool completed,
+    required int expectedListVersion,
+    required int expectedItemVersion,
+  }) {
+    throw const ActiveListFailure(ActiveListFailureCode.unavailable);
+  }
 }
 
 class _StaleRenameWidgetRepository extends FakeActiveListRepository {
@@ -569,6 +709,7 @@ ActiveListSummary _summary({
   ActiveListStatus status = ActiveListStatus.active,
   DateTime? archivedAt,
   int version = 3,
+  bool isOwner = true,
 }) {
   return ActiveListSummary(
     id: id,
@@ -580,6 +721,11 @@ ActiveListSummary _summary({
     createdAt: DateTime.utc(2026, 7, 20, 9),
     updatedAt: DateTime.utc(2026, 7, 20, 10),
     archivedAt: archivedAt,
+    isOwner: isOwner,
+    ownerProfileId: isOwner ? null : 'owner-1',
+    ownerUsername: isOwner ? null : 'owner_user',
+    ownerDisplayName: isOwner ? null : 'Owner User',
+    callerAccessVersion: isOwner ? null : 6,
   );
 }
 

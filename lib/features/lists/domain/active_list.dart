@@ -26,6 +26,11 @@ class ActiveListSummary {
     required this.createdAt,
     required this.updatedAt,
     required this.archivedAt,
+    this.isOwner = true,
+    this.ownerProfileId,
+    this.ownerUsername,
+    this.ownerDisplayName,
+    this.callerAccessVersion,
   });
 
   final String id;
@@ -37,6 +42,11 @@ class ActiveListSummary {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? archivedAt;
+  final bool isOwner;
+  final String? ownerProfileId;
+  final String? ownerUsername;
+  final String? ownerDisplayName;
+  final int? callerAccessVersion;
 
   ActiveListCursor get cursor => ActiveListCursor(
         sortAt: status == ActiveListStatus.active ? updatedAt : archivedAt!,
@@ -63,8 +73,67 @@ class ActiveListSummary {
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       archivedAt: clearArchivedAt ? null : archivedAt ?? this.archivedAt,
+      isOwner: isOwner,
+      ownerProfileId: ownerProfileId,
+      ownerUsername: ownerUsername,
+      ownerDisplayName: ownerDisplayName,
+      callerAccessVersion: callerAccessVersion,
     );
   }
+}
+
+class ActiveListParticipant {
+  const ActiveListParticipant({
+    required this.profileId,
+    required this.username,
+    required this.displayName,
+    required this.isOwner,
+    this.accessVersion,
+  });
+
+  final String profileId;
+  final String username;
+  final String displayName;
+  final bool isOwner;
+  final int? accessVersion;
+}
+
+class ActiveListAccessProfile {
+  const ActiveListAccessProfile({
+    required this.profileId,
+    required this.username,
+    required this.displayName,
+    this.accessVersion,
+    this.createdAt,
+    this.stateChangedAt,
+  });
+
+  final String profileId;
+  final String username;
+  final String displayName;
+  final int? accessVersion;
+  final DateTime? createdAt;
+  final DateTime? stateChangedAt;
+}
+
+class ActiveListInvitation {
+  const ActiveListInvitation({
+    required this.listId,
+    required this.listTitle,
+    required this.listStatus,
+    required this.owner,
+    required this.accessVersion,
+    required this.createdAt,
+    required this.stateChangedAt,
+  });
+
+  final String listId;
+  final String listTitle;
+  final ActiveListStatus listStatus;
+  final ActiveListParticipant owner;
+  final int accessVersion;
+  final DateTime createdAt;
+  final DateTime stateChangedAt;
 }
 
 class ActiveListCursor {

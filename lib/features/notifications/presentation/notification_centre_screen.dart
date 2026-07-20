@@ -138,6 +138,10 @@ class _NotificationCentreScreenState
         localizations.notificationsReadFailedMessage,
       NotificationCentreMessage.operationFailed =>
         localizations.operationFailedMessage,
+      NotificationCentreMessage.invitationAccepted =>
+        localizations.listInvitationAcceptedMessage,
+      NotificationCentreMessage.invitationDeclined =>
+        localizations.listInvitationDeclinedMessage,
     };
   }
 }
@@ -328,9 +332,7 @@ class _NotificationCard extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        localizations.friendRequestNotificationTitle(
-                          notification.actorDisplayName,
-                        ),
+                        _title(localizations),
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
@@ -377,6 +379,13 @@ class _NotificationCard extends ConsumerWidget {
     AppLocalizations localizations,
   ) {
     final controller = ref.read(notificationCentreControllerProvider.notifier);
+    if (notification.type != InAppNotificationType.friendRequest &&
+        notification.type != InAppNotificationType.listInvitation) {
+      return Text(
+        _informationalText(localizations),
+        textAlign: TextAlign.end,
+      );
+    }
     return switch (notification.actionStatus) {
       NotificationActionStatus.actionable => Wrap(
           alignment: WrapAlignment.end,
@@ -395,13 +404,19 @@ class _NotificationCard extends ConsumerWidget {
               key: Key('acceptNotification-${notification.id}'),
               onPressed: isBusy ? null : () => controller.accept(notification),
               icon: const Icon(Icons.check_rounded),
-              label: Text(localizations.friendRequestAcceptButton),
+              label: Text(
+                  notification.type == InAppNotificationType.listInvitation
+                      ? localizations.listInvitationAcceptButton
+                      : localizations.friendRequestAcceptButton),
             ),
             OutlinedButton.icon(
               key: Key('declineNotification-${notification.id}'),
               onPressed: isBusy ? null : () => controller.decline(notification),
               icon: const Icon(Icons.close_rounded),
-              label: Text(localizations.friendRequestDeclineButton),
+              label: Text(
+                  notification.type == InAppNotificationType.listInvitation
+                      ? localizations.listInvitationDeclineButton
+                      : localizations.friendRequestDeclineButton),
             ),
           ],
         ),
@@ -410,6 +425,13 @@ class _NotificationCard extends ConsumerWidget {
           child: Chip(
             avatar: const Icon(Icons.people_alt_rounded, size: 18),
             label: Text(localizations.friendshipStatusFriends),
+          ),
+        ),
+      NotificationActionStatus.accepted => Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: Chip(
+            avatar: const Icon(Icons.group_outlined, size: 18),
+            label: Text(localizations.listInvitationAcceptedStatus),
           ),
         ),
       NotificationActionStatus.unavailable => Text(
@@ -421,4 +443,46 @@ class _NotificationCard extends ConsumerWidget {
         ),
     };
   }
+
+  String _title(AppLocalizations localizations) => switch (notification.type) {
+        InAppNotificationType.friendRequest =>
+          localizations.friendRequestNotificationTitle(
+            notification.actorDisplayName,
+          ),
+        InAppNotificationType.listInvitation =>
+          localizations.listInvitationNotificationTitle(
+            notification.activeListTitle ?? '',
+          ),
+        InAppNotificationType.listInvitationAccepted =>
+          localizations.listInvitationAcceptedNotificationTitle(
+            notification.activeListTitle ?? '',
+          ),
+        InAppNotificationType.listInvitationDeclined =>
+          localizations.listInvitationDeclinedNotificationTitle(
+            notification.activeListTitle ?? '',
+          ),
+        InAppNotificationType.listMemberLeft =>
+          localizations.listMemberLeftNotificationTitle(
+            notification.activeListTitle ?? '',
+          ),
+        InAppNotificationType.listMemberRemoved =>
+          localizations.listMemberRemovedNotificationTitle(
+            notification.activeListTitle ?? '',
+          ),
+      };
+
+  String _informationalText(AppLocalizations localizations) =>
+      switch (notification.type) {
+        InAppNotificationType.listInvitationAccepted =>
+          localizations.listInvitationAcceptedInformation,
+        InAppNotificationType.listInvitationDeclined =>
+          localizations.listInvitationDeclinedInformation,
+        InAppNotificationType.listMemberLeft =>
+          localizations.listMemberLeftInformation,
+        InAppNotificationType.listMemberRemoved =>
+          localizations.listMemberRemovedInformation,
+        InAppNotificationType.friendRequest ||
+        InAppNotificationType.listInvitation =>
+          localizations.notificationUnavailableMessage,
+      };
 }
