@@ -1,3 +1,4 @@
+import { withSupabase } from "@supabase/server";
 import {
   AccountDeletionBoundaryError,
   type AccountDeletionRequestContext,
@@ -9,6 +10,29 @@ import {
 } from "./supabase_adapters.ts";
 
 const endpoint = "http://localhost/functions/v1/delete-account";
+const authenticatedUserId = "11111111-1111-4111-8111-111111111111";
+const publishableKey = "sb_publishable_delete_account_test";
+const secretKey = "sb_secret_delete_account_test";
+const jwtKeyId = "delete-account-test-key";
+const jwtSecret = new TextEncoder().encode(
+  "delete-account-wrapper-test-secret-with-at-least-32-bytes",
+);
+
+const wrapperEnvironment = {
+  url: "http://127.0.0.1:54321",
+  publishableKeys: { default: publishableKey },
+  secretKeys: { default: secretKey },
+  jwks: {
+    keys: [
+      {
+        kty: "oct",
+        alg: "HS256",
+        kid: jwtKeyId,
+        k: base64Url(jwtSecret),
+      },
+    ],
+  },
+};
 
 function assert(
   condition: unknown,
@@ -23,6 +47,66 @@ function assertEquals(actual: unknown, expected: unknown): void {
   if (actualJson !== expectedJson) {
     throw new Error(`expected ${expectedJson}, received ${actualJson}`);
   }
+}
+
+function assertIncludes(actual: string, expected: string): void {
+  assert(
+    actual.includes(expected),
+    `expected ${JSON.stringify(actual)} to include ${JSON.stringify(expected)}`,
+  );
+}
+
+function base64Url(value: Uint8Array | string): string {
+  const bytes = typeof value === "string"
+    ? new TextEncoder().encode(value)
+    : value;
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+}
+
+async function userJwt(
+  secret = jwtSecret,
+  subject = authenticatedUserId,
+): Promise<string> {
+  const header = base64Url(JSON.stringify({
+    alg: "HS256",
+    kid: jwtKeyId,
+    typ: "JWT",
+  }));
+  const payload = base64Url(JSON.stringify({
+    aud: "authenticated",
+    exp: Math.floor(Date.now() / 1000) + 300,
+    iat: Math.floor(Date.now() / 1000),
+    role: "authenticated",
+    sub: subject,
+  }));
+  const signingInput = `${header}.${payload}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    secret,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = new Uint8Array(
+    await crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(signingInput),
+    ),
+  );
+  return `${signingInput}.${base64Url(signature)}`;
+}
+
+function wrapperRequest(headers: HeadersInit = {}): Request {
+  return new Request(endpoint, {
+    method: "POST",
+    headers,
+  });
 }
 
 function post(body: string, headers: HeadersInit = {}): Request {
@@ -40,7 +124,7 @@ function context(
   overrides: Partial<AccountDeletionRequestContext> = {},
 ): AccountDeletionRequestContext {
   return {
-    userId: "11111111-1111-4111-8111-111111111111",
+    userId: authenticatedUserId,
     validate: () => Promise.resolve(),
     hardDelete: () => Promise.resolve(),
     ...overrides,
@@ -50,6 +134,143 @@ function context(
 async function responseJson(response: Response): Promise<unknown> {
   return JSON.parse(await response.text());
 }
+
+Deno.test("configuration delegates delete-account authentication to the SDK wrapper", async () => {
+  const config = await Deno.readTextFile(
+    new URL("../../config.toml", import.meta.url),
+  );
+  const entrypoint = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const functionSection = config.match(
+    /\[functions\.delete-account\]([\s\S]*?)(?=\n\[|$)/,
+  )?.[1] ?? "";
+
+  assertIncludes(functionSection, "enabled = true");
+  assertIncludes(functionSection, "verify_jwt = false");
+  assert(!functionSection.includes("verify_jwt = true"));
+  assertIncludes(entrypoint, 'withSupabase({ auth: "user" }');
+  assertIncludes(entrypoint, "context.userClaims?.id");
+  assertIncludes(entrypoint, "context.supabase as unknown");
+  assertIncludes(entrypoint, "context.supabaseAdmin");
+});
+
+for (
+  const [name, headers] of [
+    ["missing authentication", {}],
+    ["a malformed user JWT", { authorization: "Bearer not-a-jwt" }],
+    [
+      "a publishable key without a user session",
+      {
+        apikey: publishableKey,
+        authorization: `Bearer ${publishableKey}`,
+      },
+    ],
+    [
+      "a secret key presented as a user request",
+      { apikey: secretKey, authorization: `Bearer ${secretKey}` },
+    ],
+  ] as const
+) {
+  Deno.test(`the SDK user wrapper rejects ${name}`, async () => {
+    let handlerCalled = false;
+    const wrapped = withSupabase(
+      { auth: "user", env: wrapperEnvironment },
+      () => {
+        handlerCalled = true;
+        return Promise.resolve(Response.json({ accepted: true }));
+      },
+    );
+
+    const response = await wrapped(wrapperRequest(headers));
+
+    assertEquals(response.status, 401);
+    assertEquals(handlerCalled, false);
+  });
+}
+
+Deno.test("the SDK user wrapper rejects an invalidly signed user JWT", async () => {
+  let handlerCalled = false;
+  const wrapped = withSupabase(
+    { auth: "user", env: wrapperEnvironment },
+    () => {
+      handlerCalled = true;
+      return Promise.resolve(Response.json({ accepted: true }));
+    },
+  );
+  const invalidJwt = await userJwt(
+    new TextEncoder().encode(
+      "different-wrapper-test-secret-with-at-least-32-bytes",
+    ),
+  );
+
+  const response = await wrapped(
+    wrapperRequest({ authorization: `Bearer ${invalidJwt}` }),
+  );
+
+  assertEquals(response.status, 401);
+  assertEquals(handlerCalled, false);
+});
+
+Deno.test("a valid user receives verified identity and both scoped clients", async () => {
+  let observed: unknown;
+  const requests: Request[] = [];
+  const token = await userJwt();
+  const wrapped = withSupabase(
+    {
+      auth: "user",
+      env: wrapperEnvironment,
+      supabaseOptions: {
+        global: {
+          fetch: (input, init) => {
+            requests.push(new Request(input, init));
+            return Promise.resolve(
+              new Response("null", {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              }),
+            );
+          },
+        },
+      },
+    },
+    async (_request, wrapperContext) => {
+      await wrapperContext.supabase.rpc("user_scope_probe");
+      await wrapperContext.supabaseAdmin.rpc("admin_scope_probe");
+      observed = {
+        authMode: wrapperContext.authMode,
+        userId: wrapperContext.userClaims?.id,
+        hasUserClient: wrapperContext.supabase != null,
+        hasAdminClient: wrapperContext.supabaseAdmin != null,
+        clientsAreDistinct:
+          wrapperContext.supabase !== wrapperContext.supabaseAdmin,
+      };
+      return Response.json({ accepted: true });
+    },
+  );
+
+  const response = await wrapped(
+    wrapperRequest({
+      apikey: publishableKey,
+      authorization: `Bearer ${token}`,
+    }),
+  );
+
+  assertEquals(response.status, 200);
+  assertEquals(observed, {
+    authMode: "user",
+    userId: authenticatedUserId,
+    hasUserClient: true,
+    hasAdminClient: true,
+    clientsAreDistinct: true,
+  });
+  assertEquals(requests.length, 2);
+  assertIncludes(requests[0].url, "/rest/v1/rpc/user_scope_probe");
+  assertEquals(requests[0].headers.get("apikey"), publishableKey);
+  assertEquals(requests[0].headers.get("authorization"), `Bearer ${token}`);
+  assertIncludes(requests[1].url, "/rest/v1/rpc/admin_scope_probe");
+  assertEquals(requests[1].headers.get("apikey"), secretKey);
+});
 
 Deno.test("OPTIONS returns an empty preflight response without deletion", async () => {
   let called = false;

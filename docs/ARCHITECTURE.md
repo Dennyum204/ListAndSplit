@@ -245,14 +245,15 @@ either value, makes the returned session active, and invokes `delete-account` wi
 only the confirmation. Passwords never enter Riverpod state, an Edge Function,
 database call, log, analytic, or error payload.
 
-`delete-account` is a POST-only authenticated Edge Function. The platform JWT
-check remains enabled and the pinned `@supabase/server` `auth: 'user'` wrapper
-builds both the caller-scoped client and a server-only admin client from
-platform-injected publishable/secret-key configuration. The handler accepts one
-bounded exact `confirmation` string, first calls the authenticated validation RPC,
-and only then calls Auth Admin hard deletion with `shouldSoftDelete: false` for the
-wrapper-authenticated caller ID. It never accepts a target identity or exposes a
-secret to Flutter.
+`delete-account` is a POST-only authenticated Edge Function. Its legacy platform
+JWT check is disabled so the pinned `@supabase/server` `auth: 'user'` wrapper is
+the sole authentication boundary under the publishable/secret-key system. The
+wrapper verifies the user session JWT and builds both the caller-scoped client and
+a server-only admin client from platform-injected configuration. The handler
+accepts one bounded exact `confirmation` string, first calls the authenticated
+validation RPC, and only then calls Auth Admin hard deletion with
+`shouldSoftDelete: false` for the wrapper-authenticated caller ID. It never accepts
+a target identity or exposes a secret to Flutter.
 
 The narrow `validate_account_deletion(text)` RPC derives user identity from
 `auth.uid()` and session identity only from `auth.jwt()`'s `session_id`. A hardened
