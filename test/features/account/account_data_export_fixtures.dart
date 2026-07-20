@@ -65,7 +65,7 @@ Map<String, dynamic> validAccountDataExportJson({
               'expected_relationship_version': 4,
             },
           ],
-    if (schemaVersion == 2)
+    if (schemaVersion >= 2)
       'active_lists': emptyCollections
           ? <Object?>[]
           : [
@@ -101,6 +101,20 @@ Map<String, dynamic> validAccountDataExportJson({
                 'updated_at': '2026-07-18T08:00:00.000Z',
                 'archived_at': '2026-07-18T08:00:00.000Z',
                 'items': <Object?>[],
+              },
+            ],
+    if (schemaVersion >= 3)
+      'shared_list_access': emptyCollections
+          ? <Object?>[]
+          : [
+              {
+                'list_id': '88888888-8888-4888-8888-888888888888',
+                'list_title': 'Shared trip',
+                'list_status': 'active',
+                'access_state': 'member',
+                'access_version': 5,
+                'created_at': '2026-07-19T05:00:00.000Z',
+                'state_changed_at': '2026-07-19T06:00:00.000Z',
               },
             ],
   };

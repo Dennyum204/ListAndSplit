@@ -71,8 +71,57 @@ void main() {
       expect(document.toJson(), isNot(contains('active_lists')));
     });
 
+    test('maps privacy-minimal schema-v3 shared-list access', () {
+      final document = AccountDataExportDocument.fromJson(
+        validAccountDataExportJson(schemaVersion: 3),
+      );
+
+      expect(document.schemaVersion, 3);
+      expect(document.activeLists, hasLength(2));
+      expect(document.sharedListAccess, hasLength(1));
+      final access = document.sharedListAccess.single;
+      expect(access.listId, '88888888-8888-4888-8888-888888888888');
+      expect(access.listTitle, 'Shared trip');
+      expect(access.listStatus, AccountActiveListStatus.active);
+      expect(access.accessState, AccountSharedListAccessState.member);
+      expect(access.accessVersion, 5);
+      expect(access.stateChangedAt.isAfter(access.createdAt), isTrue);
+      expect(access.toJson().keys, {
+        'list_id',
+        'list_title',
+        'list_status',
+        'access_state',
+        'access_version',
+        'created_at',
+        'state_changed_at',
+      });
+      expect(document.toJson(), contains('shared_list_access'));
+    });
+
+    test('schema versions 1 and 2 never fabricate shared-list access', () {
+      for (final version in [1, 2]) {
+        final document = AccountDataExportDocument.fromJson(
+          validAccountDataExportJson(schemaVersion: version),
+        );
+        expect(document.sharedListAccess, isEmpty);
+        expect(document.toJson(), isNot(contains('shared_list_access')));
+      }
+    });
+
+    test('schema-v3 accepts every retained caller-relative access state', () {
+      for (final state in AccountSharedListAccessState.values) {
+        final json = validAccountDataExportJson(schemaVersion: 3);
+        ((json['shared_list_access'] as List).single
+            as Map<String, dynamic>)['access_state'] = state.wireValue;
+
+        final document = AccountDataExportDocument.fromJson(json);
+
+        expect(document.sharedListAccess.single.accessState, state);
+      }
+    });
+
     test('rejects unsupported schema versions', () {
-      final json = validAccountDataExportJson()..['schema_version'] = 3;
+      final json = validAccountDataExportJson()..['schema_version'] = 4;
 
       expect(
         () => AccountDataExportDocument.fromJson(json),
@@ -135,6 +184,43 @@ void main() {
           .first as Map<String, dynamic>)['quantity_thousandths'] = 1.5;
 
       for (final json in [unknownUnit, leakedRequest, impreciseQuantity]) {
+        expect(
+          () => AccountDataExportDocument.fromJson(json),
+          throwsA(isA<AccountDataExportFailure>()),
+        );
+      }
+    });
+
+    test('rejects malformed or privacy-expanded shared-list access', () {
+      final ownerLeak = validAccountDataExportJson(schemaVersion: 3);
+      ((ownerLeak['shared_list_access'] as List).single
+              as Map<String, dynamic>)['owner_profile_id'] =
+          '99999999-9999-4999-8999-999999999999';
+
+      final itemLeak = validAccountDataExportJson(schemaVersion: 3);
+      ((itemLeak['shared_list_access'] as List).single
+          as Map<String, dynamic>)['items'] = <Object?>[];
+
+      final invalidState = validAccountDataExportJson(schemaVersion: 3);
+      ((invalidState['shared_list_access'] as List).single
+          as Map<String, dynamic>)['access_state'] = 'blocked';
+
+      final invalidVersion = validAccountDataExportJson(schemaVersion: 3);
+      ((invalidVersion['shared_list_access'] as List).single
+          as Map<String, dynamic>)['access_version'] = 0;
+
+      final reversedTimestamps = validAccountDataExportJson(schemaVersion: 3);
+      ((reversedTimestamps['shared_list_access'] as List).single
+              as Map<String, dynamic>)['state_changed_at'] =
+          '2026-07-19T04:00:00.000Z';
+
+      for (final json in [
+        ownerLeak,
+        itemLeak,
+        invalidState,
+        invalidVersion,
+        reversedTimestamps,
+      ]) {
         expect(
           () => AccountDataExportDocument.fromJson(json),
           throwsA(isA<AccountDataExportFailure>()),

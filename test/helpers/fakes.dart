@@ -60,11 +60,17 @@ class FakeAccountDataExportShareService
   }
 }
 
-class FakeAccountDeletionRepository implements AccountDeletionRepository {
+class FakeAccountDeletionRepository
+    implements AccountDeletionRepository, AccountDeletionImpactRepository {
   Object? deletionFailure;
   Completer<void>? deletionCompleter;
   AuthoritativeAccountState validationResult = AuthoritativeAccountState.valid;
   Completer<AuthoritativeAccountState>? validationCompleter;
+  AccountDeletionListImpact impact = const AccountDeletionListImpact(
+    ownedSharedListCount: 0,
+    affectedParticipantCount: 0,
+  );
+  Object? impactFailure;
 
   String? lastEmail;
   String? lastPassword;
@@ -72,6 +78,14 @@ class FakeAccountDeletionRepository implements AccountDeletionRepository {
   int deletionCalls = 0;
   int validationCalls = 0;
   int clearSessionCalls = 0;
+  int impactCalls = 0;
+
+  @override
+  Future<AccountDeletionListImpact> getListImpact() async {
+    impactCalls += 1;
+    if (impactFailure != null) throw impactFailure!;
+    return impact;
+  }
 
   @override
   Future<void> deleteOwnAccount({

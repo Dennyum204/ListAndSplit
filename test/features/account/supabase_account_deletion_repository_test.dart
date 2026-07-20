@@ -58,6 +58,76 @@ void main() {
     expect(receivedConfirmation, ' Exact_Name ');
   });
 
+  test('maps the privacy-minimal authoritative list impact', () async {
+    final repository = SupabaseAccountDeletionRepository(
+      client,
+      currentSession: () => activeSession,
+      reauthenticate: (_, __) async => activeSession,
+      invokeDeletion: (_) async {},
+      getUser: () async => 'user-1',
+      localSignOut: () async {},
+      getListImpact: () async => [
+        {
+          'owned_shared_list_count': 2,
+          'affected_participant_count': 5,
+        },
+      ],
+    );
+
+    final impact = await repository.getListImpact();
+
+    expect(impact.ownedSharedListCount, 2);
+    expect(impact.affectedParticipantCount, 5);
+  });
+
+  test('rejects malformed or privacy-expanded deletion impact responses',
+      () async {
+    for (final response in <Object?>[
+      null,
+      <Object?>[],
+      [
+        {
+          'owned_shared_list_count': -1,
+          'affected_participant_count': 5,
+        },
+      ],
+      [
+        {
+          'owned_shared_list_count': 2,
+          'affected_participant_count': '5',
+        },
+      ],
+      [
+        {
+          'owned_shared_list_count': 2,
+          'affected_participant_count': 5,
+          'participant_ids': ['private-user'],
+        },
+      ],
+    ]) {
+      final repository = SupabaseAccountDeletionRepository(
+        client,
+        currentSession: () => activeSession,
+        reauthenticate: (_, __) async => activeSession,
+        invokeDeletion: (_) async {},
+        getUser: () async => 'user-1',
+        localSignOut: () async {},
+        getListImpact: () async => response,
+      );
+
+      await expectLater(
+        repository.getListImpact(),
+        throwsA(
+          isA<AccountDeletionFailure>().having(
+            (failure) => failure.code,
+            'code',
+            AccountDeletionFailureCode.retryable,
+          ),
+        ),
+      );
+    }
+  });
+
   test('wrong password prevents deletion invocation', () async {
     var invokeCalls = 0;
     final repository = SupabaseAccountDeletionRepository(
