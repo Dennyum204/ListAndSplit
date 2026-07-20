@@ -252,12 +252,12 @@ reference the exact pending relationship version but never becomes authoritative
 for its transition. Realtime, push delivery, public profiles, the final navigation
 shell, shared lists, and detailed audit history remain outside the relationship
 record. Current relationship-row account deletion cleanup is implemented by the
-Auth-root cascade. The effects of
-relationship or block changes on existing shared resources remain unresolved.
+Auth-root cascade. Accepted shared-list access and the effects of friendship/block
+changes follow P-035 through P-039.
 
 ## Active-list aggregate
 
-### Implemented owner-only active list
+### Implemented active/shared list
 
 `public.active_lists` has a UUID primary key, one non-null `owner_id` referencing
 `public.profiles(id) ON DELETE CASCADE`, a trimmed 1-80-character title, checked
@@ -267,27 +267,34 @@ update, and nullable archive timestamps. Status and archive time are constrained
 to agree. `(owner_id, creation_request_id)` is unique; duplicate titles remain
 valid.
 
-The owner can create, read, rename, archive, restore, and permanently delete the
-list. Archived rows remain readable but every mutation except restore is rejected
-inside the RPC boundary. Active listing orders by `(updated_at, id)` descending;
+The owner can create, read, rename, archive, restore, permanently delete, and manage
+access. Accepted members can read the list and mutate items only while active.
+Archived rows remain readable; only owner restore/removal and member leave remain
+valid transitions. Active listing orders by `(updated_at, id)` descending;
 archived listing orders by `(archived_at, id)` descending. Both use a bounded
 exclusive keyset cursor and aggregate item total/completed counts in the same
 projection.
 
-No membership table exists in this slice. The future full role model,
-administrative permissions, accepted-friend invitations, removal/leaving, and
-ownership transfer remain open. Membership and friendship will remain distinct so
-a later friendship change cannot silently rewrite historical list data.
+Membership and friendship are distinct. Ending friendship cancels pending list
+invitations but preserves accepted membership; blocking applies the accepted
+symmetric separation rules. Ownership transfer remains open.
 
-### List invitation
+### Implemented participant access row
 
-A list invitation links an inviting authorized member, an active list, and an
-accepted friend as recipient. It has an actionable state with at least pending,
-accepted, and declined outcomes. Acceptance creates membership once and must be
-atomic/idempotent. Expiry, revocation, who may invite, and reinvitation rules remain
-open.
+`public.active_list_participants` retains one current row per `(list_id,
+participant_profile_id)` for a non-owner. Its exact states are `pending`, `member`,
+`declined`, `cancelled`, `removed`, and `left`; version is a positive monotonic
+`bigint`; creation and state-change times are database-owned. A constraint/trigger
+prevents an owner duplicate. Dormant rows may reopen to a new pending version.
 
-### Implemented owner-only list item
+Only the owner invites, cancels, and removes. Only the recipient accepts/declines,
+and only a member leaves. Capacity counts the owner plus `pending`/`member` rows and
+is limited to 20 under serialized list locking. Pending invitations do not expire.
+The table is RPC-only with enabled/forced RLS, an explicit restrictive rejection
+policy, and no direct API-role grants. Auth-root owner deletion cascades the list;
+non-owner deletion removes only that person's access row.
+
+### Implemented list item
 
 `public.active_list_items` has a UUID primary key, non-null `list_id` referencing
 the list `ON DELETE CASCADE`, trimmed 1-120-character name, positive integer
@@ -497,10 +504,11 @@ anonymous denial unless public read is explicitly intended.
 | Profiles | Direct access remains authenticated owner-only select and approved-field update; exact cross-user discovery uses only the approved block-aware minimal projection |
 | Active blocks | RPC-only application access; the caller can create/remove/list only outgoing blocks, while incoming and unrelated rows remain private |
 | Friend relationships | RPC-only current-state access for the two participants through caller-relative summaries/lists and version-checked transitions; no direct table access or raw dormant-state disclosure |
-| Owner-only active lists | RPC-only owner access; no direct table CRUD or caller-supplied ownership authority |
-| Owner-only list items | RPC-only through the owning-list boundary; archived lists reject mutations |
-| Future memberships, assignments, notes, mentions | Authorized list members, with mutations limited by the accepted future role model |
-| Invitations | Recipient and authorized inviters/list administrators |
+| Active/shared lists | RPC-only owner/accepted-member reads; owner-only metadata/access management; member item mutations while active |
+| Active-list participants | RPC-only caller-derived transitions; pending visible only to owner/recipient; minimal accepted participant projection |
+| List items | RPC-only through the owner/accepted-member boundary; archived lists reject mutations |
+| Future assignments, notes, mentions | Authorized list members, with mutations limited by later accepted rules |
+| Invitations | Exact recipient and owner through versioned participant-access RPCs |
 | Private templates/categories | Owner only |
 | Public templates | Readable according to approved public-profile policy; mutation remains owner-only |
 | Template sends | Sender and recipient; acceptance only by recipient |

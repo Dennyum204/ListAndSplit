@@ -154,11 +154,11 @@ Templates, and Profile.
 Friendship management and request actions use those same gates and are reachable
 from Community. The notification centre uses the same gates and opens on the root
 navigator from a bell rather than a fifth destination. The shell introduces no
-Realtime, push delivery, feature deep links, public profiles, or shared-list roles.
+Realtime, push delivery, feature deep links, or public profile table access.
 
 ### Active-list client boundary
 
-The first Lists feature is owner-only and follows the existing feature-first
+The Lists feature follows the existing feature-first
 repository/Riverpod pattern under `lib/features/lists/`. Widgets render state and
 emit intent; controllers own load, pagination, refresh, mutation,
 duplicate-submit, and stale-conflict state; the repository alone translates
@@ -167,7 +167,8 @@ data layer.
 
 List providers are keyed by the current verified user identity and are invalidated
 on sign-out, account deletion, invalid-session recovery, or identity change. No
-global list payload survives a session boundary. There is no SQLite, Realtime, or
+global list/member/invitation payload survives a session boundary. There is no
+SQLite, Realtime, or
 optimistic server success in this slice; stale `40001` failures refresh current
 state and never overwrite it. Exact quantity parsing is a domain value that stores
 positive integer thousandths and never converts through `double`.
@@ -221,12 +222,18 @@ required rights.
 
 ### Active-list database boundary
 
-`public.active_lists` and `public.active_list_items` are an RPC-only aggregate.
-Both tables enable and force RLS, explicitly reject every direct `anon` and
+`public.active_lists`, `public.active_list_items`, and
+`public.active_list_participants` are an RPC-only aggregate. All tables enable and
+force RLS, explicitly reject every direct `anon` and
 `authenticated` operation, and revoke all table privileges from `PUBLIC`, `anon`,
 `authenticated`, and `service_role`. Owner/list cascade foreign keys integrate the
 aggregate with Auth-root deletion. A nullable completion-actor foreign key uses
 `ON DELETE SET NULL`, so future actor deletion cannot remove an item.
+
+Participant rows retain one non-owner's versioned `pending`, `member`, `declined`,
+`cancelled`, `removed`, or `left` state. List-row locking serializes the 20-person
+capacity including pending reservations. Pair locks precede deterministic list-row
+locks for friendship/block effects. No detailed access history exists.
 
 Exact `postgres`-owned `SECURITY DEFINER` functions derive authority only from
 `auth.uid()`, require a confirmed fully onboarded profile, pin an empty
@@ -245,7 +252,14 @@ both list and item versions. Real changes update their server timestamps once;
 completed retries/no-ops update neither. Creation request UUIDs are payload-bound
 idempotency tokens rather than authority. Reorder validates that the submitted
 array is non-null and unique and exactly equals the current item set before writing
-contiguous positive integer positions in one short transaction.
+contiguous positive integer positions in one short transaction. Owner-or-member
+item access is rechecked inside each transaction; owner-only metadata and access
+operations never trust caller-supplied role or identity.
+
+Realtime is accepted for the next focused slice as private Supabase Broadcast with
+opaque invalidation payloads only. RPC repositories remain authoritative; resume
+and manual refresh reconcile state. No row contents, profile data, notifications,
+offline mutation queue, or authorization decisions belong in Broadcast payloads.
 
 ### Account export boundary
 
@@ -255,10 +269,12 @@ exactly one corresponding profile but deliberately does not require completed
 onboarding. This keeps export available from both verified incomplete Onboarding
 and completed Profile without exposing it to anonymous or unverified sessions.
 
-The RPC returns one `jsonb` schema-version-2 document built exclusively from
+The RPC returns one `jsonb` schema-version-3 document built exclusively from
 explicit key allowlists. Version `2` preserves all version-1 account/social roots
-and adds one deterministic `active_lists` array containing both active and
-archived owned lists with ordered items. It is a hardened `SECURITY DEFINER`
+and adds the deterministic `active_lists` array with active/archived owned lists and
+ordered items. Version `3` adds only caller-relative metadata for lists owned by
+others and excludes their items, owner identity, other participants, and internal
+authorization data. It is a hardened `SECURITY DEFINER`
 boundary because it must read the caller's approved Auth columns and RPC-only
 social tables: ownership
 is `postgres`, `search_path` is empty, every object is qualified, default

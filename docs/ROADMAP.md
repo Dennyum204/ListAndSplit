@@ -79,10 +79,9 @@ The friend relationship schema gate O-A09 is resolved: one current row uses the
 five accepted states, deterministic pair locking, monotonic versions, server-owned
 state-change time, and no detailed event log. The subsequent notification slice
 references that row without replacing its action authority and still excludes
-Realtime, push delivery, other notification types, public profiles, and shared
-lists. The four-tab authenticated shell now begins the first owner-only list
-slice. Shared-resource block effects must be resolved
-before shared lists ship. Resolve the immutable-username support/admin correction
+Realtime, push delivery, other notification types, and public profiles. The
+four-tab authenticated shell now includes the secure shared-list membership slice.
+Resolve the immutable-username support/admin correction
 path and avatar storage lifecycle before the later slices that encode them.
 Shared-resource ownership/deletion, administrator deletion, moderation/legal
 retention, Storage cleanup, and compliance obligations remain open beyond the
@@ -91,9 +90,9 @@ implemented self-service current-aggregate account lifecycle.
 ## Phase 2 — Active/shared lists (in progress)
 
 Goal: deliver the core collaborative-list experience for accepted friends. This
-phase is in progress through an intentionally owner-only first slice.
+phase is in progress through owner and accepted-member collaboration.
 
-Implemented first slice:
+Implemented slices:
 
 - A state-preserving authenticated shell with Lists, Templates, Community, and
   Profile; notifications remain a bell destination above the shell.
@@ -105,21 +104,24 @@ Implemented first slice:
   read-only enforcement.
 - RPC-only tables with forced RLS, explicit rejection policies, reviewed
   definer-rights functions, Auth-root deletion cascade, and account export schema
-  version `2`.
+  version `3`.
+- One retained versioned non-owner access row, owner-managed persistent invitations,
+  member item access, 20-person capacity, accepted participant projections, and
+  archived-list access rules.
+- Atomic friendship/block effects, actionable/informational list notifications,
+  privacy-minimal account export schema version `3`, and deletion-impact warning.
 
 Remaining candidate slices:
 
-- Friend-only list invitations with Accept/Decline notifications.
-- The agreed owner/member role lifecycle, removal/leaving, and ownership transfer.
+- Ownership transfer.
 - Multi-member item assignment and assignment notifications.
 - General note editing, member `@mentions`, and mention notifications.
-- Supabase Realtime updates routed through repositories.
+- Private Supabase Broadcast opaque invalidations routed through repositories.
 - Authorization and concurrent-update tests for future membership and notes.
 
-Required decisions still include shared roles, leave/remove/transfer behavior,
-mention parsing, invitation expiry/revocation, shared-resource blocking, and
-collaborative/offline conflict handling. Owner archive/delete, item quantity/order,
-and initial online concurrency are resolved for the implemented first slice.
+Required decisions still include ownership transfer, mention parsing, and offline
+conflict behavior. Role lifecycle, invitation retention/revocation, shared-resource
+blocking, archive/delete, item quantity/order, and online concurrency are resolved.
 
 ## Phase 3 — Templates and community discovery (planned)
 
