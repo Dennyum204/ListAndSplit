@@ -119,8 +119,10 @@ because code generation is available.
 ## Navigation
 
 `go_router` owns a single root route graph and future deep-link handling. The
-planned main shell has four destinations: Lists, Templates, Community, and
-Profile. Notifications open from a bell and must not become a fifth destination.
+implemented authenticated `StatefulShellRoute.indexedStack` has four destinations:
+Lists, Templates, Community, and Profile. Each branch preserves its navigation
+stack and state when another tab is selected. Notifications open above the shell
+from a bell and must not become a fifth destination.
 
 Routing resolves these gates in order before entering an authenticated destination:
 
@@ -140,19 +142,35 @@ is never treated as authentication or authorization evidence.
 
 The registered mobile Auth callback is
 `com.ferbatech.listandsplit://auth-callback` on both Android and iOS, without
-changing either platform identifier. Final signed-in route nesting, restoration,
-notification-link behavior, and other feature deep links remain open. Redirect
-decisions are centralized and covered by navigation/widget tests.
+changing either platform identifier. Notification-link behavior and later feature
+deep links remain open. Redirect decisions are centralized and covered by
+navigation/widget tests.
 
 Exact community discovery and blocked-user management are authenticated,
-post-onboarding routes. They use the same configuration, session, verification,
-recovery, and onboarding gates as the foundation and profile destinations. This
-does not introduce the planned four-tab root shell.
+post-onboarding routes within the Community branch. They use the same
+configuration, session, verification, recovery, and onboarding gates as Lists,
+Templates, and Profile.
 
 Friendship management and request actions use those same gates and are reachable
-from Community. The notification centre uses the same gates and opens from a bell
-rather than a fifth destination. This does not introduce Realtime, push delivery,
-feature deep links, public profiles, shared lists, or the final four-tab shell.
+from Community. The notification centre uses the same gates and opens on the root
+navigator from a bell rather than a fifth destination. The shell introduces no
+Realtime, push delivery, feature deep links, public profiles, or shared-list roles.
+
+### Active-list client boundary
+
+The first Lists feature is owner-only and follows the existing feature-first
+repository/Riverpod pattern under `lib/features/lists/`. Widgets render state and
+emit intent; controllers own load, pagination, refresh, mutation,
+duplicate-submit, and stale-conflict state; the repository alone translates
+domain operations to exact Supabase RPC calls. Backend maps/DTOs do not escape the
+data layer.
+
+List providers are keyed by the current verified user identity and are invalidated
+on sign-out, account deletion, invalid-session recovery, or identity change. No
+global list payload survives a session boundary. There is no SQLite, Realtime, or
+optimistic server success in this slice; stale `40001` failures refresh current
+state and never overwrite it. Exact quantity parsing is a domain value that stores
+positive integer thousandths and never converts through `double`.
 
 ## Backend architecture
 
@@ -201,6 +219,34 @@ server function that crosses the Auth/application boundary uses qualified object
 names, a pinned safe `search_path`, revoked default execution, and the minimum
 required rights.
 
+### Active-list database boundary
+
+`public.active_lists` and `public.active_list_items` are an RPC-only aggregate.
+Both tables enable and force RLS, explicitly reject every direct `anon` and
+`authenticated` operation, and revoke all table privileges from `PUBLIC`, `anon`,
+`authenticated`, and `service_role`. Owner/list cascade foreign keys integrate the
+aggregate with Auth-root deletion. A nullable completion-actor foreign key uses
+`ON DELETE SET NULL`, so future actor deletion cannot remove an item.
+
+Exact `postgres`-owned `SECURITY DEFINER` functions derive authority only from
+`auth.uid()`, require a confirmed fully onboarded profile, pin an empty
+`search_path`, fully qualify objects, expose allowlisted projections, revoke
+default execution from every client/admin API role, and grant only exact
+signatures to `authenticated`. Listing is bounded keyset pagination: active lists
+use `(updated_at, id)` descending; archived lists use `(archived_at, id)`
+descending. Aggregate counts are returned in the same list query rather than by
+N+1 calls.
+
+Mutations lock the list row before item rows; when multiple items are locked they
+use UUID order. Expected positive `bigint` versions reject stale writes with
+SQLSTATE `40001`. List metadata changes increment only list version. Item
+create/delete/reorder increment list version; item edit/complete/reopen increment
+both list and item versions. Real changes update their server timestamps once;
+completed retries/no-ops update neither. Creation request UUIDs are payload-bound
+idempotency tokens rather than authority. Reorder validates that the submitted
+array is non-null and unique and exactly equals the current item set before writing
+contiguous positive integer positions in one short transaction.
+
 ### Account export boundary
 
 Account data export is a parameterless authenticated PostgreSQL RPC that derives
@@ -209,9 +255,12 @@ exactly one corresponding profile but deliberately does not require completed
 onboarding. This keeps export available from both verified incomplete Onboarding
 and completed Profile without exposing it to anonymous or unverified sessions.
 
-The RPC returns one `jsonb` schema-version-1 document built exclusively from
-explicit key allowlists. It is a hardened `SECURITY DEFINER` boundary because it
-must read the caller's approved Auth columns and RPC-only social tables: ownership
+The RPC returns one `jsonb` schema-version-2 document built exclusively from
+explicit key allowlists. Version `2` preserves all version-1 account/social roots
+and adds one deterministic `active_lists` array containing both active and
+archived owned lists with ordered items. It is a hardened `SECURITY DEFINER`
+boundary because it must read the caller's approved Auth columns and RPC-only
+social tables: ownership
 is `postgres`, `search_path` is empty, every object is qualified, default
 execution is revoked, and only the exact parameterless signature is granted to
 `authenticated`. No Auth schema, table privilege, or direct social-table access is
@@ -220,8 +269,11 @@ exposed to Flutter.
 The export reuses the existing caller-relative privacy contracts. It selects only
 outgoing blocks; only active, non-blocked relationship projections; and only
 caller-owned notifications that are unsuppressed, unexpired, and not hidden by a
-block in either direction. Objects are constructed field by field rather than by
-serializing physical rows. The function is stable and read-only: it does not mark
+block in either direction. List/item objects likewise use explicit public fields,
+exact integer `quantity_thousandths`, and deterministic list/item order while
+excluding creation request IDs and internal authorization details. Objects are
+constructed field by field rather than by serializing physical rows. The function
+is stable and read-only: it does not mark
 notifications read, mutate relationships, update Auth, or persist an export job,
 file, audit row, Storage object, signed URL, or background task.
 
@@ -232,7 +284,9 @@ state, prevents concurrent requests, and clears transient state when identity
 changes. The file service writes pretty UTF-8 JSON to application-scoped
 temporary/cache storage and invokes the Android/iOS native share sheet with a
 privacy-safe UTC filename and JSON MIME type. It never falls back to public shared
-storage or promises guaranteed cache deletion.
+storage or promises guaranteed cache deletion. Production responses must be
+version `2`; the parser deliberately retains strict version-1 support for
+historical fixtures and previously downloaded documents.
 
 ### Permanent account-deletion boundary
 
@@ -267,16 +321,17 @@ profile's Auth email exactly, returns only `true`, and never deletes or mutates.
 Auth Admin deletion of `auth.users` is the single atomic database root. Cascading
 foreign keys remove the profile, either direction of blocks, either relationship
 participant, notification recipient/actor rows, and notifications whose
-relationship disappears. A `BEFORE DELETE` profile trigger reserves only a
+relationship disappears, plus every list owned by the profile and the list's
+items. A `BEFORE DELETE` profile trigger reserves only a
 completed canonical username in `private.deleted_username_reservations` with an
 expiry exactly 30 days after deletion. A hardened availability helper coordinates
 concurrent profile deletion/onboarding, active reservations reject claims, and
 expired reservations do not. Migration-managed `pg_cron` physically removes only
 expired reservations once daily at 03:17 UTC.
 
-On confirmed success Flutter invalidates session-scoped account, profile,
-community, friendship, and notification state, removes the local Auth session, and
-routes to sign-in. A lost response triggers authoritative `getUser`
+On confirmed success Flutter invalidates session-scoped account, profile, lists,
+community, friendship, and notification state, removes the local Auth session,
+and routes to sign-in. A lost response triggers authoritative `getUser`
 reconciliation: confirmed absence becomes local success, confirmed continued
 existence permits a retry, and transient/offline failure preserves the account and
 session. The smallest app-resume boundary performs the same authoritative
@@ -456,10 +511,12 @@ binary.
 ### Server operation shape
 
 Operations that span records or enforce important invariants should be atomic and
-idempotent where retries are possible. Likely examples include accepting an
+idempotent where retries are possible. The owner-only list aggregate uses exact
+PostgreSQL RPCs because its validation, locking, version checks, and writes belong
+in one short database transaction. Future examples include accepting an
 invitation, accepting/saving a template copy, creating a template snapshot in an
-active list, and recording a ledger change. Whether each operation is best served
-by a PostgreSQL function or an Edge Function is an open implementation decision.
+active list, and recording a ledger change; placement for those operations remains
+open.
 
 ## Money boundary
 
@@ -527,8 +584,8 @@ reconciliation, not as direct UI mutations.
   retention, Storage cleanup, and compliance obligations beyond the implemented
   current-aggregate account lifecycle.
 - Precise feature folder layering and whether Riverpod code generation is used.
-- Final authenticated route topology, state restoration, notification links, and
-  non-Auth feature deep links.
+- Notification links and later non-Auth feature deep links beyond the accepted
+  four-tab shell.
 - Development/staging/production flavor and environment-separation strategy.
 - PostgreSQL-function versus Edge-Function placement for each atomic server action.
 - Realtime subscription granularity, reconnect/replay behavior, and event ordering.

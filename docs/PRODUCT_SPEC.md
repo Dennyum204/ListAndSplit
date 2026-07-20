@@ -66,20 +66,26 @@ are the evidence of implementation status.
   Profile and verified incomplete Onboarding; it does not weaken the existing
   configuration, authentication, or email-verification gates.
 - **Download my data** produces one UTF-8 JSON document with product identifier,
-  positive export schema version (initially `1`), server-generated UTC export
-  time, the caller's allowlisted Auth identity and profile fields, outgoing
-  blocks, active caller-visible relationships, and currently visible recipient
-  notifications. Collections are deterministic arrays and are empty rather than
-  null.
+  positive export schema version, server-generated UTC export time, the caller's
+  allowlisted Auth identity and profile fields, outgoing blocks, active
+  caller-visible relationships, currently visible recipient notifications, and
+  owned active lists with ordered items. Version `1` introduced the account/social
+  sections; version `2` adds the explicit `active_lists` root array. Collections
+  are deterministic arrays and are empty rather than null.
 - The export includes nullable onboarding fields faithfully. It includes only the
   existing caller-visible block, relationship, and notification projections, so
   either-direction block suppression, dormant relationship privacy, notification
   suppression, and 180-day logical expiry remain authoritative.
+- The list export contains both active and archived owned lists and only approved
+  list/item identifiers, title/name, status, exact integer quantity thousandths,
+  stable unit code, integer position, completion attribution/time, versions, and
+  timestamps. It excludes creation request IDs and internal locking or
+  authorization details.
 - The export never includes passwords or hashes, tokens, sessions, raw Auth
   metadata, another person's email or Auth data, incoming blocks, raw dormant
   relationship state, reopening/requester internals, suppressed/expired/
-  block-hidden notifications, server logs, security records, or unimplemented
-  lists, templates, and ledger data.
+  block-hidden notifications, server logs, security records, templates, shared
+  membership data, or ledger data.
 - Export is generated synchronously on demand and returned to the caller. The
   server retains no export file or export record. The mobile app validates and
   pretty-prints the versioned document, writes it to OS-managed temporary/cache
@@ -111,8 +117,9 @@ are the evidence of implementation status.
 - Deleting the Auth user is the atomic root operation. Database cascades remove
   the profile, incoming and outgoing blocks, relationships in either participant
   position, notifications where the user is recipient or actor, and notifications
-  attached to a deleted relationship. No application cleanup transaction is
-  committed separately before the Auth deletion.
+  attached to a deleted relationship, plus every owned list and item. No
+  application cleanup transaction is committed separately before the Auth
+  deletion.
 - Deleting a completed profile reserves only its canonical username for exactly
   30 days from deletion. The private reservation contains no email, Auth user ID,
   profile ID, display name, or copied user data. Active reservations block
@@ -136,17 +143,45 @@ are the evidence of implementation status.
 
 ### Active and shared lists
 
-- A user can create an active list.
-- The creator can invite accepted friends. A non-friend cannot be invited.
-- Members can add, edit, complete, and delete list items.
-- An item has a quantity and may have a unit.
-- An item can be assigned to more than one list member.
-- A list has a general note that supports `@mentions` of relevant users.
-- Payment Control can be enabled per active list. It is unavailable outside active
-  lists and absent from lists where it is not enabled.
+The first implemented list slice is intentionally owner-only. Each list has one
+fully onboarded owner and no membership, role, invitation, assignment, note,
+mention, Realtime, offline-cache, template, or Payment Control record yet.
 
-Detailed ownership roles, member removal, archival, and concurrent-edit behavior
-are not yet decided.
+- The owner can create, list, open, rename, archive, restore, and permanently
+  delete a list. Duplicate titles are allowed; titles are trimmed and contain
+  1-80 characters. Status is exactly `active` or `archived`.
+- Active lists are ordered by most recent update, then ID. Archived lists are
+  ordered by most recent archive time, then ID. Both use bounded keyset
+  pagination and show total/completed item counts.
+- Archived lists remain readable and explicitly read-only. Every server mutation,
+  including item changes and reorder, is rejected while archived. Restore is the
+  only transition out of that state. Deleting a list permanently removes its
+  current items after explicit confirmation.
+- The owner can add, edit, complete, reopen, reorder, and permanently delete
+  items. Item names are trimmed to 1-120 characters and duplicates are allowed.
+- Quantity defaults to `1`, must be positive, supports at most three decimal
+  places, and is at most `999999.999`. Authority is an integer number of
+  thousandths (`1` = `1000`, `1.5` = `1500`, `0.001` = `1`); Flutter never parses
+  through binary floating point and display removes unnecessary trailing zeros.
+- Unit is optional and stored only as null or the stable code `piece`, `kg`, `g`,
+  `l`, `ml`, `pack`, `box`, `bottle`, `can`, or `bag`. Display labels are localized.
+- Initial item order follows successful creation. Drag reorder is atomic,
+  deterministic, integer-based, and requires exactly the current unique item ID
+  set.
+- Completion stores database-owned `completed_at` and the authenticated owner as
+  `completed_by`; reopen clears both. A later deleted actor may leave the
+  completion time with a null actor, but actor deletion can never delete the item.
+- Positive monotonic versions prevent stale overwrite. List metadata changes
+  increment list version; item create/delete/reorder increment list version; item
+  edit/complete/reopen increment list and item versions. Real changes update the
+  corresponding timestamps once; completed retries/no-ops update neither.
+  Creation is retry-safe through a payload-bound client request UUID that never
+  grants authority. Stale conflicts refresh instead of silently overwriting.
+
+Future collaborative lists still require accepted decisions for membership roles,
+friend-only invitations, removal/leaving/ownership transfer, assignments, notes and
+mentions, invitation notifications, shared-resource blocking, Realtime, and
+offline synchronization. Templates and Payment Control remain separate phases.
 
 ### Templates
 
@@ -224,10 +259,10 @@ used in new UI or documentation.
   blocks suppress the entire relationship and profile projection instead.
 - Only the current row, version, creation and state-change times, most recent
   requester, and reopening controller are retained. Detailed audit history is not
-  introduced; accepted account hard-deletion cleanup remains a later slice.
+  introduced; implemented account hard deletion cascades this current row.
 - The relationship row remains the authoritative action state when persistent
   friend-request notifications are added. Realtime, push delivery, public
-  profiles, shared lists, and the final four-tab shell remain separate slices.
+  profiles, and shared lists remain separate slices from the implemented shell.
 - Only accepted friends can be invited to a shared active list.
 - A user's public templates can be viewed from that user's profile.
 - The community feed shows recent public templates from accepted friends.
@@ -294,12 +329,16 @@ The four primary destinations are:
 3. Community
 4. Profile
 
-The notification centre is opened from a bell affordance and is not a primary tab.
+The implemented signed-in shell preserves an independent navigation stack for each
+destination. Lists is functional, Templates is an honest localized placeholder,
+and the existing Community and Profile flows live in their respective tabs. The
+notification centre is opened above the shell from a bell affordance and is not a
+primary tab.
 Authentication uses the mobile callback
 `com.ferbatech.listandsplit://auth-callback`. The application resolves backend
 configuration, authentication, email verification, and profile onboarding before
-allowing access to an authenticated destination. The final signed-in route tree,
-restoration, notification links, and feature deep links remain open.
+allowing access to an authenticated destination. Notification links and later
+feature deep-link contracts remain open.
 
 ## Cross-cutting behavior
 
@@ -353,10 +392,8 @@ restoration, notification links, and feature deep links remain open.
 These decisions are intentionally unresolved; implementations must not silently
 choose them:
 
-- List ownership/administrator roles, member removal, leaving, archive, and delete
-  semantics.
-- Item quantity precision, validation, unit vocabulary, ordering, and duplicate
-  handling.
+- Collaborative list roles, invitation authority, member removal/leaving,
+  ownership transfer, and effects of membership changes on existing content.
 - Note mention parsing, eligibility, editing, and notification deduplication.
 - A support or administrator correction process for immutable usernames, including
   its authorization and audit requirements.

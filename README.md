@@ -2,16 +2,20 @@
 
 List & Split is an Android and iOS app for collaborative active lists,
 reusable templates, a mutual-friend community, and an optional expense ledger.
-The repository provides the runnable Flutter foundation and current Phase 1
-identity/community slices: verified email/password authentication, session
+The repository provides the runnable Flutter application and current identity,
+community, account-lifecycle, and first active-list slices: verified email/password
+authentication, session
 routing, password recovery, owner-only profile onboarding, secure exact-username
 discovery, directional block management, versioned friend requests, and mutual
 friendship management. Persistent in-app friend-request notifications include an
 unread badge, deterministic pagination, safe versioned actions, and block-aware
 suppression. Versioned account-data export and immediate permanent self-service
 account deletion are available to authenticated email-verified users from
-completed Profile or incomplete Onboarding. Lists, templates, other notification
-types, and the expense ledger remain planned work.
+completed Profile or incomplete Onboarding. The authenticated four-tab shell now
+provides functional owner-only Lists, a localized Templates placeholder, existing
+Community, and existing Profile; notifications remain available from the bell.
+Collaborative membership, real Templates, other notification types, Realtime/
+offline behavior, and the expense ledger remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
@@ -187,11 +191,21 @@ duplicate and crossed sends create none. Listing and badge results exclude
 expired, suppressed, or block-hidden rows, and block creation permanently
 suppresses existing pair notifications in the same transaction.
 
+Owner-only active lists and items use only reviewed authenticated RPCs. The tables
+have forced RLS, explicit direct-access rejection policies, and no client table
+grants. Titles and item names are trimmed/check-constrained while duplicates are
+allowed. Quantities are exact positive integer thousandths with stable nullable
+unit codes, positions are deterministic integers, archived lists are server-side
+read-only, and positive versions plus creation request UUIDs protect stale writes
+and retries. Account-root deletion cascades lists and items.
+
 The account lifecycle separates versioned account-data export from permanent
 deletion. Export uses a parameterless, allowlist-only RPC for any authenticated
 email-verified user, including before onboarding, followed by a validated UTF-8
 JSON file in app-scoped temporary cache and the native share sheet. The server
-retains no export file.
+retains no export file. Export schema version `2` adds both active and archived
+owned lists with their ordered items; creation request IDs and internal authority
+details remain excluded.
 
 Deletion is immediate and irreversible. Completed profiles confirm with their
 exact stored canonical username; incomplete profiles confirm with their exact
@@ -200,8 +214,9 @@ reauthentication, then invokes the authenticated `delete-account` Edge Function
 with only the exact confirmation. A database validation RPC proves that the
 matching `auth.sessions` row was created no more than ten minutes earlier before a
 server-only admin client hard-deletes the caller's Auth user. That Auth deletion
-atomically cascades through the current profile, blocks, relationships, and
-notifications. A completed username is retained alone in a private 30-day
+atomically cascades through the current profile, blocks, relationships,
+notifications, owned lists, and list items. A completed username is retained alone
+in a private 30-day
 reservation and expired reservations are physically removed daily at 03:17 UTC.
 No email, Auth/profile identifier, or copied former-user data enters the
 reservation. These product behaviors are not a guarantee of complete legal or
@@ -241,7 +256,8 @@ SQL into the Dashboard.
 ## Intentional deferrals
 
 The current slices do not implement unrestricted profile/directory search,
-avatars, lists, templates, notification types beyond friend requests,
+avatars, collaborative memberships, real templates, notification types beyond
+friend requests,
 notification archive/preferences or physical cleanup, reporting, Realtime,
 server-side ledger logic, SQLite caching/offline synchronization, push delivery,
 Firebase setup, administrator-initiated deletion, or a production backend.

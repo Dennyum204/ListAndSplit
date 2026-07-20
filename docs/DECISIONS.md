@@ -2,7 +2,7 @@
 
 ## Record semantics
 
-This log captures decisions agreed for List & Split as of 2026-07-19. **Accepted**
+This log captures decisions agreed for List & Split as of 2026-07-20. **Accepted**
 means the direction is agreed; it does not mean the behavior is implemented. Check
 code, tests, migrations, and pull requests for implementation status.
 
@@ -10,8 +10,8 @@ Open questions are listed separately and must not be resolved implicitly in code
 When a decision changes, update this log and the affected product, architecture,
 and data-model documents in the same pull request.
 
-The account-deletion resolutions requested as Decisions 30a, 31a, and 32a are
-recorded below as `P-030a`, `P-031a`, and `A-032a`.
+The active-list resolutions requested as Decisions 33a through 36a are recorded
+below as `P-033a`, `P-034a`, `A-035a`, and `A-036a`.
 
 ## Accepted decisions
 
@@ -49,6 +49,8 @@ recorded below as `P-030a`, `P-031a`, and `A-032a`.
 | P-028 | Permanent account deletion follows only after export is merged and manually verified. It is immediate hard deletion after exact canonical-username confirmation for completed profiles or exact email confirmation for incomplete profiles, current-password reauthentication, and a session no older than ten minutes. It cascades current aggregates, reserves a completed username for 30 days without email/user ID, restores nothing on re-registration, and invalidates other sessions on later validation. | The prerequisite has been satisfied. The authenticated server-only `delete-account` boundary and one additive schema migration cover every current aggregate. Hosted QA uses separately authorized disposable accounts and never Fernando or Susana. |
 | P-030a | Self-service deletion is immediate, permanent, and available to every signed-in email-verified user, including incomplete onboarding. Completed users confirm with the exact stored canonical username; incomplete users confirm with the exact stored Auth email. The current password is forwarded unchanged only to Supabase Auth for reauthentication, export is offered but optional, and a final irreversible acknowledgement is required. | No trimming/case folding, grace period, soft delete, restoration, password forwarding to application services, or target-user selection is permitted. Success clears local session-bound state. Lost responses and resume checks use authoritative Auth validation; offline failures preserve a valid local session. |
 | P-031a | Deleting a completed profile reserves only its canonical username for exactly 30 days; incomplete profiles create no reservation. Active reservations reject onboarding, expired reservations permit reuse, and a migration-managed daily 03:17 UTC database Cron job physically removes expired rows. | The private record contains only canonical username and expiry, with no email, Auth/profile ID, display name, or copied former-user data. Concurrent deletion/claim and repeated reservation attempts must preserve the hold. |
+| P-033a | The first active-list slice is owner-only: one fully onboarded profile owns each list, with no membership, role, invitation, assignment, note, mention, Realtime, offline-cache, template, or Payment Control schema. Owners can create, read, rename, archive, restore, and permanently delete lists. Titles are trimmed to 1-80 characters, duplicates are allowed, status is exactly `active` or `archived`, archived lists remain readable but reject every mutation, and deletion removes the current item aggregate. | This deliberately narrow phase does not settle future collaborative roles, shared-resource blocking, invitations, ownership transfer, or member lifecycle. Auth-root profile deletion cascades owned lists and items. |
+| P-034a | Owner-only list items support add, edit, deterministic drag reorder, complete, reopen, and permanent delete. Names are trimmed to 1-120 characters and duplicates are allowed. Quantity is a positive integer number of thousandths, defaults to `1000`, and is limited to `1` through `999999999`; Flutter accepts at most three decimal places without binary floating point and suppresses insignificant display zeros. Unit is null or one stable code: `piece`, `kg`, `g`, `l`, `ml`, `pack`, `box`, `bottle`, `can`, or `bag`. | Completion records database-owned time and the authenticated owner; reopening clears attribution. A future missing actor may leave completion time with a null actor. Initial order follows successful creation order; reorder is atomic and requires the exact current item-ID set. No detailed item event history exists yet. |
 
 ### Architecture and delivery
 
@@ -81,6 +83,8 @@ recorded below as `P-030a`, `P-031a`, and `A-032a`.
 | A-025 | Account export is one parameterless `public.export_own_account_data() returns jsonb` RPC. It derives `auth.uid()`, requires one confirmed Auth user and exactly one profile without requiring onboarding, builds every object from an explicit allowlist, and synchronously returns a stable read-only document without server persistence. | The `postgres`-owned definer-rights function has empty `search_path`, qualified objects, revoked default execution, and an exact `authenticated` grant. It adds no table grants and preserves existing caller-relative/block-aware projections. |
 | A-026 | Flutter validates schema version `1` behind an account repository, pretty-prints UTF-8 through an injectable temporary-file/share service, and presents one privacy-safe JSON file through the native Android/iOS share sheet. Export state is session-identity-scoped, prevents overlap, and never retains payload JSON globally. | Only compatible pinned path/share dependencies are added. Temporary cache is OS-managed rather than guaranteed securely erased; payloads never enter logs, analytics, errors, source control, or identifying filenames. |
 | A-032a | Auth Admin hard deletion of `auth.users` is the atomic root. Cascading foreign keys remove current profiles, either-direction blocks, either-participant relationships, recipient/actor notifications, and notifications whose relationship is removed. Before profile deletion, a hardened trigger creates the private 30-day username reservation. A narrow authenticated RPC derives identity from `auth.uid()` and `auth.jwt()` `session_id`, validates the exact matching `auth.sessions` row's actual creation time is at most ten minutes old, and returns only success before the authenticated Edge Function invokes hard deletion for that same caller. | The RPC accepts only confirmation and never mutates. JWT `iat`, token refresh time, and user `last_sign_in_at` cannot establish freshness. The POST-only Edge Function disables the legacy platform JWT check and uses a pinned `@supabase/server` `auth: 'user'` wrapper as the sole authentication boundary under the publishable/secret-key system. The wrapper verifies the user session, provides the caller-scoped and server-only admin clients, never accepts a target ID, and maps failures to privacy-safe outcomes. |
+| A-035a | `public.active_lists` and `public.active_list_items` form one RPC-only owner aggregate with UUID identities, positive `bigint` versions, server-owned timestamps, checked text/state/quantity/unit/order invariants, owner/list cascades, and only query-justified foreign-key and ordered-keyset indexes. Both tables have enabled and forced RLS, explicit restrictive `FOR ALL` rejection policies for `anon` and `authenticated`, and no direct privileges for `PUBLIC`, `anon`, `authenticated`, or `service_role`. Narrow authenticated PostgreSQL RPCs derive only `auth.uid()`, require a confirmed fully onboarded caller, verify ownership, return allowlisted projections, and reject archived mutations. | List metadata changes increment only list version. Item create/delete/reorder increment list version; item edit/complete/reopen increment both list and item versions. Real changes update their corresponding timestamps once; completed retries/no-ops update neither. Expected versions use SQLSTATE `40001` for stale conflict. Creation uses caller-generated request UUIDs only for payload-bound idempotency; conflicting reuse is rejected. List row locking precedes item row locking, item locks follow UUID order, and reorder accepts exactly the current unique item set and writes deterministic positive integer positions in one short transaction. |
+| A-036a | The authenticated application uses `StatefulShellRoute.indexedStack` with four state-preserving branches: Lists, Templates, Community, and Profile. Notifications remain a root overlay opened from the existing bell; configuration, Auth, verification, recovery, onboarding, and account-error gates remain outside the shell. Lists use feature-first repository/Riverpod boundaries scoped to the verified session and are invalidated on sign-out/deletion/account change. Templates is an honest localized placeholder. Account export schema version `2` adds one deterministic `active_lists` array containing both statuses and ordered allowlisted items, while Flutter deliberately retains strict version-1 fixture parsing. | Android back and independent tab stacks are controlled by the centralized router. Community and Profile retain existing functionality. The export includes exact integer `quantity_thousandths` and excludes creation request IDs and authorization internals. The existing Auth-root deletion cascade extends through the new owner foreign key without changing the deletion migration or Edge Function. |
 
 ## Deferred but accepted direction
 
@@ -100,7 +104,6 @@ These items are part of the agreed direction but intentionally deferred:
 | ID | Question |
 | --- | --- |
 | O-P01 | What are the active-list owner/admin/member roles and rules for inviting, removing, leaving, archiving, deleting, and transferring ownership? |
-| O-P02 | What quantity precision, unit vocabulary, item ordering, duplicate, completion-audit, and concurrent-edit rules apply? |
 | O-P03 | How are `@mentions` parsed, validated, edited, deduplicated, and rendered? |
 | O-P04 | What support or administrator correction path, if any, exists for an immutable username, and what audit/authorization rules govern it? |
 | O-P05 | How do blocking or friendship termination affect existing shared resources, including list membership and invitations? |
@@ -122,13 +125,13 @@ These items are part of the agreed direction but intentionally deferred:
 | ID | Question |
 | --- | --- |
 | O-A01 | What exact feature folder depth, domain/use-case boundaries, and Riverpod code-generation conventions should be adopted as features arrive? |
-| O-A02 | What final authenticated route topology, state-restoration behavior, and notification-link contract are required beyond the accepted Auth callback and gating order? |
+| O-A02 | What notification-link and later non-Auth feature deep-link contracts extend the accepted authenticated shell? |
 | O-A03 | What development/staging/production flavor and environment-separation model should build on the accepted compile-time configuration names? |
 | O-A04 | Which atomic operations belong in PostgreSQL functions versus Edge Functions? |
-| O-A05 | What versioning/concurrency fields, idempotency keys, and transaction boundaries support list edits and template copies? |
+| O-A05 | What versioning/concurrency, copy idempotency, and transaction boundaries support templates and later shared/offline list behavior beyond the accepted owner-only aggregate? |
 | O-A06 | What realtime subscription scope, event ordering, reconnect/replay, and repository reconciliation rules apply? |
 | O-A07 | Which SQLite package, cache schema, mutation queue, tombstone, retry, and conflict algorithm should be used? |
-| O-A08 | What physical identifiers, audit timestamps, archival/soft-delete conventions, indexes, and enum/check-constraint strategy should later aggregates use beyond the accepted profile and relationship records? |
+| O-A08 | What physical identifiers, audit timestamps, archival/soft-delete conventions, indexes, and enum/check-constraint strategy should later aggregates use beyond the accepted profile, relationship, notification, and owner-list records? |
 | O-A10 | What is the mention-storage model and which layer owns parsing? |
 | O-A11 | What server algorithm and stable output contract calculate balances and debts, and are derived results computed on demand or projected? |
 | O-A12 | What payload/localization contracts for future notification types and what push-token and delivery-attempt schema are needed? |
@@ -141,13 +144,19 @@ These items are part of the agreed direction but intentionally deferred:
 | ID | Resolution |
 | --- | --- |
 | O-A09 | Closed on 2026-07-18 by P-023, P-024, A-021, and A-022: one RPC-only normalized current relationship row, five check-constrained states, version-checked deterministic transitions, minimal caller-relative projections, and no detailed audit log. |
+| O-P02 | Closed on 2026-07-20 by P-034a and A-035a for the owner-only active-list item model: exact thousandths, stable units, duplicate names, integer order, completion attribution, versions, locking, and conflict handling. Future assignment/member audit and offline synchronization remain governed by their separate open decisions. |
 
 ## Partially resolved decision references
 
 | ID | Resolution |
 | --- | --- |
 | O-P12 | Partially resolved on 2026-07-19 by P-025 and P-026 for friend-request persistence, read state, badge semantics, blocking, and 180-day logical expiry. The narrowed question above remains open. |
-| O-P15 | Partially resolved on 2026-07-19 by P-027, P-028, P-030a, P-031a, A-025, A-026, and A-032a for product export and implemented self-service deletion of current aggregates. Shared resources, administrator deletion, moderation/legal retention, Storage cleanup, and compliance obligations remain open. Additional locales moved to O-P17. |
+| O-P01 | Partially resolved on 2026-07-20 by P-033a for owner create/read/rename/archive/restore/delete. Membership, roles, invitations, removal, leaving, and ownership transfer remain open. |
+| O-P15 | Partially resolved on 2026-07-20 by P-027, P-028, P-030a, P-031a, P-033a, A-025, A-026, A-032a, and A-036a for schema-versioned product export and implemented self-service deletion of current aggregates including owned lists/items. Shared resources, administrator deletion, moderation/legal retention, Storage cleanup, and compliance obligations remain open. Additional locales moved to O-P17. |
+| O-A02 | Partially resolved on 2026-07-20 by A-036a for the four-tab state-preserving authenticated shell and root notification overlay. Notification and later feature deep-link contracts remain open. |
+| O-A04 | Partially resolved on 2026-07-20 by A-035a: active-list aggregate operations belong in exact atomic PostgreSQL RPCs. Placement for other future operations remains open. |
+| O-A05 | Partially resolved on 2026-07-20 by A-035a for owner-list and item versions, idempotent creation, short lock-ordered transactions, and stale-write handling. Template copies and shared/offline behavior remain open. |
+| O-A08 | Partially resolved on 2026-07-20 by A-035a for owner-list identifiers, timestamps, archive state, constraints, and indexes. Later aggregate conventions remain open. |
 | O-A12 | Partially resolved on 2026-07-19 by A-023 and A-024 for the friend-request table and RPC boundary. Future types, push payloads/tokens, and delivery attempts remain open. |
 
 ## Decision discipline
