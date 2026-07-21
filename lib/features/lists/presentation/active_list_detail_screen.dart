@@ -8,9 +8,11 @@ import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_controller.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
+import 'package:list_and_split/features/templates/domain/private_template.dart';
+import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
-enum _ListAction { rename, archive, restore, delete, leave }
+enum _ListAction { saveTemplate, rename, archive, restore, delete, leave }
 
 class ActiveListDetailScreen extends ConsumerWidget {
   const ActiveListDetailScreen({required this.listId, super.key});
@@ -62,6 +64,10 @@ class ActiveListDetailScreen extends ConsumerWidget {
               enabled: !state.isMutating,
               onSelected: (action) => _handleAction(context, ref, action),
               itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: _ListAction.saveTemplate,
+                  child: Text(localizations.templatesSaveListButton),
+                ),
                 if (!archived)
                   PopupMenuItem(
                     value: _ListAction.rename,
@@ -89,6 +95,10 @@ class ActiveListDetailScreen extends ConsumerWidget {
               onSelected: (action) => _handleAction(context, ref, action),
               itemBuilder: (_) => [
                 PopupMenuItem(
+                  value: _ListAction.saveTemplate,
+                  child: Text(localizations.templatesSaveListButton),
+                ),
+                PopupMenuItem(
                   value: _ListAction.leave,
                   child: Text(localizations.listLeaveButton),
                 ),
@@ -99,8 +109,13 @@ class ActiveListDetailScreen extends ConsumerWidget {
       floatingActionButton: detail != null && !archived
           ? FloatingActionButton.extended(
               key: const Key('addItemButton'),
-              onPressed:
-                  state.isMutating ? null : () => _showItemDialog(context, ref),
+              onPressed: state.isMutating ||
+                      detail.items.length >= activeListItemCapacity
+                  ? null
+                  : () => _showItemDialog(context, ref),
+              tooltip: detail.items.length >= activeListItemCapacity
+                  ? localizations.listItemCapacityReachedMessage
+                  : localizations.itemAddButton,
               icon: const Icon(Icons.add_rounded),
               label: Text(localizations.itemAddButton),
             )
@@ -140,6 +155,8 @@ class ActiveListDetailScreen extends ConsumerWidget {
     final controller =
         ref.read(activeListDetailControllerProvider(listId).notifier);
     switch (action) {
+      case _ListAction.saveTemplate:
+        await _showSaveAsTemplate(context, ref);
       case _ListAction.rename:
         await _showRenameDialog(context, ref);
       case _ListAction.archive:
@@ -151,6 +168,36 @@ class ActiveListDetailScreen extends ConsumerWidget {
       case _ListAction.leave:
         await _confirmLeaveList(context, ref);
     }
+  }
+
+  Future<void> _showSaveAsTemplate(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final detail =
+        ref.read(activeListDetailControllerProvider(listId)).detail.valueOrNull;
+    if (detail == null) return;
+    await ref.read(privateTemplatesControllerProvider.notifier).load();
+    if (!context.mounted) return;
+    final categories =
+        ref.read(privateTemplatesControllerProvider).categories.valueOrNull ??
+            const <TemplateCategory>[];
+    final input = await showDialog<_SaveTemplateInput>(
+      context: context,
+      builder: (_) => _SaveTemplateDialog(
+        detail: detail,
+        categories: categories,
+      ),
+    );
+    if (input == null || !context.mounted) return;
+    await ref
+        .read(privateTemplatesControllerProvider.notifier)
+        .saveListAsTemplate(
+          detail,
+          input.selectedItemIds,
+          input.name,
+          categoryId: input.categoryId,
+        );
   }
 
   Future<void> _confirmLeaveList(BuildContext context, WidgetRef ref) async {
@@ -417,6 +464,8 @@ class _DetailBody extends ConsumerWidget {
         localizations.listRefreshFailedMessage,
       ActiveListDetailMessage.invalidInput =>
         localizations.listInvalidInputMessage,
+      ActiveListDetailMessage.itemCapacity =>
+        localizations.listItemCapacityReachedMessage,
       ActiveListDetailMessage.archivedReadOnly =>
         localizations.listReadOnlyMessage,
       ActiveListDetailMessage.unavailable =>
@@ -746,6 +795,171 @@ class _ItemsEmpty extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SaveTemplateInput {
+  const _SaveTemplateInput({
+    required this.name,
+    required this.categoryId,
+    required this.selectedItemIds,
+  });
+
+  final String name;
+  final String? categoryId;
+  final Set<String> selectedItemIds;
+}
+
+class _SaveTemplateDialog extends StatefulWidget {
+  const _SaveTemplateDialog({
+    required this.detail,
+    required this.categories,
+  });
+
+  final ActiveListDetail detail;
+  final List<TemplateCategory> categories;
+
+  @override
+  State<_SaveTemplateDialog> createState() => _SaveTemplateDialogState();
+}
+
+class _SaveTemplateDialogState extends State<_SaveTemplateDialog> {
+  late final TextEditingController _nameController;
+  late Set<String> _selectedIds;
+  String? _categoryId;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.detail.summary.title);
+    _selectedIds = widget.detail.items.map((item) => item.id).toSet();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final valid = _nameController.text.trim().isNotEmpty &&
+        _selectedIds.isNotEmpty &&
+        _selectedIds.length <= privateTemplateItemCapacity;
+    return AlertDialog(
+      title: Text(localizations.templatesSaveListTitle),
+      content: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(localizations.templatesSaveListDescription),
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('saveListTemplateNameField'),
+              controller: _nameController,
+              decoration: InputDecoration(
+                labelText: localizations.templatesNameLabel,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String?>(
+              value: _categoryId,
+              decoration: InputDecoration(
+                labelText: localizations.templatesCategoryLabel,
+              ),
+              items: [
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text(localizations.templatesNoCategoryLabel),
+                ),
+                for (final category in widget.categories)
+                  DropdownMenuItem<String?>(
+                    value: category.id,
+                    child: Text(category.name),
+                  ),
+              ],
+              onChanged: (value) => setState(() => _categoryId = value),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    localizations.templatesSelectionCount(
+                      _selectedIds.length,
+                      widget.detail.items.length,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() {
+                    _selectedIds =
+                        widget.detail.items.map((item) => item.id).toSet();
+                  }),
+                  child: Text(localizations.templatesSelectAllButton),
+                ),
+                TextButton(
+                  onPressed: () => setState(_selectedIds.clear),
+                  child: Text(localizations.templatesClearSelectionButton),
+                ),
+              ],
+            ),
+            if (_selectedIds.length > privateTemplateItemCapacity)
+              Text(
+                localizations.templatesCapacityExceeded,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            const Divider(),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: widget.detail.items.length,
+                itemBuilder: (context, index) {
+                  final item = widget.detail.items[index];
+                  return CheckboxListTile(
+                    key: Key('save-template-item-${item.id}'),
+                    value: _selectedIds.contains(item.id),
+                    title: Text(item.name),
+                    subtitle: Text(item.quantity.format()),
+                    secondary: item.isCompleted
+                        ? const Icon(Icons.check_circle_outline)
+                        : const Icon(Icons.radio_button_unchecked),
+                    onChanged: (_) => setState(() {
+                      _selectedIds.contains(item.id)
+                          ? _selectedIds.remove(item.id)
+                          : _selectedIds.add(item.id);
+                    }),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(localizations.cancelButton),
+        ),
+        FilledButton(
+          key: const Key('confirmSaveListTemplateButton'),
+          onPressed: valid
+              ? () => Navigator.pop(
+                    context,
+                    _SaveTemplateInput(
+                      name: _nameController.text.trim(),
+                      categoryId: _categoryId,
+                      selectedItemIds: Set.unmodifiable(_selectedIds),
+                    ),
+                  )
+              : null,
+          child: Text(localizations.templatesConfirmSaveButton),
+        ),
+      ],
     );
   }
 }

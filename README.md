@@ -12,13 +12,14 @@ unread badge, deterministic pagination, safe versioned actions, and block-aware
 suppression. Versioned account-data export and immediate permanent self-service
 account deletion are available to authenticated email-verified users from
 completed Profile or incomplete Onboarding. The authenticated four-tab shell now
-provides functional owned and shared Lists, a localized Templates placeholder, existing
-Community, and existing Profile; notifications remain available from the bell.
+provides functional owned/shared Lists, private Templates with personal categories,
+existing Community, and existing Profile; notifications remain available from the bell.
 Friend-only list invitations, accepted-member item collaboration, member management,
 and persistent list-access notifications are implemented. Private account-scoped
 Supabase Broadcast now reconciles connected devices through the existing RPC
-repositories without carrying application data. Real Templates, offline behavior,
-push delivery, and the expense ledger remain planned work.
+repositories without carrying application data. Private templates support independent
+list snapshots and atomic selected-item list creation/import. Public/shared templates,
+offline behavior, push delivery, and the expense ledger remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
@@ -262,7 +263,7 @@ SQL into the Dashboard.
 ## Intentional deferrals
 
 The current slices do not implement unrestricted profile/directory search,
-avatars, real templates, notification archive/preferences or
+avatars, public/shared/sent templates, notification archive/preferences or
 physical cleanup, reporting, server-side ledger logic, SQLite caching/offline
 synchronization, push delivery,
 Firebase setup, administrator-initiated deletion, or a production backend.

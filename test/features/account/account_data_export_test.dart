@@ -98,6 +98,24 @@ void main() {
       expect(document.toJson(), contains('shared_list_access'));
     });
 
+    test('maps schema-v4 private categories, templates, quantities and order',
+        () {
+      final document = AccountDataExportDocument.fromJson(
+        validAccountDataExportJson(schemaVersion: 4),
+      );
+
+      expect(document.schemaVersion, 4);
+      expect(document.templateCategories.single.name, 'Weekly shops');
+      final template = document.templates.single;
+      expect(template.name, 'Weekly groceries');
+      expect(template.categoryId, document.templateCategories.single.id);
+      expect(template.items.single.name, 'Coffee');
+      expect(template.items.single.quantityThousandths, 1500);
+      expect(template.items.single.position, 1);
+      expect(document.toJson(), contains('template_categories'));
+      expect(document.toJson(), contains('templates'));
+    });
+
     test('schema versions 1 and 2 never fabricate shared-list access', () {
       for (final version in [1, 2]) {
         final document = AccountDataExportDocument.fromJson(
@@ -121,7 +139,7 @@ void main() {
     });
 
     test('rejects unsupported schema versions', () {
-      final json = validAccountDataExportJson()..['schema_version'] = 4;
+      final json = validAccountDataExportJson()..['schema_version'] = 5;
 
       expect(
         () => AccountDataExportDocument.fromJson(json),

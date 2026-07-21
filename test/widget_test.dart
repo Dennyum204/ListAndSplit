@@ -22,8 +22,10 @@ import 'package:list_and_split/features/lists/presentation/active_list_providers
 import 'package:list_and_split/features/notifications/domain/in_app_notification.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 
 import 'helpers/fakes.dart';
+import 'helpers/fake_private_template_repository.dart';
 
 void main() {
   testWidgets('shows an actionable screen when Supabase config is missing',
@@ -474,7 +476,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('templatesDestination')));
     await tester.pumpAndSettle();
-    expect(find.text('Reusable templates are planned'), findsOneWidget);
+    expect(find.text('No private templates yet'), findsOneWidget);
     expect(find.byKey(const Key('notificationBellButton')), findsWidgets);
 
     await tester.tap(find.byKey(const Key('communityDestination')));
@@ -1271,6 +1273,9 @@ Future<void> _pumpConfiguredApp(
         ),
         activeListRepositoryProvider.overrideWithValue(
           lists ?? FakeActiveListRepository(),
+        ),
+        privateTemplateRepositoryProvider.overrideWithValue(
+          FakePrivateTemplateRepository(),
         ),
       ],
       child: const ListAndSplitApp(),

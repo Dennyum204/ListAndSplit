@@ -14,11 +14,15 @@ class AccountDataExportDocument {
     required List<AccountVisibleNotification> visibleNotifications,
     required List<AccountActiveListExport> activeLists,
     List<AccountSharedListAccessExport> sharedListAccess = const [],
+    List<AccountTemplateCategoryExport> templateCategories = const [],
+    List<AccountPrivateTemplateExport> templates = const [],
   })  : outgoingBlocks = List.unmodifiable(outgoingBlocks),
         activeRelationships = List.unmodifiable(activeRelationships),
         visibleNotifications = List.unmodifiable(visibleNotifications),
         activeLists = List.unmodifiable(activeLists),
-        sharedListAccess = List.unmodifiable(sharedListAccess) {
+        sharedListAccess = List.unmodifiable(sharedListAccess),
+        templateCategories = List.unmodifiable(templateCategories),
+        templates = List.unmodifiable(templates) {
     if (product != supportedProduct ||
         !supportedSchemaVersions.contains(schemaVersion) ||
         authIdentity.id != profile.id) {
@@ -38,6 +42,7 @@ class AccountDataExportDocument {
         1 => _schemaOneRootKeys,
         2 => _schemaTwoRootKeys,
         3 => _schemaThreeRootKeys,
+        4 => _schemaFourRootKeys,
         _ => const <String>{},
       },
     );
@@ -71,12 +76,22 @@ class AccountDataExportDocument {
           : _requiredObjects(json, 'shared_list_access')
               .map(AccountSharedListAccessExport.fromJson)
               .toList(growable: false),
+      templateCategories: schemaVersion < 4
+          ? const []
+          : _requiredObjects(json, 'template_categories')
+              .map(AccountTemplateCategoryExport.fromJson)
+              .toList(growable: false),
+      templates: schemaVersion < 4
+          ? const []
+          : _requiredObjects(json, 'templates')
+              .map(AccountPrivateTemplateExport.fromJson)
+              .toList(growable: false),
     );
   }
 
   static const supportedProduct = 'list_and_split';
-  static const supportedSchemaVersion = 3;
-  static const supportedSchemaVersions = {1, 2, supportedSchemaVersion};
+  static const supportedSchemaVersion = 4;
+  static const supportedSchemaVersions = {1, 2, 3, supportedSchemaVersion};
   static const _schemaOneRootKeys = {
     'product',
     'schema_version',
@@ -95,6 +110,11 @@ class AccountDataExportDocument {
     ..._schemaTwoRootKeys,
     'shared_list_access',
   };
+  static const _schemaFourRootKeys = {
+    ..._schemaThreeRootKeys,
+    'template_categories',
+    'templates',
+  };
 
   final String product;
   final int schemaVersion;
@@ -106,6 +126,8 @@ class AccountDataExportDocument {
   final List<AccountVisibleNotification> visibleNotifications;
   final List<AccountActiveListExport> activeLists;
   final List<AccountSharedListAccessExport> sharedListAccess;
+  final List<AccountTemplateCategoryExport> templateCategories;
+  final List<AccountPrivateTemplateExport> templates;
 
   Map<String, dynamic> toJson() => {
         'product': product,
@@ -130,6 +152,178 @@ class AccountDataExportDocument {
           'shared_list_access': sharedListAccess
               .map((access) => access.toJson())
               .toList(growable: false),
+        if (schemaVersion >= 4)
+          'template_categories': templateCategories
+              .map((category) => category.toJson())
+              .toList(growable: false),
+        if (schemaVersion >= 4)
+          'templates': templates
+              .map((template) => template.toJson())
+              .toList(growable: false),
+      };
+}
+
+class AccountTemplateCategoryExport {
+  const AccountTemplateCategoryExport({
+    required this.id,
+    required this.name,
+    required this.version,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory AccountTemplateCategoryExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, _keys);
+    final name = _requiredString(json, 'name');
+    if (name != name.trim().replaceAll(RegExp(r'\s+'), ' ')) {
+      throw const AccountDataExportFailure();
+    }
+    return AccountTemplateCategoryExport(
+      id: _requiredUuid(json, 'category_id'),
+      name: name,
+      version: _requiredPositiveInt(json, 'version'),
+      createdAt: _requiredUtcDateTime(json, 'created_at'),
+      updatedAt: _requiredUtcDateTime(json, 'updated_at'),
+    );
+  }
+
+  static const _keys = {
+    'category_id',
+    'name',
+    'version',
+    'created_at',
+    'updated_at',
+  };
+
+  final String id;
+  final String name;
+  final int version;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  Map<String, dynamic> toJson() => {
+        'category_id': id,
+        'name': name,
+        'version': version,
+        'created_at': _encodeDateTime(createdAt),
+        'updated_at': _encodeDateTime(updatedAt),
+      };
+}
+
+class AccountPrivateTemplateExport {
+  AccountPrivateTemplateExport({
+    required this.id,
+    required this.categoryId,
+    required this.name,
+    required this.version,
+    required this.createdAt,
+    required this.updatedAt,
+    required List<AccountPrivateTemplateItemExport> items,
+  }) : items = List.unmodifiable(items);
+
+  factory AccountPrivateTemplateExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, _keys);
+    final name = _requiredString(json, 'name');
+    if (name != name.trim()) throw const AccountDataExportFailure();
+    return AccountPrivateTemplateExport(
+      id: _requiredUuid(json, 'template_id'),
+      categoryId: json['category_id'] == null
+          ? null
+          : _requiredUuid(json, 'category_id'),
+      name: name,
+      version: _requiredPositiveInt(json, 'version'),
+      createdAt: _requiredUtcDateTime(json, 'created_at'),
+      updatedAt: _requiredUtcDateTime(json, 'updated_at'),
+      items: _requiredObjects(json, 'items')
+          .map(AccountPrivateTemplateItemExport.fromJson)
+          .toList(growable: false),
+    );
+  }
+
+  static const _keys = {
+    'template_id',
+    'category_id',
+    'name',
+    'version',
+    'created_at',
+    'updated_at',
+    'items',
+  };
+
+  final String id;
+  final String? categoryId;
+  final String name;
+  final int version;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final List<AccountPrivateTemplateItemExport> items;
+
+  Map<String, dynamic> toJson() => {
+        'template_id': id,
+        'category_id': categoryId,
+        'name': name,
+        'version': version,
+        'created_at': _encodeDateTime(createdAt),
+        'updated_at': _encodeDateTime(updatedAt),
+        'items': items.map((item) => item.toJson()).toList(growable: false),
+      };
+}
+
+class AccountPrivateTemplateItemExport {
+  const AccountPrivateTemplateItemExport({
+    required this.id,
+    required this.name,
+    required this.quantityThousandths,
+    required this.position,
+    required this.version,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory AccountPrivateTemplateItemExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, _keys);
+    final name = _requiredString(json, 'name');
+    final quantity = _requiredPositiveInt(json, 'quantity_thousandths');
+    if (name != name.trim() || name.length > 120 || quantity > 999999999) {
+      throw const AccountDataExportFailure();
+    }
+    return AccountPrivateTemplateItemExport(
+      id: _requiredUuid(json, 'item_id'),
+      name: name,
+      quantityThousandths: quantity,
+      position: _requiredPositiveInt(json, 'position'),
+      version: _requiredPositiveInt(json, 'version'),
+      createdAt: _requiredUtcDateTime(json, 'created_at'),
+      updatedAt: _requiredUtcDateTime(json, 'updated_at'),
+    );
+  }
+
+  static const _keys = {
+    'item_id',
+    'name',
+    'quantity_thousandths',
+    'position',
+    'version',
+    'created_at',
+    'updated_at',
+  };
+
+  final String id;
+  final String name;
+  final int quantityThousandths;
+  final int position;
+  final int version;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  Map<String, dynamic> toJson() => {
+        'item_id': id,
+        'name': name,
+        'quantity_thousandths': quantityThousandths,
+        'position': position,
+        'version': version,
+        'created_at': _encodeDateTime(createdAt),
+        'updated_at': _encodeDateTime(updatedAt),
       };
 }
 

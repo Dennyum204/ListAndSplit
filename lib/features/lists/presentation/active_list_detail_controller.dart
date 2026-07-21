@@ -22,6 +22,7 @@ enum ActiveListDetailMessage {
   recoveryFailed,
   refreshFailed,
   invalidInput,
+  itemCapacity,
   archivedReadOnly,
   unavailable,
   operationFailed,
@@ -233,6 +234,10 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
     final detail = _startMutable();
     final normalized = name.trim();
     if (detail == null) return ActiveListMutationOutcome.failed;
+    if (detail.items.length >= activeListItemCapacity) {
+      _finish(ActiveListDetailMessage.itemCapacity);
+      return ActiveListMutationOutcome.invalid;
+    }
     if (normalized.isEmpty || normalized.length > 120) {
       _finish(ActiveListDetailMessage.invalidInput);
       return ActiveListMutationOutcome.invalid;
@@ -434,9 +439,13 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
         );
       case ActiveListFailureCode.invalid:
       case ActiveListFailureCode.retryConflict:
-      case ActiveListFailureCode.capacity:
         return _finishWithOutcome(
           ActiveListDetailMessage.invalidInput,
+          ActiveListMutationOutcome.invalid,
+        );
+      case ActiveListFailureCode.capacity:
+        return _finishWithOutcome(
+          ActiveListDetailMessage.itemCapacity,
           ActiveListMutationOutcome.invalid,
         );
       case ActiveListFailureCode.transport:
