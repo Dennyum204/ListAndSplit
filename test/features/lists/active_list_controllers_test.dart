@@ -37,6 +37,25 @@ void main() {
     expect(repository.listCalls, 2);
   });
 
+  test('Realtime overview reconciliation preserves cached state on failure',
+      () async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary(title: 'Cached')];
+    final controller = ActiveListsController(
+      repository,
+      hasAuthenticatedUser: true,
+    );
+    addTearDown(controller.dispose);
+    await controller.loadAll();
+
+    repository.failure =
+        const ActiveListFailure(ActiveListFailureCode.transport);
+    await controller.reconcile();
+
+    expect(controller.state.activeLists.requireValue.single.title, 'Cached');
+    expect(controller.state.activeLists.hasError, isFalse);
+  });
+
   test('creation validates and blocks rapid duplicate submissions', () async {
     final repository = FakeActiveListRepository()
       ..createCompleter = Completer<ActiveListSummary>();
@@ -437,6 +456,31 @@ void main() {
     expect(await newerResult, ActiveListMutationOutcome.succeeded);
     await _flushAsync();
     expect(controller.state.isMutating, isFalse);
+  });
+
+  test('disposing detail releases reconciliation waiting on a mutation',
+      () async {
+    final repository = _VersionedActiveListRepository(
+      summary: _summary(),
+      items: const [],
+    );
+    final controller = ActiveListDetailController(
+      repository,
+      'list-1',
+      invalidateLists: () {},
+    );
+    await controller.load();
+    final delayedMutation = Completer<ActiveListSummary>();
+    repository.nextRename = delayedMutation;
+
+    final mutation = controller.rename('Delayed');
+    await Future<void>.delayed(Duration.zero);
+    final reconciliation = controller.reconcile();
+    controller.dispose();
+
+    await reconciliation.timeout(const Duration(milliseconds: 100));
+    delayedMutation.complete(_summary(title: 'Delayed', version: 2));
+    await mutation;
   });
 }
 

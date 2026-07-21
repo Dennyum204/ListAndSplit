@@ -80,6 +80,30 @@ void main() {
     expect(unreadRefreshes, 2);
   });
 
+  test('Realtime reconciliation keeps cached centre and badge on failure',
+      () async {
+    notifications.notifications = [notification(id: 'cached')];
+    await controller.load();
+    notifications.listFailure = const NotificationFailure();
+
+    await controller.reconcile();
+
+    expect(controller.state.notifications.requireValue.single.id, 'cached');
+    expect(controller.state.notifications.hasError, isFalse);
+
+    final badge = NotificationUnreadCountController(notifications);
+    addTearDown(badge.dispose);
+    notifications.listFailure = null;
+    notifications.unreadCount = 3;
+    await badge.load();
+    notifications.unreadFailure = const NotificationFailure();
+
+    await badge.reconcile();
+
+    expect(badge.state.requireValue, 3);
+    expect(badge.state.hasError, isFalse);
+  });
+
   test('pagination uses the last cursor and suppresses duplicate rows',
       () async {
     final firstPage = List.generate(
