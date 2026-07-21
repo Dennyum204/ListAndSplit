@@ -145,7 +145,7 @@ are the evidence of implementation status.
 ### Active and shared lists
 
 Each list has one fully onboarded owner and may have retained, versioned non-owner
-access rows. Ownership transfer, assignment, note, mention, Realtime, offline cache,
+access rows. Ownership transfer, assignment, note, mention, offline cache,
 template, and Payment Control records are not implemented.
 
 - The owner can create, list, open, rename, archive, restore, and permanently
@@ -201,7 +201,16 @@ template, and Payment Control records are not implemented.
   beyond normal notification expiry; resolved notifications use normal retention.
 - Accepted participants see only profile ID, username, and display name for the owner
   and accepted members. Pending recipients are visible only to the owner and that
-  recipient. Realtime implementation remains a separate slice.
+  recipient.
+- Connected authenticated devices subscribe to one private account-scoped
+  Broadcast channel after onboarding. The fixed `invalidate` event carries only
+  application payload `{"v":1}`; it is best-effort notice that authoritative
+  visible state may have changed, never content or authorization evidence.
+  Valid events, successful subscription joins, and app resume reconcile mounted
+  list, detail, member, notification, badge, and relevant community projections
+  through existing repositories. Remote rename updates mounted list titles; remote
+  archive/restore moves the list between projections, and a remotely archived open
+  detail returns to Lists once. Manual refresh remains available.
 
 ### Templates
 
@@ -328,8 +337,8 @@ the presentation of simplified debts remain open decisions.
 - Notifications expire logically exactly 180 days after creation and are then
   omitted from listing and badge counts. Physical cleanup remains a documented
   pre-production follow-up and no scheduled deletion is introduced here.
-- Active-list invitations and templates sent by friends remain accepted future
-  actionable types requiring Accept or Decline.
+- Templates sent by friends remain an accepted future actionable type requiring
+  Accept or Decline. Active-list invitation actions are implemented.
 - Users receive informational notifications for new item assignments and note
   mentions.
 - User-facing archive, delete, mark-unread, preference, and notification-history
@@ -378,6 +387,9 @@ feature deep-link contracts remain open.
 ### Reliability and offline direction
 
 - Repositories are the app's data source of truth.
+- Private Broadcast is receive-only and best-effort. Reconnection and app resume
+  always reconcile through authoritative RPCs; event delivery is not a durable
+  history or a guarantee.
 - Local SQLite caching is planned later to make active-list usage tolerant of
   intermittent connectivity.
 - Offline edits, synchronization ordering, and conflict resolution must be decided
@@ -403,20 +415,19 @@ feature deep-link contracts remain open.
 - No production Supabase or Firebase project without separate explicit
   authorization.
 - No promise of fully offline operation until cache and conflict rules are defined.
+- No Presence, Broadcast Replay, Postgres Changes subscription, client-originated
+  Broadcast, or push delivery is part of the implemented Realtime contract.
 
 ## Open product decisions
 
 These decisions are intentionally unresolved; implementations must not silently
 choose them:
 
-- Collaborative list roles, invitation authority, member removal/leaving,
-  ownership transfer, and effects of membership changes on existing content.
+- Ownership transfer beyond the accepted one-owner/member model.
 - Note mention parsing, eligibility, editing, and notification deduplication.
 - A support or administrator correction process for immutable usernames, including
   its authorization and audit requirements.
 - Avatar storage, upload validation, privacy, replacement, and deletion lifecycle.
-- The effects of blocking or ending a friendship on existing shared resources,
-  including active-list membership and invitations.
 - Template/category ordering, copy visibility defaults, version/provenance display,
   and feed ranking/retention.
 - Invitation and sent-template expiry, revocation, and idempotent re-acceptance.

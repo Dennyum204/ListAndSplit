@@ -732,7 +732,7 @@ void main() {
     expect(secondManagement.state.relationships.valueOrNull, isEmpty);
   });
 
-  test('search invalidation reconstructs and reloads friendship management',
+  test('search invalidation refreshes friendship management in place',
       () async {
     final container = ProviderContainer(
       overrides: [
@@ -757,7 +757,7 @@ void main() {
 
     final second =
         container.read(friendshipManagementControllerProvider.notifier);
-    expect(second, isNot(same(first)));
+    expect(second, same(first));
     expect(friendshipRepository.friendshipListCalls, 2);
   });
 

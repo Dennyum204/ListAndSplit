@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
@@ -559,6 +560,112 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('mounted remote detail title reconciles without route recreation',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary(title: 'Original title', isOwner: false)];
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ActiveListDetailScreen)),
+    );
+
+    await repository.renameList(
+      'list-1',
+      'Remote title',
+      expectedVersion: 3,
+    );
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pump();
+
+    expect(find.text('Remote title'), findsOneWidget);
+    expect(find.text('Original title'), findsNothing);
+  });
+
+  testWidgets(
+      'remote archive exits detail once and duplicate invalidations stay silent',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary(isOwner: false)];
+    final router = GoRouter(
+      initialLocation: '/lists/list-1',
+      routes: [
+        GoRoute(
+          path: '/lists',
+          builder: (_, __) => const Scaffold(body: Text('Lists landing')),
+          routes: [
+            GoRoute(
+              path: ':listId',
+              builder: (_, state) => ActiveListDetailScreen(
+                listId: state.pathParameters['listId']!,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          verifiedUserIdProvider.overrideWithValue('member-1'),
+          activeListRepositoryProvider.overrideWithValue(repository),
+          notificationRepositoryProvider.overrideWithValue(
+            FakeNotificationRepository(),
+          ),
+        ],
+        child: MaterialApp.router(
+          theme: AppTheme.light,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ActiveListDetailScreen)),
+    );
+    var listTransitions = 0;
+    var previousPath = router.routeInformationProvider.value.uri.path;
+    void trackRoute() {
+      final nextPath = router.routeInformationProvider.value.uri.path;
+      if (previousPath != '/lists' && nextPath == '/lists') {
+        listTransitions += 1;
+      }
+      previousPath = nextPath;
+    }
+
+    router.routeInformationProvider.addListener(trackRoute);
+    addTearDown(
+      () => router.routeInformationProvider.removeListener(trackRoute),
+    );
+
+    await repository.setArchived(
+      'list-1',
+      archived: true,
+      expectedVersion: 3,
+    );
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+
+    expect(router.routeInformationProvider.value.uri.path, '/lists');
+    expect(find.text('Lists landing'), findsOneWidget);
+    expect(listTransitions, 1);
+    expect(find.byType(SnackBar), findsNothing);
+
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+
+    expect(listTransitions, 1);
+    expect(find.byType(SnackBar), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

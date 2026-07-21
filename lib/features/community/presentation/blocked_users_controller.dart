@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/features/community/domain/community_profile.dart';
 import 'package:list_and_split/features/community/domain/community_repository.dart';
 import 'package:list_and_split/features/community/presentation/community_providers.dart';
@@ -48,6 +49,20 @@ class BlockedUsersController extends StateNotifier<BlockedUsersState> {
     }
   }
 
+  Future<void> reconcile() async {
+    if (state.unblockingProfileId != null) return;
+    try {
+      final profiles = await _repository.listBlockedProfiles();
+      if (!mounted) return;
+      state = BlockedUsersState(
+        profiles: AsyncData(profiles),
+        message: state.message,
+      );
+    } catch (_) {
+      // Preserve the last usable projection on transient Realtime failure.
+    }
+  }
+
   Future<bool> unblock(BlockedProfile profile) async {
     final currentProfiles = state.profiles.valueOrNull;
     if (currentProfiles == null || state.unblockingProfileId != null) {
@@ -86,6 +101,7 @@ final blockedUsersControllerProvider = StateNotifierProvider.autoDispose<
   ref.watch(verifiedUserIdProvider);
   final controller =
       BlockedUsersController(ref.watch(communityRepositoryProvider));
+  registerForReconciliation(ref, controller.reconcile);
   unawaited(controller.load());
   return controller;
 });

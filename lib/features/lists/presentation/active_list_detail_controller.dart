@@ -10,6 +10,7 @@ enum ActiveListDetailMessage {
   renamed,
   archived,
   restored,
+  remotelyArchived,
   itemCreated,
   itemUpdated,
   itemDeleted,
@@ -88,6 +89,7 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
   final Duration _requestTimeout;
   final Duration _reconciliationDelay;
   int _loadGeneration = 0;
+  Completer<void>? _mutationCompleted;
   String? _pendingItemPayload;
   String? _pendingItemRequestId;
 
@@ -98,9 +100,16 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
     );
   }
 
+  Future<void> reconcile() async {
+    final mutationCompleted = _mutationCompleted;
+    if (mutationCompleted != null) await mutationCompleted.future;
+    if (!mounted) return;
+    await _load(successMessage: null, failureMessage: null);
+  }
+
   Future<bool> _load({
     required ActiveListDetailMessage? successMessage,
-    required ActiveListDetailMessage failureMessage,
+    required ActiveListDetailMessage? failureMessage,
     int? scheduledGeneration,
   }) async {
     final generation = scheduledGeneration ?? ++_loadGeneration;
@@ -117,14 +126,20 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
         _repository.listItems(listId),
       ]).timeout(_requestTimeout);
       if (!mounted || generation != _loadGeneration) return false;
+      final refreshedSummary = results[0] as ActiveListSummary;
+      final message = existing?.summary.status == ActiveListStatus.active &&
+              refreshedSummary.status == ActiveListStatus.archived &&
+              successMessage != ActiveListDetailMessage.archived
+          ? ActiveListDetailMessage.remotelyArchived
+          : successMessage;
       state = ActiveListDetailState(
         detail: AsyncData(
           ActiveListDetail(
-            summary: results[0] as ActiveListSummary,
+            summary: refreshedSummary,
             items: results[1] as List<ActiveListItem>,
           ),
         ),
-        message: successMessage,
+        message: message,
       );
       return true;
     } catch (error, stackTrace) {
@@ -136,7 +151,7 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
         message: error is ActiveListFailure &&
                 error.code == ActiveListFailureCode.unavailable
             ? ActiveListDetailMessage.unavailable
-            : failureMessage,
+            : failureMessage ?? state.message,
       );
       return false;
     }
@@ -374,6 +389,7 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
 
   void _markMutating() {
     ++_loadGeneration;
+    _mutationCompleted = Completer<void>();
     state = ActiveListDetailState(
       detail: state.detail,
       isMutating: true,
@@ -496,6 +512,15 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
 
   void _finish(ActiveListDetailMessage? message) {
     state = ActiveListDetailState(detail: state.detail, message: message);
+    _mutationCompleted?.complete();
+    _mutationCompleted = null;
+  }
+
+  @override
+  void dispose() {
+    _mutationCompleted?.complete();
+    _mutationCompleted = null;
+    super.dispose();
   }
 
   static void _noop() {}

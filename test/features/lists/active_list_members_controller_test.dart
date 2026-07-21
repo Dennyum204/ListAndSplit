@@ -149,6 +149,28 @@ void main() {
     expect(controller.state.busyProfileIds, isEmpty);
   });
 
+  test('Realtime revocation clears cached member content generically',
+      () async {
+    final repository = _membersRepository(isOwner: false);
+    final controller = ActiveListMembersController(
+      repository,
+      'list-1',
+      invalidateLists: () {},
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+    expect(controller.state.data.hasValue, isTrue);
+
+    repository.failure =
+        const ActiveListFailure(ActiveListFailureCode.unavailable);
+    await controller.reconcile();
+
+    expect(controller.state.data.hasError, isTrue);
+    expect(controller.state.data.valueOrNull, isNull);
+    expect(controller.state.message, ActiveListMembersMessage.unavailable);
+    expect(controller.state.busyProfileIds, isEmpty);
+  });
+
   test('session reset reconstructs list detail and membership state', () {
     final repository = _membersRepository(isOwner: true);
     final container = ProviderContainer(

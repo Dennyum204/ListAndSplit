@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/core/supabase/supabase_client_provider.dart';
 import 'package:list_and_split/features/lists/data/supabase_active_list_repository.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
@@ -25,11 +26,14 @@ final activeListsControllerProvider =
     StateNotifierProvider.autoDispose<ActiveListsController, ActiveListsState>(
         (ref) {
   final userId = ref.watch(verifiedUserIdProvider);
-  ref.watch(activeListsRefreshSignalProvider);
   final controller = ActiveListsController(
     ref.watch(activeListRepositoryProvider),
     hasAuthenticatedUser: userId != null,
   );
+  ref.listen<int>(activeListsRefreshSignalProvider, (_, __) {
+    unawaited(controller.reconcile());
+  });
+  registerForReconciliation(ref, controller.reconcile);
   if (userId != null) unawaited(controller.loadAll());
   return controller;
 });
@@ -43,6 +47,7 @@ final activeListDetailControllerProvider = StateNotifierProvider.autoDispose
       listId,
       invalidateLists: ref.watch(invalidateActiveListsProvider),
     );
+    registerForReconciliation(ref, controller.reconcile);
     if (userId != null) unawaited(controller.load());
     return controller;
   },
@@ -57,6 +62,7 @@ final activeListMembersControllerProvider = StateNotifierProvider.autoDispose
       listId,
       invalidateLists: ref.watch(invalidateActiveListsProvider),
     );
+    registerForReconciliation(ref, controller.reconcile);
     if (userId != null) unawaited(controller.load());
     return controller;
   },

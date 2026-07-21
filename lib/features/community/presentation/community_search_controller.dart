@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/features/community/domain/community_profile.dart';
 import 'package:list_and_split/features/community/domain/community_repository.dart';
 import 'package:list_and_split/features/community/domain/friendship_repository.dart';
@@ -149,6 +150,36 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
   void handleFriendshipInvalidation() {
     _externalRefreshPending = true;
     _drainExternalRefresh();
+  }
+
+  Future<void> reconcile() async {
+    final result = state.result;
+    if (result == null) return;
+    if (state.isBusy) {
+      _externalRefreshPending = true;
+      return;
+    }
+    _externalRefreshPending = false;
+    try {
+      final relationship =
+          await _friendshipRepository.getRelationshipSummary(result.id);
+      if (!mounted) return;
+      _requireMatchingTarget(result, relationship);
+      state = CommunitySearchState(
+        result: result,
+        relationship: relationship,
+        message: state.message,
+      );
+    } on FriendshipFailure catch (failure) {
+      if (!mounted) return;
+      if (failure.code == FriendshipFailureCode.unavailable) {
+        state = const CommunitySearchState(
+          message: CommunitySearchMessage.notFoundOrUnavailable,
+        );
+      }
+    } catch (_) {
+      // Preserve the last usable exact-search result on transport failure.
+    }
   }
 
   Future<bool> sendFriendRequest() {
@@ -386,5 +417,6 @@ final communitySearchControllerProvider = StateNotifierProvider.autoDispose<
   ref.listen<int>(communitySearchRefreshSignalProvider, (_, __) {
     controller.handleFriendshipInvalidation();
   });
+  registerForReconciliation(ref, controller.reconcile);
   return controller;
 });

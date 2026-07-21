@@ -55,9 +55,30 @@ void main() {
     );
     expect(notifications.listCalls.single.limit, 20);
     expect(notifications.listCalls.single.before, isNull);
-    expect(notifications.markCalls.single, ['n-1', 'n-2']);
+    expect(notifications.markCalls.single, ['n-1']);
     expect(unreadRefreshes, 1);
     expect(controller.state.hasMore, isFalse);
+  });
+
+  test('read-write invalidation cannot start a reconciliation feedback loop',
+      () async {
+    final unreadPage = [notification(id: 'n-1')];
+    final readPage = [notification(id: 'n-1', isRead: true)];
+    notifications.queuedPages.addAll([unreadPage, readPage, readPage]);
+
+    await controller.load();
+    await controller.reconcile();
+    await controller.reconcile();
+
+    expect(notifications.listCalls, hasLength(3));
+    expect(notifications.markCalls, [
+      ['n-1'],
+    ]);
+    expect(unreadRefreshes, 3);
+    expect(
+      controller.state.notifications.requireValue.every((item) => item.isRead),
+      isTrue,
+    );
   });
 
   test('empty and retryable initial failure states recover', () async {
@@ -78,6 +99,30 @@ void main() {
     expect(controller.state.notifications.valueOrNull, isEmpty);
     expect(notifications.markCalls, isEmpty);
     expect(unreadRefreshes, 2);
+  });
+
+  test('Realtime reconciliation keeps cached centre and badge on failure',
+      () async {
+    notifications.notifications = [notification(id: 'cached')];
+    await controller.load();
+    notifications.listFailure = const NotificationFailure();
+
+    await controller.reconcile();
+
+    expect(controller.state.notifications.requireValue.single.id, 'cached');
+    expect(controller.state.notifications.hasError, isFalse);
+
+    final badge = NotificationUnreadCountController(notifications);
+    addTearDown(badge.dispose);
+    notifications.listFailure = null;
+    notifications.unreadCount = 3;
+    await badge.load();
+    notifications.unreadFailure = const NotificationFailure();
+
+    await badge.reconcile();
+
+    expect(badge.state.requireValue, 3);
+    expect(badge.state.hasError, isFalse);
   });
 
   test('pagination uses the last cursor and suppresses duplicate rows',

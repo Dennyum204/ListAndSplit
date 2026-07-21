@@ -42,6 +42,7 @@ Profile --owns--> Personal Category --< category placement >-- Template
 
 Profile --receives--> Notification
 Profile --receives--> List Invitation / Sent Template
+Profile --authorizes--> private account Broadcast topic (transport only)
 ```
 
 ## Identity and social graph
@@ -249,9 +250,9 @@ unnecessary internal timestamps are never returned.
 
 Requests do not expire in the initial design. A persistent notification may
 reference the exact pending relationship version but never becomes authoritative
-for its transition. Realtime, push delivery, public profiles, the final navigation
-shell, shared lists, and detailed audit history remain outside the relationship
-record. Current relationship-row account deletion cleanup is implemented by the
+for its transition. Realtime invalidation, push delivery, public profiles, the
+navigation shell, shared lists, and detailed audit history remain outside the
+relationship record itself. Current relationship-row account deletion cleanup is implemented by the
 Auth-root cascade. Accepted shared-list access and the effects of friendship/block
 changes follow P-035 through P-039.
 
@@ -471,7 +472,6 @@ No scheduled or physical cleanup is introduced in this slice.
 
 Accepted future notification types remain:
 
-- actionable active-list invitation;
 - actionable sent template;
 - informational item assignment; and
 - informational note mention.
@@ -490,8 +490,31 @@ invalidation, and privacy rules must be designed before push implementation.
 Directional blocking and exact block-aware username discovery preceded friend
 requests in Phase 1. Reporting remains required before public content is
 considered mature. Reporting records, moderation roles, evidence retention,
-appeals, and block effects on existing shared resources are intentionally not
-designed here.
+appeals, and public-content safety behavior are intentionally not designed here.
+
+## Realtime invalidation transport
+
+Realtime adds no application entity, history, outbox, queue, or authorization
+record. Each completed authenticated profile may join only the private topic
+`account:<auth.uid()>` for Broadcast receive. The sole application event is
+`invalidate` with payload exactly `{"v":1}`. Supabase transport metadata is not
+application data, and no list, item, profile, notification, relationship, block,
+operation, version, or timestamp enters the application payload.
+
+Hardened database triggers derive affected profile IDs from authoritative rows
+and call private `realtime.send` inside the successful mutation transaction. List
+changes reach the owner plus current accepted/pending projections as applicable;
+item changes fan out through their required parent-list version update;
+participant changes reach the owner, affected participant, and accepted peers
+when their visible member projection changes; notifications reach only their
+recipient; relationship/block changes reach both accounts. Profile deletion
+captures surviving list recipients before cascades remove their IDs.
+
+The one `realtime.messages` receive policy compares the requested channel topic
+with `auth.uid()` and restricts the extension to `broadcast`. There is no client
+send or Presence policy and no application table in `supabase_realtime`.
+Messages are ephemeral invalidations; current RPC projections, access-row versions,
+and persistent notifications remain authoritative.
 
 ## Row Level Security expectations
 
@@ -528,9 +551,6 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   owner-list records.
 - Support/administrator correction and audit rules for immutable usernames.
 - Avatar Storage, validation, replacement, retention, and deletion lifecycle.
-- Block effects on existing shared resources beyond the implemented current
-  aggregate account-deletion cascade.
-- List role model and membership lifecycle.
 - Mention representation and parser ownership.
 - Template category cardinality, version/provenance representation, and copy
   idempotency keys.
@@ -538,6 +558,6 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   algorithms.
 - Future notification-type payload/localization, archive/preferences, physical
   cleanup, account-lifecycle retention, and push-token tables.
-- Optimistic concurrency/version fields, realtime publication, offline mutation
-  identifiers, tombstones, and conflict resolution.
+- Offline mutation identifiers, tombstones, cache reconciliation, and conflict
+  resolution.
 - Reporting schema and moderation authorization.

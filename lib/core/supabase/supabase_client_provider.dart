@@ -4,3 +4,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 final supabaseClientProvider = Provider<SupabaseClient>(
   (ref) => Supabase.instance.client,
 );
+
+final supabaseRuntimeReadyProvider = Provider<bool>((ref) {
+  try {
+    return Supabase.instance.isInitialized;
+  } on AssertionError {
+    return false;
+  }
+});

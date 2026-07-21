@@ -10,6 +10,7 @@ enum ActiveListMembersMessage {
   memberRemoved,
   capacityReached,
   staleRefreshed,
+  unavailable,
   operationFailed,
 }
 
@@ -63,8 +64,12 @@ class ActiveListMembersController
   final void Function() _invalidateLists;
   final Duration _requestTimeout;
   int _generation = 0;
+  bool _externalRefreshPending = false;
 
-  Future<void> load({ActiveListMembersMessage? message}) async {
+  Future<void> load({
+    ActiveListMembersMessage? message,
+    bool silentFailure = false,
+  }) async {
     final generation = ++_generation;
     final existing = state.data.valueOrNull;
     if (existing == null) state = const ActiveListMembersState.loading();
@@ -97,13 +102,28 @@ class ActiveListMembersController
       );
     } catch (error, stackTrace) {
       if (!mounted || generation != _generation) return;
+      final unavailable = error is ActiveListFailure &&
+          error.code == ActiveListFailureCode.unavailable;
       state = ActiveListMembersState(
-        data: existing == null
+        data: existing == null || unavailable
             ? AsyncError(error, stackTrace)
             : AsyncData(existing),
-        message: ActiveListMembersMessage.operationFailed,
+        message: unavailable
+            ? ActiveListMembersMessage.unavailable
+            : silentFailure
+                ? state.message
+                : ActiveListMembersMessage.operationFailed,
       );
     }
+  }
+
+  Future<void> reconcile() async {
+    if (state.busyProfileIds.isNotEmpty) {
+      _externalRefreshPending = true;
+      return;
+    }
+    _externalRefreshPending = false;
+    await load(silentFailure: true);
   }
 
   Future<bool> invite(ActiveListAccessProfile profile) {
@@ -180,11 +200,13 @@ class ActiveListMembersController
       if (!mounted) return false;
       _invalidateLists();
       state = ActiveListMembersState(data: state.data);
+      _externalRefreshPending = false;
       await load(message: success);
       return true;
     } on ActiveListFailure catch (failure) {
       if (!mounted) return false;
       state = ActiveListMembersState(data: state.data);
+      _externalRefreshPending = false;
       await load(
         message: failure.code == ActiveListFailureCode.capacity
             ? ActiveListMembersMessage.capacityReached
@@ -200,7 +222,18 @@ class ActiveListMembersController
           message: ActiveListMembersMessage.operationFailed,
         );
       }
+      _drainExternalRefresh();
       return false;
     }
+  }
+
+  void _drainExternalRefresh() {
+    if (!_externalRefreshPending ||
+        !mounted ||
+        state.busyProfileIds.isNotEmpty) {
+      return;
+    }
+    _externalRefreshPending = false;
+    unawaited(reconcile());
   }
 }

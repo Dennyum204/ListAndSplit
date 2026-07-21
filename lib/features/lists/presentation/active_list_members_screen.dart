@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_members_controller.dart';
@@ -15,6 +17,18 @@ class ActiveListMembersScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(activeListMembersControllerProvider(listId));
+    ref.listen<ActiveListMembersState>(
+      activeListMembersControllerProvider(listId),
+      (previous, next) {
+        if (next.message == ActiveListMembersMessage.unavailable &&
+            previous?.message != ActiveListMembersMessage.unavailable) {
+          context.go(AppRoutes.lists);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(localizations.listAccessRevokedMessage)),
+          );
+        }
+      },
+    );
     return Scaffold(
       appBar: AppBar(title: Text(localizations.listMembersTitle)),
       body: SafeArea(
@@ -193,6 +207,8 @@ class ActiveListMembersScreen extends ConsumerWidget {
           localizations.listCapacityReachedMessage,
         ActiveListMembersMessage.staleRefreshed =>
           localizations.listStaleMessage,
+        ActiveListMembersMessage.unavailable =>
+          localizations.listAccessRevokedMessage,
         ActiveListMembersMessage.operationFailed =>
           localizations.operationFailedMessage,
         null => null,

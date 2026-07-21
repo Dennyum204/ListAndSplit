@@ -15,9 +15,10 @@ completed Profile or incomplete Onboarding. The authenticated four-tab shell now
 provides functional owned and shared Lists, a localized Templates placeholder, existing
 Community, and existing Profile; notifications remain available from the bell.
 Friend-only list invitations, accepted-member item collaboration, member management,
-and persistent list-access notifications are implemented. Real Templates, private
-Realtime Broadcast invalidation, offline behavior, and the expense ledger remain
-planned work.
+and persistent list-access notifications are implemented. Private account-scoped
+Supabase Broadcast now reconciles connected devices through the existing RPC
+repositories without carrying application data. Real Templates, offline behavior,
+push delivery, and the expense ledger remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
@@ -262,12 +263,15 @@ SQL into the Dashboard.
 
 The current slices do not implement unrestricted profile/directory search,
 avatars, ownership transfer, real templates, notification archive/preferences or
-physical cleanup, reporting, Realtime, server-side ledger logic, SQLite caching/
-offline synchronization, push delivery,
+physical cleanup, reporting, server-side ledger logic, SQLite caching/offline
+synchronization, push delivery,
 Firebase setup, administrator-initiated deletion, or a production backend.
-Private Realtime Broadcast remains the next focused list slice: payloads will be
-opaque invalidations, RPC repositories stay authoritative, and resume/manual refresh
-provide reconciliation. No offline mutation queue is accepted.
-Other open
-product and architecture choices are recorded in the project documentation and
-must be decided before their implementation slices.
+Private Realtime Broadcast is implemented as best-effort account invalidation:
+the event is `invalidate`, the application payload is exactly `{"v":1}`, and every
+valid event, successful join, or app resume reloads authoritative state through
+repositories. Presence, Broadcast Replay, Postgres Changes, client-originated
+Broadcast, push delivery, and an offline mutation queue remain deliberately absent.
+Remote list metadata and active/archive projection changes reconcile in place;
+remotely archived open detail returns safely to Lists once. Other open product and
+architecture choices are recorded in the project documentation and must be decided
+before their implementation slices.

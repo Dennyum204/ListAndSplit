@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/features/community/domain/friendship_repository.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
@@ -101,6 +102,17 @@ class NotificationUnreadCountController extends StateNotifier<AsyncValue<int>> {
       state = AsyncError(error, stackTrace);
     }
   }
+
+  Future<void> reconcile() async {
+    final generation = ++_generation;
+    try {
+      final count = await _repository.getUnreadCount();
+      if (!mounted || generation != _generation) return;
+      state = AsyncData(count);
+    } catch (_) {
+      // Keep the last usable badge count on best-effort Realtime failure.
+    }
+  }
 }
 
 class NotificationCentreController
@@ -137,12 +149,14 @@ class NotificationCentreController
 
   Future<void> refresh() => _loadFirstPage();
 
+  Future<void> reconcile() => _loadFirstPage(background: true);
+
   void handleExternalRefresh() {
     if (state.busyNotificationIds.isNotEmpty || state.isLoadingMore) {
       _externalRefreshPending = true;
       return;
     }
-    unawaited(_loadFirstPage());
+    unawaited(reconcile());
   }
 
   Future<void> loadMore() async {
@@ -280,7 +294,10 @@ class NotificationCentreController
     }
   }
 
-  Future<void> _loadFirstPage({NotificationCentreMessage? message}) async {
+  Future<void> _loadFirstPage({
+    NotificationCentreMessage? message,
+    bool background = false,
+  }) async {
     if (state.busyNotificationIds.isNotEmpty) {
       _externalRefreshPending = true;
       return;
@@ -288,10 +305,14 @@ class NotificationCentreController
 
     _externalRefreshPending = false;
     final generation = ++_loadGeneration;
-    state = NotificationCentreState(
-      notifications: const AsyncLoading(),
-      message: message,
-    );
+    final existing = state.notifications.valueOrNull;
+    final previousMessage = state.message;
+    if (!background || existing == null) {
+      state = NotificationCentreState(
+        notifications: const AsyncLoading(),
+        message: message,
+      );
+    }
     try {
       final page = await _notificationRepository.listNotifications(
         limit: _notificationPageSize,
@@ -301,7 +322,7 @@ class NotificationCentreController
         notifications: AsyncData(page),
         cursor: page.isEmpty ? null : page.last.cursor,
         hasMore: page.length == _notificationPageSize,
-        message: message,
+        message: background ? previousMessage : message,
       );
       await _markDisplayedRead(
         page.map((item) => item.id).toList(growable: false),
@@ -310,11 +331,13 @@ class NotificationCentreController
       _drainExternalRefresh();
     } catch (error, stackTrace) {
       if (!mounted || generation != _loadGeneration) return;
-      state = NotificationCentreState(
-        notifications: AsyncError(error, stackTrace),
-        message: NotificationCentreMessage.operationFailed,
-      );
-      await _refreshUnreadCount();
+      if (!background || existing == null) {
+        state = NotificationCentreState(
+          notifications: AsyncError(error, stackTrace),
+          message: NotificationCentreMessage.operationFailed,
+        );
+        await _refreshUnreadCount();
+      }
       _drainExternalRefresh();
     }
   }
@@ -326,14 +349,24 @@ class NotificationCentreController
     bool refreshUnreadOnFailure = false,
   }) async {
     try {
-      if (notificationIds.isEmpty) {
+      final candidateIds = notificationIds.toSet();
+      final unreadIds = state.notifications.valueOrNull
+              ?.where(
+                (notification) =>
+                    candidateIds.contains(notification.id) &&
+                    !notification.isRead,
+              )
+              .map((notification) => notification.id)
+              .toList(growable: false) ??
+          const <String>[];
+      if (unreadIds.isEmpty) {
         await _refreshUnreadCount();
         return;
       }
 
-      await _notificationRepository.markRead(notificationIds);
+      await _notificationRepository.markRead(unreadIds);
       if (!mounted || generation != _loadGeneration) return;
-      final displayedIds = notificationIds.toSet();
+      final displayedIds = unreadIds.toSet();
       final current = state.notifications.valueOrNull;
       if (current != null) {
         state = state.copyWith(
@@ -510,8 +543,9 @@ final notificationUnreadCountControllerProvider = StateNotifierProvider
     hasAuthenticatedUser: userId != null,
   );
   ref.listen<int>(notificationRefreshSignalProvider, (_, __) {
-    if (userId != null) unawaited(controller.load());
+    if (userId != null) unawaited(controller.reconcile());
   });
+  registerForReconciliation(ref, controller.reconcile);
   if (userId != null) {
     unawaited(controller.load());
   }
@@ -535,6 +569,7 @@ final notificationCentreControllerProvider = StateNotifierProvider.autoDispose<
   ref.listen<int>(notificationRefreshSignalProvider, (_, __) {
     if (userId != null) controller.handleExternalRefresh();
   });
+  registerForReconciliation(ref, controller.reconcile);
   if (userId != null) unawaited(controller.load());
   return controller;
 });
