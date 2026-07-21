@@ -72,18 +72,48 @@ class ActiveListMembersScreen extends ConsumerWidget {
                     trailing: profile.isOwner
                         ? Chip(label: Text(localizations.listOwnerLabel))
                         : data.summary.isOwner
-                            ? IconButton(
-                                key: Key('removeMember-${profile.profileId}'),
-                                onPressed: state.busyProfileIds
-                                        .contains(profile.profileId)
-                                    ? null
-                                    : () => _confirmRemove(
-                                          context,
-                                          ref,
-                                          profile,
-                                        ),
-                                tooltip: localizations.listRemoveMemberButton,
-                                icon: const Icon(Icons.person_remove_outlined),
+                            ? Wrap(
+                                children: [
+                                  if (data.summary.status ==
+                                      ActiveListStatus.active)
+                                    IconButton(
+                                      key: Key(
+                                        'transferOwnership-${profile.profileId}',
+                                      ),
+                                      onPressed: state.transferringOwnership ||
+                                              state.busyProfileIds.isNotEmpty
+                                          ? null
+                                          : () => _confirmTransfer(
+                                                context,
+                                                ref,
+                                                profile,
+                                              ),
+                                      tooltip: localizations
+                                          .listTransferOwnershipButton,
+                                      icon: const Icon(
+                                        Icons.manage_accounts_outlined,
+                                      ),
+                                    ),
+                                  IconButton(
+                                    key: Key(
+                                      'removeMember-${profile.profileId}',
+                                    ),
+                                    onPressed: state.transferringOwnership ||
+                                            state.busyProfileIds
+                                                .contains(profile.profileId)
+                                        ? null
+                                        : () => _confirmRemove(
+                                              context,
+                                              ref,
+                                              profile,
+                                            ),
+                                    tooltip:
+                                        localizations.listRemoveMemberButton,
+                                    icon: const Icon(
+                                      Icons.person_remove_outlined,
+                                    ),
+                                  ),
+                                ],
                               )
                             : null,
                   ),
@@ -106,8 +136,8 @@ class ActiveListMembersScreen extends ConsumerWidget {
                       subtitle: Text('@${profile.username}'),
                       trailing: TextButton(
                         key: Key('cancelInvitation-${profile.profileId}'),
-                        onPressed: state.busyProfileIds
-                                .contains(profile.profileId)
+                        onPressed: state.transferringOwnership ||
+                                state.busyProfileIds.contains(profile.profileId)
                             ? null
                             : () => ref
                                 .read(
@@ -136,8 +166,8 @@ class ActiveListMembersScreen extends ConsumerWidget {
                       subtitle: Text('@${profile.username}'),
                       trailing: FilledButton.tonal(
                         key: Key('inviteMember-${profile.profileId}'),
-                        onPressed: state.busyProfileIds
-                                .contains(profile.profileId)
+                        onPressed: state.transferringOwnership ||
+                                state.busyProfileIds.contains(profile.profileId)
                             ? null
                             : () => ref
                                 .read(
@@ -192,6 +222,38 @@ class ActiveListMembersScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _confirmTransfer(
+    BuildContext context,
+    WidgetRef ref,
+    ActiveListParticipant profile,
+  ) async {
+    final localizations = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(localizations.listTransferOwnershipTitle),
+        content: Text(
+          localizations.listTransferOwnershipDescription(profile.displayName),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(localizations.cancelButton),
+          ),
+          FilledButton(
+            key: const Key('confirmTransferOwnershipButton'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(localizations.listTransferOwnershipConfirmButton),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await ref
+        .read(activeListMembersControllerProvider(listId).notifier)
+        .transferOwnership(profile);
+  }
+
   String? _message(
     AppLocalizations localizations,
     ActiveListMembersMessage? message,
@@ -203,6 +265,8 @@ class ActiveListMembersScreen extends ConsumerWidget {
           localizations.listInvitationCancelledMessage,
         ActiveListMembersMessage.memberRemoved =>
           localizations.listMemberRemovedMessage,
+        ActiveListMembersMessage.ownershipTransferred =>
+          localizations.listOwnershipTransferredMessage,
         ActiveListMembersMessage.capacityReached =>
           localizations.listCapacityReachedMessage,
         ActiveListMembersMessage.staleRefreshed =>

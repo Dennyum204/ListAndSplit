@@ -106,7 +106,7 @@ Implemented slices:
 - RPC-only tables with forced RLS, explicit rejection policies, reviewed
   definer-rights functions, Auth-root deletion cascade, and account export schema
   version `3`.
-- One retained versioned non-owner access row, owner-managed persistent invitations,
+- One retained versioned access lineage, owner-managed persistent invitations,
   member item access, 20-person capacity, accepted participant projections, and
   archived-list access rules.
 - Atomic friendship/block effects, actionable/informational list notifications,
@@ -115,17 +115,21 @@ Implemented slices:
   opaque database invalidations, and generation-safe Flutter reconciliation after
   joins, events, reconnects, and app resume. RPCs and manual refresh remain
   authoritative fallbacks.
+- Immediate current-owner-to-accepted-member ownership transfer with explicit
+  confirmation, monotonic retained access versions, unchanged capacity/content,
+  informational notification, lifecycle projection updates, and private Realtime
+  reconciliation.
 
 Remaining candidate slices:
 
-- Ownership transfer.
 - Multi-member item assignment and assignment notifications.
 - General note editing, member `@mentions`, and mention notifications.
 - Authorization and concurrent-update tests for future membership and notes.
 
-Required decisions still include ownership transfer, mention parsing, and offline
-conflict behavior. Role lifecycle, invitation retention/revocation, shared-resource
-blocking, archive/delete, item quantity/order, and online concurrency are resolved.
+Required decisions still include mention parsing and offline conflict behavior.
+Role lifecycle, ownership transfer, invitation retention/revocation,
+shared-resource blocking, archive/delete, item quantity/order, and online
+concurrency are resolved.
 
 ## Phase 3 — Templates and community discovery (planned)
 

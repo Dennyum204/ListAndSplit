@@ -121,6 +121,7 @@ void main() {
       'list_invitation_declined',
       'list_member_left',
       'list_member_removed',
+      'list_ownership_transferred',
     ]) {
       response = [
         _row(

@@ -31,8 +31,8 @@ Profile --blocks (directional)--> Profile
 Profile --< versioned Relationship state >-- Profile
 
 Profile --owns--> Active List --< List Item
+Active List --< retained participant access >-- Profile
 
-Future: Active List --< List Member >-- Profile
 Future: List Item --< Item Assignment >-- List Member
 Active List --< Expense --1 payer / many participant shares--> List Member
 Active List --< Settlement --from/to--> List Member
@@ -168,10 +168,10 @@ The blocker may receive the target's ID, username, display name, and block creat
 time through their account export; interactive outgoing-block management retains
 its existing narrower projection. Incoming-only and unrelated blocks are never
 disclosed. An active block in either direction makes the separate
-relationship-summary RPC return no row and no target profile fields. Account
-shared-resource effects remain open. Both block foreign keys cascade only through
-the reviewed account-deletion root; the block model still does not select
-active-list membership behavior.
+relationship-summary RPC return no row and no target profile fields. Accepted
+shared-list and ownership-transfer effects remain authoritative. Both block
+foreign keys cascade only through the reviewed account-deletion root;
+shared-list block effects follow the accepted participant-lifecycle contract.
 
 ### Versioned friend request and friendship relationship
 
@@ -278,15 +278,24 @@ projection.
 
 Membership and friendship are distinct. Ending friendship cancels pending list
 invitations but preserves accepted membership; blocking applies the accepted
-symmetric separation rules. Ownership transfer remains open.
+symmetric separation rules.
+
+Only the current owner may transfer an active list to one exact accepted member.
+`active_lists.owner_id` remains the sole ownership authority. The transaction
+advances the list version once, preserves every item/content field, and swaps the
+two profiles' retained access roles without changing capacity.
 
 ### Implemented participant access row
 
 `public.active_list_participants` retains one current row per `(list_id,
-participant_profile_id)` for a non-owner. Its exact states are `pending`, `member`,
-`declined`, `cancelled`, `removed`, and `left`; version is a positive monotonic
+participant_profile_id)` access lineage. Its exact states are `pending`, `member`,
+`declined`, `cancelled`, `removed`, `left`, and the internal transfer-only `owner`;
+version is a positive monotonic
 `bigint`; creation and state-change times are database-owned. A constraint/trigger
-prevents an owner duplicate. Dormant rows may reopen to a new pending version.
+prevents a committed owner duplicate with any state other than `owner`, and an
+`owner` row may match only the authoritative list owner. Legacy/original owners
+need no row until their first transfer. Dormant rows may reopen to a new pending
+version.
 
 Only the owner invites, cancels, and removes. Only the recipient accepts/declines,
 and only a member leaves. Capacity counts the owner plus `pending`/`member` rows and
@@ -294,6 +303,14 @@ is limited to 20 under serialized list locking. Pending invitations do not expir
 The table is RPC-only with enabled/forced RLS, an explicit restrictive rejection
 policy, and no direct API-role grants. Auth-root owner deletion cascades the list;
 non-owner deletion removes only that person's access row.
+
+During a transfer, the target's existing `member` row becomes `owner` at the next
+version instead of being deleted. The former owner's existing `owner` row becomes
+`member` at the next version, or a first retained `member` row starts at version
+one. This prevents participant-state ABA/version reuse and preserves notification
+foreign keys across repeated transfers. Exact expected list and target-access
+versions reject stale attempts; pair-before-list locking serializes concurrent
+block and transfer actions.
 
 ### Implemented list item
 
@@ -470,6 +487,11 @@ counts. Creating a block suppresses every existing pair notification in the same
 transaction, regardless of recipient direction; unblocking does not restore them.
 No scheduled or physical cleanup is introduced in this slice.
 
+Accepted informational notification types also include ownership transfer. The
+new owner is the recipient, the former owner is the actor, and the reference uses
+the former owner's resulting retained member-access version. No copied profile or
+list text is stored.
+
 Accepted future notification types remain:
 
 - actionable sent template;
@@ -509,6 +531,10 @@ participant changes reach the owner, affected participant, and accepted peers
 when their visible member projection changes; notifications reach only their
 recipient; relationship/block changes reach both accounts. Profile deletion
 captures surviving list recipients before cascades remove their IDs.
+Ownership transfer changes both visible authority/access projections and creates
+the new-owner notification in the same transaction, so the existing list,
+participant, and notification triggers invalidate both affected accounts without
+changing the wire contract.
 
 The one `realtime.messages` receive policy compares the requested channel topic
 with `auth.uid()` and restricts the extension to `broadcast`. There is no client

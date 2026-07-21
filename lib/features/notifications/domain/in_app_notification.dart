@@ -5,6 +5,7 @@ enum InAppNotificationType {
   listInvitationDeclined,
   listMemberLeft,
   listMemberRemoved,
+  listOwnershipTransferred,
 }
 
 enum NotificationActionStatus { actionable, friends, accepted, unavailable }

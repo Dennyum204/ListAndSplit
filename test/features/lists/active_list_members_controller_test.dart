@@ -68,6 +68,7 @@ void main() {
     expect(await controller.invite(_eligible), isFalse);
     expect(await controller.cancel(_pending), isFalse);
     expect(await controller.remove(_member, 4), isFalse);
+    expect(await controller.transferOwnership(_member), isFalse);
     expect(repository.mutationCalls, 0);
   });
 
@@ -98,6 +99,173 @@ void main() {
     expect(repository.lastRemoveVersion, 4);
     expect(invalidations, 3);
     expect(controller.state.busyProfileIds, isEmpty);
+  });
+
+  test('ownership transfer uses exact versions and refreshes every projection',
+      () async {
+    final repository = _RecordingMembersRepository();
+    var listInvalidations = 0;
+    var detailInvalidations = 0;
+    final controller = ActiveListMembersController(
+      repository,
+      'list-1',
+      invalidateLists: () => listInvalidations += 1,
+      invalidateDetail: () => detailInvalidations += 1,
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+
+    expect(await controller.transferOwnership(_member), isTrue);
+
+    expect(repository.lastTransferListVersion, 2);
+    expect(repository.lastTransferAccessVersion, 4);
+    expect(controller.state.message,
+        ActiveListMembersMessage.ownershipTransferred);
+    expect(controller.state.data.requireValue.summary.isOwner, isFalse);
+    expect(
+      controller.state.data.requireValue.participants
+          .singleWhere(
+            (participant) => participant.isOwner,
+          )
+          .profileId,
+      _member.profileId,
+    );
+    expect(listInvalidations, 1);
+    expect(detailInvalidations, 1);
+    expect(controller.state.busyProfileIds, isEmpty);
+    expect(controller.state.transferringOwnership, isFalse);
+  });
+
+  test('lost transfer response reconciles committed authority as success',
+      () async {
+    final repository = _LostTransferResponseRepository();
+    final controller = ActiveListMembersController(
+      repository,
+      'list-1',
+      invalidateLists: () {},
+      invalidateDetail: () {},
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+
+    expect(await controller.transferOwnership(_member), isTrue);
+
+    expect(controller.state.message,
+        ActiveListMembersMessage.ownershipTransferred);
+    expect(controller.state.data.requireValue.summary.isOwner, isFalse);
+    expect(controller.state.busyProfileIds, isEmpty);
+  });
+
+  test('stale transfer reloads current authority without claiming success',
+      () async {
+    final repository = _FailTransferRepository(ActiveListFailureCode.stale);
+    final controller = ActiveListMembersController(
+      repository,
+      'list-1',
+      invalidateLists: () {},
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+
+    expect(await controller.transferOwnership(_member), isFalse);
+
+    expect(controller.state.message, ActiveListMembersMessage.staleRefreshed);
+    expect(controller.state.data.requireValue.summary.isOwner, isTrue);
+    expect(controller.state.busyProfileIds, isEmpty);
+  });
+
+  test('rapid transfer attempts and other owner actions cannot overlap',
+      () async {
+    final repository = _DelayedTransferRepository();
+    final controller = ActiveListMembersController(
+      repository,
+      'list-1',
+      invalidateLists: () {},
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+
+    final first = controller.transferOwnership(_member);
+    expect(controller.state.transferringOwnership, isTrue);
+    expect(await controller.transferOwnership(_memberTwo), isFalse);
+    expect(await controller.remove(_memberTwo, 5), isFalse);
+    expect(repository.transferCalls, 1);
+
+    repository.gate.complete();
+    expect(await first, isTrue);
+    expect(controller.state.transferringOwnership, isFalse);
+    expect(controller.state.busyProfileIds, isEmpty);
+  });
+
+  test('former-owner and new-owner devices reconcile roles independently',
+      () async {
+    final formerOwnerRepository = _membersRepository(isOwner: true);
+    final newOwnerRepository = _membersRepository(isOwner: false);
+    final formerOwnerController = ActiveListMembersController(
+      formerOwnerRepository,
+      'list-1',
+      invalidateLists: () {},
+    );
+    final newOwnerController = ActiveListMembersController(
+      newOwnerRepository,
+      'list-1',
+      invalidateLists: () {},
+    );
+    addTearDown(formerOwnerController.dispose);
+    addTearDown(newOwnerController.dispose);
+    await Future.wait([
+      formerOwnerController.load(),
+      newOwnerController.load(),
+    ]);
+
+    final transferredParticipants = [_newOwner, _formerOwner];
+    formerOwnerRepository
+      ..activeLists = [_transferredSummary(isOwner: false)]
+      ..participantsByList['list-1'] = transferredParticipants;
+    newOwnerRepository
+      ..activeLists = [_transferredSummary(isOwner: true)]
+      ..participantsByList['list-1'] = transferredParticipants;
+
+    await Future.wait([
+      formerOwnerController.reconcile(),
+      newOwnerController.reconcile(),
+    ]);
+
+    expect(
+        formerOwnerController.state.data.requireValue.summary.isOwner, isFalse);
+    expect(formerOwnerController.state.data.requireValue.pending, isEmpty);
+    expect(newOwnerController.state.data.requireValue.summary.isOwner, isTrue);
+    expect(newOwnerController.state.data.requireValue.pending, isNotEmpty);
+  });
+
+  test('manual member refresh remains authoritative after external change',
+      () async {
+    final repository = _membersRepository(isOwner: true);
+    final controller = ActiveListMembersController(
+      repository,
+      'list-1',
+      invalidateLists: () {},
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+    repository.activeLists = [
+      ActiveListSummary(
+        id: 'list-1',
+        title: 'Externally renamed',
+        status: ActiveListStatus.active,
+        version: 3,
+        itemCount: 1,
+        completedItemCount: 0,
+        createdAt: DateTime.utc(2026, 7, 20, 8),
+        updatedAt: DateTime.utc(2026, 7, 20, 10),
+        archivedAt: null,
+      ),
+    ];
+
+    await controller.load();
+
+    expect(
+        controller.state.data.requireValue.summary.title, 'Externally renamed');
   });
 
   for (final entry in {
@@ -243,6 +411,8 @@ class _RecordingMembersRepository extends FakeActiveListRepository {
   int? lastInviteVersion;
   int? lastCancelVersion;
   int? lastRemoveVersion;
+  int? lastTransferListVersion;
+  int? lastTransferAccessVersion;
 
   @override
   Future<int> inviteMember(
@@ -282,6 +452,83 @@ class _RecordingMembersRepository extends FakeActiveListRepository {
     return super.removeMember(
       listId,
       profileId,
+      expectedAccessVersion: expectedAccessVersion,
+    );
+  }
+
+  @override
+  Future<ActiveListOwnershipTransferResult> transferOwnership(
+    String listId,
+    String profileId, {
+    required int expectedListVersion,
+    required int expectedAccessVersion,
+  }) {
+    lastTransferListVersion = expectedListVersion;
+    lastTransferAccessVersion = expectedAccessVersion;
+    return super.transferOwnership(
+      listId,
+      profileId,
+      expectedListVersion: expectedListVersion,
+      expectedAccessVersion: expectedAccessVersion,
+    );
+  }
+}
+
+class _LostTransferResponseRepository extends _RecordingMembersRepository {
+  @override
+  Future<ActiveListOwnershipTransferResult> transferOwnership(
+    String listId,
+    String profileId, {
+    required int expectedListVersion,
+    required int expectedAccessVersion,
+  }) async {
+    await super.transferOwnership(
+      listId,
+      profileId,
+      expectedListVersion: expectedListVersion,
+      expectedAccessVersion: expectedAccessVersion,
+    );
+    throw const ActiveListFailure(ActiveListFailureCode.transport);
+  }
+}
+
+class _FailTransferRepository extends _RecordingMembersRepository {
+  _FailTransferRepository(this.code);
+
+  final ActiveListFailureCode code;
+
+  @override
+  Future<ActiveListOwnershipTransferResult> transferOwnership(
+    String listId,
+    String profileId, {
+    required int expectedListVersion,
+    required int expectedAccessVersion,
+  }) async {
+    throw ActiveListFailure(code);
+  }
+}
+
+class _DelayedTransferRepository extends _RecordingMembersRepository {
+  _DelayedTransferRepository() {
+    participantsByList['list-1'] = [_owner, _member, _memberTwo];
+  }
+
+  final gate = Completer<void>();
+  var transferCalls = 0;
+
+  @override
+  Future<ActiveListOwnershipTransferResult> transferOwnership(
+    String listId,
+    String profileId, {
+    required int expectedListVersion,
+    required int expectedAccessVersion,
+  }) async {
+    transferCalls += 1;
+    await gate.future;
+    return super.transferOwnership(
+      listId,
+      profileId,
+      expectedListVersion: expectedListVersion,
       expectedAccessVersion: expectedAccessVersion,
     );
   }
@@ -356,6 +603,26 @@ const _member = ActiveListParticipant(
   isOwner: false,
   accessVersion: 4,
 );
+const _memberTwo = ActiveListParticipant(
+  profileId: 'member-2',
+  username: 'member_two',
+  displayName: 'Member Two',
+  isOwner: false,
+  accessVersion: 5,
+);
+const _newOwner = ActiveListParticipant(
+  profileId: 'member-1',
+  username: 'member_user',
+  displayName: 'Member User',
+  isOwner: true,
+);
+const _formerOwner = ActiveListParticipant(
+  profileId: 'owner-1',
+  username: 'owner_user',
+  displayName: 'Owner User',
+  isOwner: false,
+  accessVersion: 1,
+);
 const _pending = ActiveListAccessProfile(
   profileId: 'pending-1',
   username: 'pending_user',
@@ -368,3 +635,21 @@ const _eligible = ActiveListAccessProfile(
   displayName: 'Eligible User',
   accessVersion: 8,
 );
+
+ActiveListSummary _transferredSummary({required bool isOwner}) =>
+    ActiveListSummary(
+      id: 'list-1',
+      title: 'Shared trip',
+      status: ActiveListStatus.active,
+      version: 3,
+      itemCount: 1,
+      completedItemCount: 0,
+      createdAt: DateTime.utc(2026, 7, 20, 8),
+      updatedAt: DateTime.utc(2026, 7, 20, 10),
+      archivedAt: null,
+      isOwner: isOwner,
+      ownerProfileId: isOwner ? null : 'member-1',
+      ownerUsername: isOwner ? null : 'member_user',
+      ownerDisplayName: isOwner ? null : 'Member User',
+      callerAccessVersion: isOwner ? null : 1,
+    );

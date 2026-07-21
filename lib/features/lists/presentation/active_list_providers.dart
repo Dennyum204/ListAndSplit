@@ -15,10 +15,19 @@ final activeListRepositoryProvider = Provider<ActiveListRepository>(
 );
 
 final activeListsRefreshSignalProvider = StateProvider<int>((ref) => 0);
+final activeListDetailRefreshSignalProvider =
+    StateProvider.autoDispose.family<int, String>((ref, _) => 0);
 
 final invalidateActiveListsProvider = Provider<void Function()>((ref) {
   return () {
     ref.read(activeListsRefreshSignalProvider.notifier).state += 1;
+  };
+});
+
+final invalidateActiveListDetailProvider =
+    Provider.family<void Function(), String>((ref, listId) {
+  return () {
+    ref.read(activeListDetailRefreshSignalProvider(listId).notifier).state += 1;
   };
 });
 
@@ -47,6 +56,9 @@ final activeListDetailControllerProvider = StateNotifierProvider.autoDispose
       listId,
       invalidateLists: ref.watch(invalidateActiveListsProvider),
     );
+    ref.listen<int>(activeListDetailRefreshSignalProvider(listId), (_, __) {
+      unawaited(controller.reconcile());
+    });
     registerForReconciliation(ref, controller.reconcile);
     if (userId != null) unawaited(controller.load());
     return controller;
@@ -61,6 +73,9 @@ final activeListMembersControllerProvider = StateNotifierProvider.autoDispose
       ref.watch(activeListRepositoryProvider),
       listId,
       invalidateLists: ref.watch(invalidateActiveListsProvider),
+      invalidateDetail: ref.watch(
+        invalidateActiveListDetailProvider(listId),
+      ),
     );
     registerForReconciliation(ref, controller.reconcile);
     if (userId != null) unawaited(controller.load());

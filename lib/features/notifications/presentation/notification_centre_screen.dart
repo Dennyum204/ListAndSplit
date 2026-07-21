@@ -469,6 +469,10 @@ class _NotificationCard extends ConsumerWidget {
           localizations.listMemberRemovedNotificationTitle(
             notification.activeListTitle ?? '',
           ),
+        InAppNotificationType.listOwnershipTransferred =>
+          localizations.listOwnershipTransferredNotificationTitle(
+            notification.activeListTitle ?? '',
+          ),
       };
 
   String _informationalText(AppLocalizations localizations) =>
@@ -481,6 +485,8 @@ class _NotificationCard extends ConsumerWidget {
           localizations.listMemberLeftInformation,
         InAppNotificationType.listMemberRemoved =>
           localizations.listMemberRemovedInformation,
+        InAppNotificationType.listOwnershipTransferred =>
+          localizations.listOwnershipTransferredInformation,
         InAppNotificationType.friendRequest ||
         InAppNotificationType.listInvitation =>
           localizations.notificationUnavailableMessage,

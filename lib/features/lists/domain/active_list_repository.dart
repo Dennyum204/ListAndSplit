@@ -113,6 +113,12 @@ abstract interface class ActiveListRepository {
     String profileId, {
     required int expectedAccessVersion,
   });
+  Future<ActiveListOwnershipTransferResult> transferOwnership(
+    String listId,
+    String profileId, {
+    required int expectedListVersion,
+    required int expectedAccessVersion,
+  });
   Future<int> leaveList(
     String listId, {
     required int expectedAccessVersion,

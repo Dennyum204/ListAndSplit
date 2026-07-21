@@ -98,6 +98,26 @@ class ActiveListParticipant {
   final int? accessVersion;
 }
 
+class ActiveListOwnershipTransferResult {
+  const ActiveListOwnershipTransferResult({
+    required this.listId,
+    required this.previousOwnerProfileId,
+    required this.ownerProfileId,
+    required this.listVersion,
+    required this.previousOwnerAccessVersion,
+    required this.ownerAccessVersion,
+    required this.transferredAt,
+  });
+
+  final String listId;
+  final String previousOwnerProfileId;
+  final String ownerProfileId;
+  final int listVersion;
+  final int previousOwnerAccessVersion;
+  final int ownerAccessVersion;
+  final DateTime transferredAt;
+}
+
 class ActiveListAccessProfile {
   const ActiveListAccessProfile({
     required this.profileId,

@@ -416,6 +416,48 @@ class SupabaseActiveListRepository implements ActiveListRepository {
       );
 
   @override
+  Future<ActiveListOwnershipTransferResult> transferOwnership(
+    String listId,
+    String profileId, {
+    required int expectedListVersion,
+    required int expectedAccessVersion,
+  }) async {
+    try {
+      final row = _singleRow(
+        await _rpc(
+          'transfer_active_list_ownership',
+          params: {
+            'target_list_id': listId,
+            'target_profile_id': profileId,
+            'expected_list_version': expectedListVersion,
+            'expected_target_access_version': expectedAccessVersion,
+          },
+        ),
+      );
+      final result = ActiveListOwnershipTransferResult(
+        listId: _uuid(row['list_id']),
+        previousOwnerProfileId: _uuid(row['previous_owner_profile_id']),
+        ownerProfileId: _uuid(row['owner_profile_id']),
+        listVersion: _positiveInt(row['list_version']),
+        previousOwnerAccessVersion:
+            _positiveInt(row['previous_owner_access_version']),
+        ownerAccessVersion: _positiveInt(row['owner_access_version']),
+        transferredAt: _dateTime(row['transferred_at']),
+      );
+      if (result.listId != listId ||
+          result.ownerProfileId != profileId ||
+          result.previousOwnerProfileId == result.ownerProfileId ||
+          result.listVersion != expectedListVersion + 1 ||
+          result.ownerAccessVersion != expectedAccessVersion + 1) {
+        throw const FormatException('invalid ownership transfer projection');
+      }
+      return result;
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
   Future<int> leaveList(
     String listId, {
     required int expectedAccessVersion,

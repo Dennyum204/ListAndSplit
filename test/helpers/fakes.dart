@@ -824,6 +824,73 @@ class FakeActiveListRepository implements ActiveListRepository {
   }
 
   @override
+  Future<ActiveListOwnershipTransferResult> transferOwnership(
+    String listId,
+    String profileId, {
+    required int expectedListVersion,
+    required int expectedAccessVersion,
+  }) async {
+    mutationCalls += 1;
+    if (failure != null) throw failure!;
+    final current = _find(listId);
+    final participants = participantsByList[listId]!;
+    final previousOwner =
+        participants.firstWhere((participant) => participant.isOwner);
+    final target = participants.firstWhere(
+      (participant) =>
+          participant.profileId == profileId && !participant.isOwner,
+    );
+    final now = current.updatedAt.add(const Duration(seconds: 1));
+    participantsByList[listId] = [
+      for (final participant in participants)
+        if (participant.profileId == previousOwner.profileId)
+          ActiveListParticipant(
+            profileId: participant.profileId,
+            username: participant.username,
+            displayName: participant.displayName,
+            isOwner: false,
+            accessVersion: 1,
+          )
+        else if (participant.profileId == target.profileId)
+          ActiveListParticipant(
+            profileId: participant.profileId,
+            username: participant.username,
+            displayName: participant.displayName,
+            isOwner: true,
+          )
+        else
+          participant,
+    ];
+    _replace(
+      ActiveListSummary(
+        id: current.id,
+        title: current.title,
+        status: current.status,
+        version: current.version + 1,
+        itemCount: current.itemCount,
+        completedItemCount: current.completedItemCount,
+        createdAt: current.createdAt,
+        updatedAt: now,
+        archivedAt: current.archivedAt,
+        isOwner: false,
+        ownerProfileId: target.profileId,
+        ownerUsername: target.username,
+        ownerDisplayName: target.displayName,
+        callerAccessVersion: 1,
+      ),
+    );
+    return ActiveListOwnershipTransferResult(
+      listId: listId,
+      previousOwnerProfileId: previousOwner.profileId,
+      ownerProfileId: target.profileId,
+      listVersion: expectedListVersion + 1,
+      previousOwnerAccessVersion: 1,
+      ownerAccessVersion: expectedAccessVersion + 1,
+      transferredAt: now,
+    );
+  }
+
+  @override
   Future<int> leaveList(
     String listId, {
     required int expectedAccessVersion,

@@ -8,6 +8,7 @@ enum ActiveListMembersMessage {
   invited,
   invitationCancelled,
   memberRemoved,
+  ownershipTransferred,
   capacityReached,
   staleRefreshed,
   unavailable,
@@ -34,16 +35,19 @@ class ActiveListMembersState {
   const ActiveListMembersState({
     required this.data,
     this.busyProfileIds = const {},
+    this.transferringOwnership = false,
     this.message,
   });
 
   const ActiveListMembersState.loading()
       : data = const AsyncLoading(),
         busyProfileIds = const {},
+        transferringOwnership = false,
         message = null;
 
   final AsyncValue<ActiveListMembersData> data;
   final Set<String> busyProfileIds;
+  final bool transferringOwnership;
   final ActiveListMembersMessage? message;
 }
 
@@ -53,8 +57,10 @@ class ActiveListMembersController
     this._repository,
     this.listId, {
     required void Function() invalidateLists,
+    void Function()? invalidateDetail,
     Duration requestTimeout = const Duration(seconds: 15),
   })  : _invalidateLists = invalidateLists,
+        _invalidateDetail = invalidateDetail ?? _noop,
         _requestTimeout = requestTimeout,
         assert(requestTimeout > Duration.zero),
         super(const ActiveListMembersState.loading());
@@ -62,6 +68,7 @@ class ActiveListMembersController
   final ActiveListRepository _repository;
   final String listId;
   final void Function() _invalidateLists;
+  final void Function() _invalidateDetail;
   final Duration _requestTimeout;
   int _generation = 0;
   bool _externalRefreshPending = false;
@@ -118,7 +125,7 @@ class ActiveListMembersController
   }
 
   Future<void> reconcile() async {
-    if (state.busyProfileIds.isNotEmpty) {
+    if (state.busyProfileIds.isNotEmpty || state.transferringOwnership) {
       _externalRefreshPending = true;
       return;
     }
@@ -185,12 +192,69 @@ class ActiveListMembersController
     );
   }
 
+  Future<bool> transferOwnership(ActiveListParticipant profile) async {
+    final data = state.data.valueOrNull;
+    final accessVersion = profile.accessVersion;
+    if (data?.summary.isOwner != true ||
+        data!.summary.status != ActiveListStatus.active ||
+        profile.isOwner ||
+        accessVersion == null ||
+        state.busyProfileIds.isNotEmpty ||
+        state.transferringOwnership ||
+        !data.participants.any(
+          (entry) =>
+              entry.profileId == profile.profileId &&
+              !entry.isOwner &&
+              entry.accessVersion == accessVersion,
+        )) {
+      return false;
+    }
+
+    state = ActiveListMembersState(
+      data: state.data,
+      busyProfileIds: {profile.profileId},
+      transferringOwnership: true,
+    );
+    try {
+      await _repository
+          .transferOwnership(
+            listId,
+            profile.profileId,
+            expectedListVersion: data.summary.version,
+            expectedAccessVersion: accessVersion,
+          )
+          .timeout(_requestTimeout);
+      if (!mounted) return false;
+      _invalidateOwnershipProjections();
+      _externalRefreshPending = false;
+      state = ActiveListMembersState(
+        data: state.data,
+        message: ActiveListMembersMessage.ownershipTransferred,
+      );
+      await load(
+        message: ActiveListMembersMessage.ownershipTransferred,
+        silentFailure: true,
+      );
+      return true;
+    } on ActiveListFailure catch (failure) {
+      return _reconcileTransferOutcome(profile.profileId, failure.code);
+    } catch (_) {
+      return _reconcileTransferOutcome(
+        profile.profileId,
+        ActiveListFailureCode.transport,
+      );
+    }
+  }
+
   Future<bool> _mutate(
     String profileId,
     Future<Object?> Function() operation,
     ActiveListMembersMessage success,
   ) async {
-    if (state.busyProfileIds.contains(profileId)) return false;
+    if (state.transferringOwnership ||
+        state.busyProfileIds.contains(profileId)) {
+      return false;
+    }
     state = ActiveListMembersState(
       data: state.data,
       busyProfileIds: {...state.busyProfileIds, profileId},
@@ -236,4 +300,50 @@ class ActiveListMembersController
     _externalRefreshPending = false;
     unawaited(reconcile());
   }
+
+  Future<bool> _reconcileTransferOutcome(
+    String targetProfileId,
+    ActiveListFailureCode failureCode,
+  ) async {
+    if (!mounted) return false;
+    _invalidateOwnershipProjections();
+    _externalRefreshPending = false;
+    state = ActiveListMembersState(data: state.data);
+    await load(silentFailure: true);
+    if (!mounted) return false;
+
+    final current = state.data.valueOrNull;
+    final transferCommitted = current != null &&
+        !current.summary.isOwner &&
+        current.participants.any(
+          (participant) =>
+              participant.isOwner && participant.profileId == targetProfileId,
+        );
+    if (transferCommitted) {
+      state = ActiveListMembersState(
+        data: state.data,
+        message: ActiveListMembersMessage.ownershipTransferred,
+      );
+      return true;
+    }
+
+    if (state.message == ActiveListMembersMessage.unavailable) return false;
+    state = ActiveListMembersState(
+      data: state.data,
+      message: switch (failureCode) {
+        ActiveListFailureCode.stale ||
+        ActiveListFailureCode.archived =>
+          ActiveListMembersMessage.staleRefreshed,
+        _ => ActiveListMembersMessage.operationFailed,
+      },
+    );
+    return false;
+  }
+
+  void _invalidateOwnershipProjections() {
+    _invalidateLists();
+    _invalidateDetail();
+  }
 }
+
+void _noop() {}
