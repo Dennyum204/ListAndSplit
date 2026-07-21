@@ -582,6 +582,38 @@ void main() {
     delayedMutation.complete(_summary(title: 'Delayed', version: 2));
     await mutation;
   });
+
+  test('two hundred current items block creation but preserve other mutations',
+      () async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..itemsByList['list-1'] = List.generate(
+        activeListItemCapacity,
+        (index) => _item(id: 'item-$index', position: index + 1),
+      );
+    final controller = ActiveListDetailController(repository, 'list-1');
+    addTearDown(controller.dispose);
+    await controller.load();
+
+    final outcome = await controller.createItem(
+      'Blocked addition',
+      quantity: ListQuantity.one,
+      unit: null,
+    );
+
+    expect(outcome, ActiveListMutationOutcome.invalid);
+    expect(controller.state.message, ActiveListDetailMessage.itemCapacity);
+    expect(repository.mutationCalls, 0);
+    expect(
+      await controller.updateItem(
+        controller.state.detail.requireValue.items.first,
+        'Still editable',
+        quantity: ListQuantity.one,
+        unit: null,
+      ),
+      ActiveListMutationOutcome.succeeded,
+    );
+  });
 }
 
 Future<void> _flushAsync() async {

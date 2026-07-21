@@ -71,8 +71,9 @@ are the evidence of implementation status.
   caller-visible relationships, currently visible recipient notifications, and
   owned active lists with ordered items. Version `1` introduced the account/social
   sections; version `2` adds the explicit `active_lists` root array; version `3`
-  adds privacy-minimal caller-relative shared-list access metadata. Collections
-  are deterministic arrays and are empty rather than null.
+  adds privacy-minimal caller-relative shared-list access metadata; version `4`
+  adds private template categories, templates, and ordered template items.
+  Collections are deterministic arrays and are empty rather than null.
 - The export includes nullable onboarding fields faithfully. It includes only the
   existing caller-visible block, relationship, and notification projections, so
   either-direction block suppression, dormant relationship privacy, notification
@@ -89,8 +90,8 @@ are the evidence of implementation status.
 - The export never includes passwords or hashes, tokens, sessions, raw Auth
   metadata, another person's email or Auth data, incoming blocks, raw dormant
   relationship state, reopening/requester internals, suppressed/expired/
-  block-hidden notifications, server logs, security records, templates, other
-  participants or shared-list contents, or ledger data.
+  block-hidden notifications, server logs, security records, other participants
+  or shared-list contents, public/shared-template data, or ledger data.
 - Export is generated synchronously on demand and returned to the caller. The
   server retains no export file or export record. The mobile app validates and
   pretty-prints the versioned document, writes it to OS-managed temporary/cache
@@ -121,8 +122,9 @@ are the evidence of implementation status.
   user-level `last_sign_in_at` are not freshness evidence.
 - Deleting the Auth user is the atomic root operation. Database cascades remove
   the profile, incoming and outgoing blocks, relationships in either participant
-  position, notifications where the user is recipient or actor, and notifications
-  attached to a deleted relationship, plus every owned list and item. No
+  position, notifications where the user is recipient or actor, notifications
+  attached to a deleted relationship, every owned list and item, and every private
+  template, template item, and category. No
   application cleanup transaction is committed separately before the Auth
   deletion.
 - Deleting a completed profile reserves only its canonical username for exactly
@@ -174,6 +176,12 @@ are not implemented.
 - Initial item order follows successful creation. Drag reorder is atomic,
   deterministic, integer-based, and requires exactly the current unique item ID
   set.
+- A shopping list may contain at most 200 current items. Completed and uncompleted
+  items both count; permanently deleted items do not and immediately free one
+  place. Capacity is enforced under the list lock for ordinary creation and every
+  template copy/import path. Existing over-capacity lists remain readable and
+  editable but reject additions until their current count falls below 200; no
+  migration deletes, truncates, or rewrites existing items.
 - Completion stores database-owned `completed_at` and the authenticated owner as
   `completed_by`; reopen clears both. A later deleted actor may leave the
   completion time with a null actor, but actor deletion can never delete the item.
@@ -233,19 +241,66 @@ are not implemented.
 ### Templates
 
 The product term is **Templates**; the former name **Internal Lists** should not be
-used in new UI or documentation.
+used in new UI or documentation. This slice implements only private personal
+templates. Public, shared, sent, friend-owned, and collaborative templates remain
+future work.
 
-- A template contains reusable groups of items.
-- A template is private or public.
-- Users organize templates into their own personal categories.
-- Adding a template to an active list creates a snapshot copy of its items. Future
-  edits or deletion of the template cannot alter already imported items.
-- Saving another user's public template creates a new, independent template owned
-  by the recipient.
-- Accepting a template sent by a friend likewise creates an independent copy owned
-  by the recipient.
-- Public templates are visible on user profiles and may appear in friends'
-  community feeds.
+- A template is one account-owned reusable ordered collection of item names and
+  quantities. Template items have no completion state, actor attribution, unit,
+  reminder, date, membership, or live link to a list item.
+- Template names need not be unique and must be non-empty after trimming. Blank
+  templates with zero items are valid and may remain empty after item deletion.
+- An account may own at most 100 templates. A template may contain at most 200
+  current items. Each item follows the existing list-item trimmed 1-120-character
+  name and integer-thousandths quantity limits. Deleting an item immediately frees
+  one place; at capacity existing items may still be edited, reordered, or deleted.
+- Owners may create, rename, recategorize, and permanently delete templates, and
+  may add, edit, reorder, and permanently delete their items. Template deletion
+  requires confirmation and changes no shopping list.
+- Categories are optional private account metadata. Each template belongs to zero
+  or one category; no category is presented as **Uncategorized**. An account may
+  own at most 25 categories, including empty visible categories.
+- Category names are trimmed, collapse runs of whitespace, and are unique per
+  account after case-insensitive normalization. Different accounts may use the
+  same name. Renaming keeps template placement; deleting a category atomically
+  moves its templates to Uncategorized without deleting them.
+- The Templates destination opens on All Templates. It provides a prominent
+  create action, category management and one active category filter (including
+  Uncategorized), search across template and item names, details and management
+  actions, and Recently updated, A-Z, and Newest created sorts. Empty categories
+  remain visible.
+
+An owner or accepted member may save any active or archived shopping list they can
+still access as their own private template. The preview includes completed and
+uncompleted items, selects all by default, permits deselection, and requires 1-200
+selected items. Only the selected names, quantities, and current order are copied.
+The template is an independent snapshot that survives later source changes,
+deletion, access loss, friendship changes, or blocking.
+
+A private template can be used in two ways:
+
+1. Create a new active shopping list owned by the caller, with an editable name
+   prefilled from the template and 1-200 selected items copied atomically as
+   uncompleted items. It starts without other members, invitations, reminders, or
+   dates.
+2. Import selected template items into an existing active shopping list where the
+   caller may normally add items. Remaining capacity is `200` minus the
+   authoritative current destination-item count. Confirmation is disabled for no
+   selection or a selection larger than that remaining capacity.
+
+Both previews select all items by default and preserve selected template order.
+Every imported row is a new independent list item. Possible duplicates are marked
+when normalized names match existing destination items, ignoring capitalization
+and extra spaces, but remain selected by default. Keeping a possible duplicate
+creates a separate item; quantities are never merged and existing items are never
+replaced or edited.
+
+All save/copy/import operations revalidate caller access, exact source and
+destination versions, every selected source identifier, state, and capacity in one
+transaction. Duplicate, missing, foreign, stale, unauthorized, or over-capacity
+requests fail without partial rows, version changes, or Realtime invalidations.
+Destination capacity changes never silently reduce the selection. Exact-capacity
+copies succeed; duplicate-name rows each consume one place.
 
 ### Community
 
@@ -377,8 +432,8 @@ The four primary destinations are:
 4. Profile
 
 The implemented signed-in shell preserves an independent navigation stack for each
-destination. Lists is functional, Templates is an honest localized placeholder,
-and the existing Community and Profile flows live in their respective tabs. The
+destination. Lists and private Templates have dedicated flows, while the existing
+Community and Profile flows live in their respective tabs. The
 notification centre is opened above the shell from a bell affordance and is not a
 primary tab.
 Authentication uses the mobile callback
@@ -447,8 +502,8 @@ choose them:
 - A support or administrator correction process for immutable usernames, including
   its authorization and audit requirements.
 - Avatar storage, upload validation, privacy, replacement, and deletion lifecycle.
-- Template/category ordering, copy visibility defaults, version/provenance display,
-  and feed ranking/retention.
+- Public-template copied visibility/category defaults, attribution and provenance
+  display, and community-feed ranking/retention.
 - Invitation and sent-template expiry, revocation, and idempotent re-acceptance.
 - Supported currencies, currency immutability after ledger use, equal-split
   remainder allocation, expense correction, settlement reversal, and debt

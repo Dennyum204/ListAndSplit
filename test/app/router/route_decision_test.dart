@@ -114,6 +114,7 @@ void main() {
     expect(complete.redirect(AppRoutes.lists), isNull);
     expect(complete.redirect('${AppRoutes.lists}/list-1'), isNull);
     expect(complete.redirect(AppRoutes.templates), isNull);
+    expect(complete.redirect('${AppRoutes.templates}/template-1'), isNull);
     expect(complete.redirect(AppRoutes.profile), isNull);
     expect(complete.redirect(AppRoutes.community), isNull);
     expect(complete.redirect(AppRoutes.friendships), isNull);

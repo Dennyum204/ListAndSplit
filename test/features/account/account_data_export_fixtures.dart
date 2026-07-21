@@ -117,6 +117,42 @@ Map<String, dynamic> validAccountDataExportJson({
                 'state_changed_at': '2026-07-19T06:00:00.000Z',
               },
             ],
+    if (schemaVersion >= 4)
+      'template_categories': emptyCollections
+          ? <Object?>[]
+          : [
+              {
+                'category_id': '99999999-9999-4999-8999-999999999999',
+                'name': 'Weekly shops',
+                'version': 2,
+                'created_at': '2026-07-19T05:00:00.000Z',
+                'updated_at': '2026-07-19T06:00:00.000Z',
+              },
+            ],
+    if (schemaVersion >= 4)
+      'templates': emptyCollections
+          ? <Object?>[]
+          : [
+              {
+                'template_id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                'category_id': '99999999-9999-4999-8999-999999999999',
+                'name': 'Weekly groceries',
+                'version': 3,
+                'created_at': '2026-07-19T05:00:00.000Z',
+                'updated_at': '2026-07-19T07:00:00.000Z',
+                'items': [
+                  {
+                    'item_id': 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+                    'name': 'Coffee',
+                    'quantity_thousandths': 1500,
+                    'position': 1,
+                    'version': 1,
+                    'created_at': '2026-07-19T05:30:00.000Z',
+                    'updated_at': '2026-07-19T05:30:00.000Z',
+                  },
+                ],
+              },
+            ],
   };
 }
 

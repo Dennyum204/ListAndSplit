@@ -29,6 +29,7 @@ import 'package:list_and_split/features/profile/presentation/onboarding_screen.d
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_screen.dart';
 import 'package:list_and_split/features/templates/presentation/templates_screen.dart';
+import 'package:list_and_split/features/templates/presentation/private_template_detail_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _listsNavigatorKey = GlobalKey<NavigatorState>();
@@ -172,6 +173,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.templates,
                 builder: (context, state) => const TemplatesScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':templateId',
+                    builder: (context, state) => PrivateTemplateDetailScreen(
+                      templateId: state.pathParameters['templateId']!,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

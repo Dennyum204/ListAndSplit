@@ -1,5 +1,7 @@
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 
+const activeListItemCapacity = 200;
+
 enum ActiveListStatus {
   active('active'),
   archived('archived');
