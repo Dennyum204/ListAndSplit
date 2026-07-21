@@ -867,6 +867,7 @@ class _SaveTemplateDialogState extends State<_SaveTemplateDialog> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String?>(
+              // ignore: deprecated_member_use
               value: _categoryId,
               decoration: InputDecoration(
                 labelText: localizations.templatesCategoryLabel,

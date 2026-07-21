@@ -135,6 +135,7 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
                         sliver: SliverReorderableList(
                           itemCount: loaded.items.length,
+                          // ignore: deprecated_member_use
                           onReorder: state.isMutating
                               ? (_, __) {}
                               : (oldIndex, newIndex) {
@@ -461,6 +462,7 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String?>(
+              // ignore: deprecated_member_use
               value: _categoryId,
               decoration: InputDecoration(
                 labelText: localizations.templatesCategoryLabel,

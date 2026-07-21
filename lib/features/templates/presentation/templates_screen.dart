@@ -112,6 +112,7 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: DropdownButtonFormField<PrivateTemplateSort>(
                     key: const Key('templateSortField'),
+                    // ignore: deprecated_member_use
                     value: state.sort,
                     decoration: InputDecoration(
                       labelText: localizations.templatesSortLabel,
@@ -566,6 +567,7 @@ class _NamedCategoryDialogState extends State<_NamedCategoryDialog> {
             const SizedBox(height: 12),
             DropdownButtonFormField<String?>(
               key: const Key('templateCategoryField'),
+              // ignore: deprecated_member_use
               value: _categoryId,
               decoration: InputDecoration(
                 labelText: localizations.templatesCategoryLabel,
