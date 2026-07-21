@@ -154,7 +154,9 @@ Templates, and Profile.
 Friendship management and request actions use those same gates and are reachable
 from Community. The notification centre uses the same gates and opens on the root
 navigator from a bell rather than a fifth destination. The shell introduces no
-Realtime, push delivery, feature deep links, or public profile table access.
+push delivery, feature deep links, or public profile table access. Its outer
+session lifecycle owns one private account Realtime coordinator after verified
+onboarding; screens do not create channels.
 
 ### Active-list client boundary
 
@@ -168,8 +170,8 @@ data layer.
 List providers are keyed by the current verified user identity and are invalidated
 on sign-out, account deletion, invalid-session recovery, or identity change. No
 global list/member/invitation payload survives a session boundary. There is no
-SQLite, Realtime, or
-optimistic server success in this slice; stale `40001` failures refresh current
+SQLite, offline mutation queue, or optimistic server success. Realtime is an
+opaque invalidation input to repository refresh only; stale `40001` failures refresh current
 state and never overwrite it. Exact quantity parsing is a domain value that stores
 positive integer thousandths and never converts through `double`.
 
@@ -184,8 +186,8 @@ positive integer thousandths and never converts through `double`.
 - **PostgreSQL** stores authoritative product records and relationships.
 - **Row Level Security** restricts every application table by identity,
   membership, ownership, or recipient relationship.
-- **Realtime** will deliver relevant list and notification changes after its
-  authorization and reconciliation behavior is designed.
+- **Realtime** delivers private, account-scoped, content-free invalidations; RPC
+  repositories remain the only state and authorization authority.
 - **Storage** is available for future binary objects, with object policies aligned
   to the owning application records. No concrete storage use is yet agreed.
 - **Database functions** and, where appropriate, **Edge Functions** hold atomic or
@@ -256,10 +258,34 @@ contiguous positive integer positions in one short transaction. Owner-or-member
 item access is rechecked inside each transaction; owner-only metadata and access
 operations never trust caller-supplied role or identity.
 
-Realtime is accepted for the next focused slice as private Supabase Broadcast with
-opaque invalidation payloads only. RPC repositories remain authoritative; resume
-and manual refresh reconcile state. No row contents, profile data, notifications,
-offline mutation queue, or authorization decisions belong in Broadcast payloads.
+Realtime uses exactly one private `account:<auth.uid()>` channel per completed
+authenticated session, event `invalidate`, and application payload `{"v":1}`.
+`realtime.messages` has one authenticated `SELECT` policy requiring extension
+`broadcast` and exact equality between `realtime.topic()` and the caller-derived
+account topic. There is no authenticated `INSERT` policy, anonymous policy,
+Presence policy, public channel, or application-table publication.
+The Supabase project Realtime setting **Allow public access** must be disabled;
+private configuration is still explicit on both database sends and Flutter joins.
+
+Postgres-owned hardened triggers call `realtime.send(..., true)` inside the same
+transaction as real list, participant, notification, relationship, block, and
+profile changes. Fanout targets affected account topics and sends no row, resource,
+actor, transition, timestamp, or authorization data. A failed or rolled-back
+mutation commits no message; duplicate transport signals are harmless.
+
+Only the injected Supabase adapter uses the channel API. A session-scoped
+coordinator starts after verified onboarding, removes the old channel before an
+account switch, relies on the pinned SDK for token refresh and error/timeout
+rejoin, replaces an unexpected closed channel, and reconciles after every
+`SUBSCRIBED` state and app resume. Mounted feature controllers register
+repository refresh work. One pass runs at a time; bursts mark one dirty follow-up
+and are cooldown-bounded. Cached UI remains usable on transport failure. Access
+revocation clears inaccessible detail/member content and navigates once to Lists
+with generic localized wording. Manual refresh remains a required fallback.
+
+Broadcast is best-effort and has no replay or durable-history promise. Presence,
+Broadcast Replay, Postgres Changes client subscriptions, client sends, REST/Edge
+fanout, push delivery, and offline mutation are deliberately deferred.
 
 ### Account export boundary
 
@@ -547,12 +573,12 @@ open.
 - Derived balances/debts may be displayed or cached, but the client is not their
   authority.
 
-## Planned offline and realtime model
+## Implemented realtime and planned offline model
 
 SQLite will later sit behind repository implementations as an offline-tolerant
 cache for active-list usage. Supabase remains authoritative.
 
-A safe future flow is conceptually:
+The current online flow and future cache placement are conceptually:
 
 ```text
 view/view model -> repository -> local cache and sync coordinator -> Supabase
@@ -560,11 +586,12 @@ view/view model -> repository -> local cache and sync coordinator -> Supabase
                                       +------ realtime --------+
 ```
 
-This diagram does not select a synchronization algorithm. Record versioning,
+Realtime currently enters the repository reconciliation side of this boundary;
+it never mutates UI state directly. The diagram does not select an offline
+synchronization algorithm. Record versioning,
 mutation queues, conflict resolution, deletion tombstones, retry semantics, and
 the boundary between optimistic and confirmed state must be decided before offline
-writes are implemented. Realtime events must be treated as inputs to repository
-reconciliation, not as direct UI mutations.
+writes are implemented.
 
 ## Error handling, testing, and observability
 
@@ -604,10 +631,8 @@ reconciliation, not as direct UI mutations.
   four-tab shell.
 - Development/staging/production flavor and environment-separation strategy.
 - PostgreSQL-function versus Edge-Function placement for each atomic server action.
-- Realtime subscription granularity, reconnect/replay behavior, and event ordering.
 - SQLite library, cache schema, synchronization algorithm, conflict policy, and
   background execution limits.
-- How blocking or relationship changes affect existing shared resources.
 - Avatar and other Storage use cases, upload validation, object policies, and
   retention.
 - Logging, analytics, crash reporting, performance budgets, and privacy controls.

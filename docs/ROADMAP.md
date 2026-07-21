@@ -79,8 +79,9 @@ The friend relationship schema gate O-A09 is resolved: one current row uses the
 five accepted states, deterministic pair locking, monotonic versions, server-owned
 state-change time, and no detailed event log. The subsequent notification slice
 references that row without replacing its action authority and still excludes
-Realtime, push delivery, other notification types, and public profiles. The
-four-tab authenticated shell now includes the secure shared-list membership slice.
+push delivery, other notification types, and public profiles. The four-tab
+authenticated shell now includes secure shared-list membership and private
+account-scoped Realtime reconciliation.
 Resolve the immutable-username support/admin correction
 path and avatar storage lifecycle before the later slices that encode them.
 Shared-resource ownership/deletion, administrator deletion, moderation/legal
@@ -110,13 +111,16 @@ Implemented slices:
   archived-list access rules.
 - Atomic friendship/block effects, actionable/informational list notifications,
   privacy-minimal account export schema version `3`, and deletion-impact warning.
+- Private account-scoped Supabase Broadcast receive authorization, transaction-local
+  opaque database invalidations, and generation-safe Flutter reconciliation after
+  joins, events, reconnects, and app resume. RPCs and manual refresh remain
+  authoritative fallbacks.
 
 Remaining candidate slices:
 
 - Ownership transfer.
 - Multi-member item assignment and assignment notifications.
 - General note editing, member `@mentions`, and mention notifications.
-- Private Supabase Broadcast opaque invalidations routed through repositories.
 - Authorization and concurrent-update tests for future membership and notes.
 
 Required decisions still include ownership transfer, mention parsing, and offline
@@ -169,7 +173,7 @@ Candidate slices:
 
 - Introduce SQLite behind repository boundaries for active-list caching.
 - Define and test mutation queues, idempotency, conflict resolution, tombstones,
-  retry, realtime reconciliation, and reconnect behavior.
+  retry, and cache reconciliation around the accepted online Realtime boundary.
 - Decide which mutations, if any, are safe while offline.
 - Add FCM and APNs registration, delivery, preferences, and notification deep links.
 - Handle device-token rotation/removal and redact sensitive notification content.
