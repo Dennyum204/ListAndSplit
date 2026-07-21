@@ -86,7 +86,7 @@ class AppRouteDecision {
 
     if (currentPath == AppRoutes.foundation ||
         _isPathWithin(currentPath, AppRoutes.lists) ||
-        currentPath == AppRoutes.templates ||
+        _isPathWithin(currentPath, AppRoutes.templates) ||
         currentPath == AppRoutes.profile ||
         _isPathWithin(currentPath, AppRoutes.community) ||
         currentPath == AppRoutes.notifications) {
