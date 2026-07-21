@@ -458,17 +458,37 @@ set local "request.jwt.claim.sub" = '41000000-0000-4000-8000-000000000001';
 select * from public.rename_active_list(
   (select value from realtime_values where label = 'list'), 'Renamed list', 8
 );
+reset role;
+select ok(
+  pg_temp.broadcast_count('41000000-0000-4000-8000-000000000001') >= 1
+  and pg_temp.broadcast_count('41000000-0000-4000-8000-000000000002') >= 1,
+  'list rename fans out to the owner and accepted member'
+);
+
+select pg_temp.clear_broadcasts();
+set local role authenticated;
+set local "request.jwt.claim.sub" = '41000000-0000-4000-8000-000000000001';
 select * from public.set_active_list_archived(
   (select value from realtime_values where label = 'list'), true, 9
 );
+reset role;
+select ok(
+  pg_temp.broadcast_count('41000000-0000-4000-8000-000000000001') >= 1
+  and pg_temp.broadcast_count('41000000-0000-4000-8000-000000000002') >= 1,
+  'list archive fans out to the owner and accepted member'
+);
+
+select pg_temp.clear_broadcasts();
+set local role authenticated;
+set local "request.jwt.claim.sub" = '41000000-0000-4000-8000-000000000001';
 select * from public.set_active_list_archived(
   (select value from realtime_values where label = 'list'), false, 10
 );
 reset role;
 select ok(
-  pg_temp.broadcast_count('41000000-0000-4000-8000-000000000001') >= 3
-  and pg_temp.broadcast_count('41000000-0000-4000-8000-000000000002') >= 3,
-  'list rename, archive, and restore each fan out to owner and accepted members'
+  pg_temp.broadcast_count('41000000-0000-4000-8000-000000000001') >= 1
+  and pg_temp.broadcast_count('41000000-0000-4000-8000-000000000002') >= 1,
+  'list restore fans out to the owner and accepted member'
 );
 
 select pg_temp.clear_broadcasts();

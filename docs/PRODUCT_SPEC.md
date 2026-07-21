@@ -208,7 +208,9 @@ template, and Payment Control records are not implemented.
   visible state may have changed, never content or authorization evidence.
   Valid events, successful subscription joins, and app resume reconcile mounted
   list, detail, member, notification, badge, and relevant community projections
-  through existing repositories. Manual refresh remains available.
+  through existing repositories. Remote rename updates mounted list titles; remote
+  archive/restore moves the list between projections, and a remotely archived open
+  detail returns to Lists once. Manual refresh remains available.
 
 ### Templates
 

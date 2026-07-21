@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
@@ -35,6 +36,105 @@ void main() {
       'archived-list',
     );
     expect(repository.listCalls, 2);
+  });
+
+  test('Realtime overview reconciliation moves archive and restore projections',
+      () async {
+    final repository = FakeActiveListRepository()..activeLists = [_summary()];
+    final controller = ActiveListsController(
+      repository,
+      hasAuthenticatedUser: true,
+    );
+    addTearDown(controller.dispose);
+    await controller.loadAll();
+
+    await repository.setArchived('list-1', archived: true, expectedVersion: 1);
+    await controller.reconcile();
+
+    expect(controller.state.activeLists.requireValue, isEmpty);
+    expect(controller.state.archivedLists.requireValue.single.id, 'list-1');
+
+    await repository.setArchived('list-1', archived: false, expectedVersion: 2);
+    await controller.reconcile();
+
+    expect(controller.state.activeLists.requireValue.single.id, 'list-1');
+    expect(controller.state.archivedLists.requireValue, isEmpty);
+  });
+
+  test('manual overview refresh remains an authoritative fallback', () async {
+    final repository = FakeActiveListRepository()..activeLists = [_summary()];
+    final controller = ActiveListsController(
+      repository,
+      hasAuthenticatedUser: true,
+    );
+    addTearDown(controller.dispose);
+    await controller.loadAll();
+
+    await repository.renameList('list-1', 'Manually refreshed',
+        expectedVersion: 1);
+    await controller.refresh(ActiveListStatus.active);
+
+    expect(
+      controller.state.activeLists.requireValue.single.title,
+      'Manually refreshed',
+    );
+  });
+
+  test('owner and member device registries reconcile independently', () async {
+    final ownerRepository = FakeActiveListRepository()
+      ..activeLists = [_summary(title: 'Original')];
+    final memberRepository = FakeActiveListRepository()
+      ..activeLists = [_summary(title: 'Original', isOwner: false)];
+    final ownerController =
+        ActiveListDetailController(ownerRepository, 'list-1');
+    final memberController =
+        ActiveListDetailController(memberRepository, 'list-1');
+    addTearDown(ownerController.dispose);
+    addTearDown(memberController.dispose);
+    await Future.wait([ownerController.load(), memberController.load()]);
+
+    final ownerRegistry = ReconciliationRegistry()
+      ..register(ownerController.reconcile);
+    final memberRegistry = ReconciliationRegistry()
+      ..register(memberController.reconcile);
+    await ownerRepository.renameList('list-1', 'Owner projection',
+        expectedVersion: 1);
+    await memberRepository.renameList('list-1', 'Member projection',
+        expectedVersion: 1);
+
+    await ownerRegistry.reconcile();
+    expect(ownerController.state.detail.requireValue.summary.title,
+        'Owner projection');
+    expect(
+        memberController.state.detail.requireValue.summary.title, 'Original');
+
+    await memberRegistry.reconcile();
+    expect(memberController.state.detail.requireValue.summary.title,
+        'Member projection');
+  });
+
+  test('remote archive is signalled once after authoritative detail refresh',
+      () async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary(isOwner: false)];
+    final controller = ActiveListDetailController(repository, 'list-1');
+    addTearDown(controller.dispose);
+    await controller.load();
+
+    await repository.setArchived('list-1', archived: true, expectedVersion: 1);
+    await controller.reconcile();
+
+    expect(
+      controller.state.message,
+      ActiveListDetailMessage.remotelyArchived,
+    );
+    expect(
+      controller.state.detail.requireValue.summary.status,
+      ActiveListStatus.archived,
+    );
+
+    await controller.reconcile();
+    expect(controller.state.message, isNull);
   });
 
   test('Realtime overview reconciliation preserves cached state on failure',
@@ -669,6 +769,7 @@ ActiveListSummary _summary({
   ActiveListStatus status = ActiveListStatus.active,
   DateTime? archivedAt,
   int version = 1,
+  bool isOwner = true,
 }) {
   return ActiveListSummary(
     id: id,
@@ -680,6 +781,7 @@ ActiveListSummary _summary({
     createdAt: DateTime.utc(2026, 7, 20, 9),
     updatedAt: DateTime.utc(2026, 7, 20, 10),
     archivedAt: archivedAt,
+    isOwner: isOwner,
   );
 }
 

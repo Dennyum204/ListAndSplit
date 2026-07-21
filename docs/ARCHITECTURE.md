@@ -281,7 +281,10 @@ rejoin, replaces an unexpected closed channel, and reconciles after every
 repository refresh work. One pass runs at a time; bursts mark one dirty follow-up
 and are cooldown-bounded. Cached UI remains usable on transport failure. Access
 revocation clears inaccessible detail/member content and navigates once to Lists
-with generic localized wording. Manual refresh remains a required fallback.
+with generic localized wording; a remote active-to-archived detail transition also
+returns to Lists once without presenting it as revocation. Notification projection
+reconciliation marks only unread rows, preventing its own read writes from
+producing a Broadcast feedback loop. Manual refresh remains a required fallback.
 
 Broadcast is best-effort and has no replay or durable-history promise. Presence,
 Broadcast Replay, Postgres Changes client subscriptions, client sends, REST/Edge

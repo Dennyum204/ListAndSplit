@@ -271,6 +271,7 @@ the event is `invalidate`, the application payload is exactly `{"v":1}`, and eve
 valid event, successful join, or app resume reloads authoritative state through
 repositories. Presence, Broadcast Replay, Postgres Changes, client-originated
 Broadcast, push delivery, and an offline mutation queue remain deliberately absent.
-Other open
-product and architecture choices are recorded in the project documentation and
-must be decided before their implementation slices.
+Remote list metadata and active/archive projection changes reconcile in place;
+remotely archived open detail returns safely to Lists once. Other open product and
+architecture choices are recorded in the project documentation and must be decided
+before their implementation slices.

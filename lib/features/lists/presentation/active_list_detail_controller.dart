@@ -10,6 +10,7 @@ enum ActiveListDetailMessage {
   renamed,
   archived,
   restored,
+  remotelyArchived,
   itemCreated,
   itemUpdated,
   itemDeleted,
@@ -125,14 +126,20 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
         _repository.listItems(listId),
       ]).timeout(_requestTimeout);
       if (!mounted || generation != _loadGeneration) return false;
+      final refreshedSummary = results[0] as ActiveListSummary;
+      final message = existing?.summary.status == ActiveListStatus.active &&
+              refreshedSummary.status == ActiveListStatus.archived &&
+              successMessage != ActiveListDetailMessage.archived
+          ? ActiveListDetailMessage.remotelyArchived
+          : successMessage;
       state = ActiveListDetailState(
         detail: AsyncData(
           ActiveListDetail(
-            summary: results[0] as ActiveListSummary,
+            summary: refreshedSummary,
             items: results[1] as List<ActiveListItem>,
           ),
         ),
-        message: successMessage,
+        message: message,
       );
       return true;
     } catch (error, stackTrace) {

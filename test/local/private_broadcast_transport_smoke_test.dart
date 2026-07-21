@@ -88,7 +88,7 @@ void main() {
       expect(await _terminalJoinStatus(anonymousTopic),
           RealtimeSubscribeStatus.channelError);
 
-      final userAEvent = Completer<Map<String, dynamic>>();
+      final userAEvents = <Map<String, dynamic>>[];
       final ownTopic = userA.channel(
         accountRealtimeTopic(userAId),
         opts: const RealtimeChannelConfig(private: true, ack: true),
@@ -97,25 +97,25 @@ void main() {
       ownTopic.onBroadcast(
         event: accountInvalidationEvent,
         callback: (payload) {
-          if (!userAEvent.isCompleted) userAEvent.complete(payload);
+          if (isAccountInvalidationEnvelope(payload)) userAEvents.add(payload);
         },
       );
       expect(await _terminalJoinStatus(ownTopic),
           RealtimeSubscribeStatus.subscribed);
 
-      final userBEvent = Completer<Map<String, dynamic>>();
-      final unrelatedTopic = userB.channel(
+      final userBEvents = <Map<String, dynamic>>[];
+      final ownTopicB = userB.channel(
         accountRealtimeTopic(userBId),
         opts: const RealtimeChannelConfig(private: true),
       );
-      channels.add((userB, unrelatedTopic));
-      unrelatedTopic.onBroadcast(
+      channels.add((userB, ownTopicB));
+      ownTopicB.onBroadcast(
         event: accountInvalidationEvent,
         callback: (payload) {
-          if (!userBEvent.isCompleted) userBEvent.complete(payload);
+          if (isAccountInvalidationEnvelope(payload)) userBEvents.add(payload);
         },
       );
-      expect(await _terminalJoinStatus(unrelatedTopic),
+      expect(await _terminalJoinStatus(ownTopicB),
           RealtimeSubscribeStatus.subscribed);
 
       final outbound = await ownTopic.sendBroadcastMessage(
@@ -133,16 +133,10 @@ void main() {
         },
       ) as List<dynamic>;
       expect(created, hasLength(1));
-      final envelope = await userAEvent.future.timeout(
-        const Duration(seconds: 10),
-      );
-      expect(
-        isAccountInvalidationEnvelope(envelope),
-        isTrue,
-      );
+      await _waitFor(() => userAEvents.isNotEmpty);
 
       await Future<void>.delayed(const Duration(milliseconds: 500));
-      expect(userBEvent.isCompleted, isFalse);
+      expect(userBEvents, isEmpty);
       final authoritative = await userA.rpc(
         'list_active_lists',
         params: {'requested_status': 'active', 'page_size': 20},
@@ -153,11 +147,85 @@ void main() {
             ),
         isTrue,
       );
+
+      final createdRow = Map<String, dynamic>.from(created.single as Map);
+      final listId = createdRow['list_id']! as String;
+      await userA.rpc(
+        'send_friend_request',
+        params: {
+          'target_profile_id': userBId,
+          'expected_relationship_version': null,
+        },
+      );
+      await userB.rpc(
+        'accept_friend_request',
+        params: {
+          'target_profile_id': userAId,
+          'expected_relationship_version': 1,
+        },
+      );
+      final invited = await userA.rpc(
+        'invite_active_list_member',
+        params: {
+          'target_list_id': listId,
+          'target_profile_id': userBId,
+          'expected_access_version': null,
+        },
+      ) as List<dynamic>;
+      final accessVersion =
+          Map<String, dynamic>.from(invited.single as Map)['access_version']!
+              as int;
+      await userB.rpc(
+        'accept_active_list_invitation',
+        params: {
+          'target_list_id': listId,
+          'expected_access_version': accessVersion,
+        },
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+
+      final ownerBeforeRename = userAEvents.length;
+      final memberBeforeRename = userBEvents.length;
+      final current = await userA.rpc(
+        'get_active_list',
+        params: {'target_list_id': listId},
+      ) as List<dynamic>;
+      final currentVersion =
+          Map<String, dynamic>.from(current.single as Map)['version']! as int;
+      await userA.rpc(
+        'rename_active_list',
+        params: {
+          'target_list_id': listId,
+          'new_title': 'Renamed for accepted member',
+          'expected_list_version': currentVersion,
+        },
+      );
+
+      await _waitFor(() => userAEvents.length > ownerBeforeRename);
+      await _waitFor(() => userBEvents.length > memberBeforeRename);
+      final memberProjection = await userB.rpc(
+        'get_active_list',
+        params: {'target_list_id': listId},
+      ) as List<dynamic>;
+      expect(
+        Map<String, dynamic>.from(memberProjection.single as Map)['title'],
+        'Renamed for accepted member',
+      );
     },
     skip: _runLocalSmoke
         ? false
         : 'requires explicit local Supabase Realtime smoke configuration',
   );
+}
+
+Future<void> _waitFor(bool Function() condition) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 10));
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) {
+      throw TimeoutException('Expected Realtime event was not received.');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
 }
 
 Future<RealtimeSubscribeStatus> _terminalJoinStatus(

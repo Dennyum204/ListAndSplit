@@ -349,14 +349,24 @@ class NotificationCentreController
     bool refreshUnreadOnFailure = false,
   }) async {
     try {
-      if (notificationIds.isEmpty) {
+      final candidateIds = notificationIds.toSet();
+      final unreadIds = state.notifications.valueOrNull
+              ?.where(
+                (notification) =>
+                    candidateIds.contains(notification.id) &&
+                    !notification.isRead,
+              )
+              .map((notification) => notification.id)
+              .toList(growable: false) ??
+          const <String>[];
+      if (unreadIds.isEmpty) {
         await _refreshUnreadCount();
         return;
       }
 
-      await _notificationRepository.markRead(notificationIds);
+      await _notificationRepository.markRead(unreadIds);
       if (!mounted || generation != _loadGeneration) return;
-      final displayedIds = notificationIds.toSet();
+      final displayedIds = unreadIds.toSet();
       final current = state.notifications.valueOrNull;
       if (current != null) {
         state = state.copyWith(

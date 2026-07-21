@@ -26,7 +26,10 @@ class ActiveListDetailScreen extends ConsumerWidget {
     ref.listen<ActiveListDetailState>(
       activeListDetailControllerProvider(listId),
       (previous, next) {
-        if (next.message == ActiveListDetailMessage.unavailable &&
+        if (next.message == ActiveListDetailMessage.remotelyArchived &&
+            previous?.message != ActiveListDetailMessage.remotelyArchived) {
+          context.go(AppRoutes.lists);
+        } else if (next.message == ActiveListDetailMessage.unavailable &&
             previous?.message != ActiveListDetailMessage.unavailable) {
           context.go(AppRoutes.lists);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -397,6 +400,7 @@ class _DetailBody extends ConsumerWidget {
       ActiveListDetailMessage.renamed => localizations.listRenamedMessage,
       ActiveListDetailMessage.archived => localizations.listArchivedMessage,
       ActiveListDetailMessage.restored => localizations.listRestoredMessage,
+      ActiveListDetailMessage.remotelyArchived => null,
       ActiveListDetailMessage.itemCreated => localizations.itemCreatedMessage,
       ActiveListDetailMessage.itemUpdated => localizations.itemUpdatedMessage,
       ActiveListDetailMessage.itemDeleted => localizations.itemDeletedMessage,
