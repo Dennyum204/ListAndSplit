@@ -82,11 +82,15 @@ are the evidence of implementation status.
   stable unit code, integer position, completion attribution/time, versions, and
   timestamps. It excludes creation request IDs and internal locking or
   authorization details.
+- After ownership transfer, the new owner receives the list only in the full owned
+  projection and the former owner receives its caller-relative shared-access
+  metadata. The internal retained owner-access state is never exported as shared
+  membership.
 - The export never includes passwords or hashes, tokens, sessions, raw Auth
   metadata, another person's email or Auth data, incoming blocks, raw dormant
   relationship state, reopening/requester internals, suppressed/expired/
-  block-hidden notifications, server logs, security records, templates, shared
-  membership data, or ledger data.
+  block-hidden notifications, server logs, security records, templates, other
+  participants or shared-list contents, or ledger data.
 - Export is generated synchronously on demand and returned to the caller. The
   server retains no export file or export record. The mobile app validates and
   pretty-prints the versioned document, writes it to OS-managed temporary/cache
@@ -144,9 +148,9 @@ are the evidence of implementation status.
 
 ### Active and shared lists
 
-Each list has one fully onboarded owner and may have retained, versioned non-owner
-access rows. Ownership transfer, assignment, note, mention, offline cache,
-template, and Payment Control records are not implemented.
+Each list has one fully onboarded owner and retained, versioned access rows.
+Assignment, note, mention, offline cache, template, and Payment Control records
+are not implemented.
 
 - The owner can create, list, open, rename, archive, restore, and permanently
   delete a list. Duplicate titles are allowed; titles are trimmed and contain
@@ -182,10 +186,11 @@ template, and Payment Control records are not implemented.
 
 - Only accepted friends can be invited. Invitations are persistent, do not expire,
   reserve one of the 20 participant places, and retain one monotonic current access
-  row in `pending`, `member`, `declined`, `cancelled`, `removed`, or `left` state.
+  row in `pending`, `member`, `declined`, `cancelled`, `removed`, `left`, or the
+  internal transfer-only `owner` state.
   Accept, decline, cancel, remove, leave, and reinvite use exact versions and are
   idempotent for completed retries. Owners cannot leave; members may leave archived
-  lists; ownership transfer is deferred.
+  lists; active-list ownership transfer follows the accepted contract below.
 - Archiving atomically cancels pending invitations. Archived content remains readable,
   members may leave and owners may remove members, but invitation creation/acceptance
   and content mutation are rejected. Restore revives no access state.
@@ -202,6 +207,19 @@ template, and Payment Control records are not implemented.
 - Accepted participants see only profile ID, username, and display name for the owner
   and accepted members. Pending recipients are visible only to the owner and that
   recipient.
+- Only the current owner may immediately transfer an active list to one current
+  accepted member after an explicit confirmation naming that member. Friendship is
+  not re-required, but either-direction blocks and every existing membership rule
+  remain authoritative. The recipient becomes the sole owner atomically; the
+  former owner remains an accepted member, capacity and list content remain
+  unchanged, and no password reauthentication or offline transfer is supported.
+- A real transfer increments the list version exactly once, preserves monotonic
+  retained access versions for both identities, and creates exactly one
+  informational notification for the new owner. Stale, unauthorized, archived,
+  blocked, ineligible, failed, or rolled-back attempts change nothing and emit no
+  notification or Realtime invalidation. The new owner gains and the former owner
+  loses every owner-only capability immediately; transferring back is a new
+  confirmed operation by the then-current owner.
 - Connected authenticated devices subscribe to one private account-scoped
   Broadcast channel after onboarding. The fixed `invalidate` event carries only
   application payload `{"v":1}`; it is best-effort notice that authoritative
@@ -341,6 +359,8 @@ the presentation of simplified debts remain open decisions.
   Accept or Decline. Active-list invitation actions are implemented.
 - Users receive informational notifications for new item assignments and note
   mentions.
+- A successful ownership transfer creates one informational notification for the
+  new owner without copying profile or list text into the notification row.
 - User-facing archive, delete, mark-unread, preference, and notification-history
   controls are not part of the friend-request slice.
 - Push notifications are planned for a later phase using Firebase Cloud Messaging
@@ -423,7 +443,6 @@ feature deep-link contracts remain open.
 These decisions are intentionally unresolved; implementations must not silently
 choose them:
 
-- Ownership transfer beyond the accepted one-owner/member model.
 - Note mention parsing, eligibility, editing, and notification deduplication.
 - A support or administrator correction process for immutable usernames, including
   its authorization and audit requirements.

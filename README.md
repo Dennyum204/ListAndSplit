@@ -262,7 +262,7 @@ SQL into the Dashboard.
 ## Intentional deferrals
 
 The current slices do not implement unrestricted profile/directory search,
-avatars, ownership transfer, real templates, notification archive/preferences or
+avatars, real templates, notification archive/preferences or
 physical cleanup, reporting, server-side ledger logic, SQLite caching/offline
 synchronization, push delivery,
 Firebase setup, administrator-initiated deletion, or a production backend.

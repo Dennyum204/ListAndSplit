@@ -232,10 +232,13 @@ force RLS, explicitly reject every direct `anon` and
 aggregate with Auth-root deletion. A nullable completion-actor foreign key uses
 `ON DELETE SET NULL`, so future actor deletion cannot remove an item.
 
-Participant rows retain one non-owner's versioned `pending`, `member`, `declined`,
-`cancelled`, `removed`, or `left` state. List-row locking serializes the 20-person
-capacity including pending reservations. Pair locks precede deterministic list-row
-locks for friendship/block effects. No detailed access history exists.
+Participant rows retain one profile's versioned `pending`, `member`, `declined`,
+`cancelled`, `removed`, or `left` state. After ownership transfer, the promoted
+profile's same retained row uses the internal `owner` state so its access version
+and notification references are never deleted or reused. List-row locking
+serializes the 20-person capacity including pending reservations. Pair locks
+precede deterministic list-row locks for friendship, block, and ownership-transfer
+effects. No detailed access history exists.
 
 Exact `postgres`-owned `SECURITY DEFINER` functions derive authority only from
 `auth.uid()`, require a confirmed fully onboarded profile, pin an empty
@@ -257,6 +260,18 @@ array is non-null and unique and exactly equals the current item set before writ
 contiguous positive integer positions in one short transaction. Owner-or-member
 item access is rechecked inside each transaction; owner-only metadata and access
 operations never trust caller-supplied role or identity.
+
+Ownership transfer is one exact authenticated PostgreSQL RPC. It accepts only the
+list ID, target profile ID, expected list version, and expected target-access
+version. After the established pair lock and list lock, it requires the caller to
+remain the owner, the list to remain active, and the target to remain an onboarded,
+unblocked accepted member. It changes `active_lists.owner_id`, advances the list
+version exactly once, advances the promoted row from `member` to internal `owner`,
+and creates or advances the former owner's retained `member` row. The count of
+`pending`/`member` rows is unchanged, and deferred consistency checks permit no
+committed owner/member duplication. One informational notification is inserted for
+the new owner in the same transaction. The allowlisted result contains only the
+list/owner identities and authoritative versions.
 
 Realtime uses exactly one private `account:<auth.uid()>` channel per completed
 authenticated session, event `invalidate`, and application payload `{"v":1}`.
@@ -321,6 +336,13 @@ constructed field by field rather than by serializing physical rows. The functio
 is stable and read-only: it does not mark
 notifications read, mutate relationships, update Auth, or persist an export job,
 file, audit row, Storage object, signed URL, or background task.
+
+An internal transferred-owner access row is excluded from `shared_list_access`, so
+the current owner receives the list only in the full owned-list projection while
+the former owner receives caller-relative shared access. The deletion-impact RPC
+continues to derive ownership solely from `active_lists.owner_id`; deleting a
+former owner removes only that profile's access, while deleting the new owner
+follows the existing owned-aggregate cascade.
 
 Flutter owns version validation and temporary-file presentation behind repository
 and injectable file/share-service boundaries. The feature controller is scoped to
@@ -492,8 +514,9 @@ caller-owned mark-read. Flutter receives a domain model with minimal actor profi
 data and caller-relative `actionable`, `friends`, or `unavailable` presentation;
 it never reads or mutates notification rows directly.
 
-The physical `public.user_notifications` table is initially constrained to
-`friend_request`. It records a generated UUID, recipient and actor profile IDs,
+The physical `public.user_notifications` table supports the reviewed
+friend-request, list-access, and ownership-transfer types. It records a generated
+UUID, recipient and actor profile IDs,
 normalized relationship participants, the positive relationship version that
 created the notification, database-owned creation and exact 180-day expiry,
 nullable read time, and nullable permanent suppression time. Profile and
@@ -556,12 +579,11 @@ binary.
 ### Server operation shape
 
 Operations that span records or enforce important invariants should be atomic and
-idempotent where retries are possible. The owner-only list aggregate uses exact
+idempotent where retries are possible. The active/shared-list aggregate uses exact
 PostgreSQL RPCs because its validation, locking, version checks, and writes belong
-in one short database transaction. Future examples include accepting an
-invitation, accepting/saving a template copy, creating a template snapshot in an
-active list, and recording a ledger change; placement for those operations remains
-open.
+in one short database transaction. Future examples include accepting/saving a
+template copy, creating a template snapshot in an active list, and recording a
+ledger change; placement for those operations remains open.
 
 ## Money boundary
 
@@ -626,7 +648,7 @@ writes are implemented.
 
 ## Open architecture decisions
 
-- Shared-resource ownership/deletion, administrator deletion, moderation/legal
+- Shared-resource administrator deletion, moderation/legal
   retention, Storage cleanup, and compliance obligations beyond the implemented
   current-aggregate account lifecycle.
 - Precise feature folder layering and whether Riverpod code generation is used.
