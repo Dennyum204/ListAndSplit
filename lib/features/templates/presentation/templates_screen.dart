@@ -436,36 +436,15 @@ class _CategoryManagementSheet extends ConsumerWidget {
     TemplateCategory? category,
   }) async {
     final localizations = AppLocalizations.of(context);
-    final controller = TextEditingController(text: category?.name ?? '');
     final name = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(category == null
+      builder: (_) => _CategoryNameDialog(
+        title: category == null
             ? localizations.templatesCreateCategoryButton
-            : localizations.templatesRenameCategoryButton),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: localizations.templatesCategoryNameLabel,
-          ),
-          onSubmitted: (value) => Navigator.pop(dialogContext, value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(localizations.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: Text(category == null
-                ? localizations.templatesCreateCategoryButton
-                : localizations.templatesRenameCategoryButton),
-          ),
-        ],
+            : localizations.templatesRenameCategoryButton,
+        initialName: category?.name ?? '',
       ),
     );
-    controller.dispose();
     if (name == null || !context.mounted) return;
     final notifier = ref.read(privateTemplatesControllerProvider.notifier);
     if (category == null) {
@@ -503,6 +482,71 @@ class _CategoryManagementSheet extends ConsumerWidget {
           .read(privateTemplatesControllerProvider.notifier)
           .deleteCategory(category);
     }
+  }
+}
+
+class _CategoryNameDialog extends StatefulWidget {
+  const _CategoryNameDialog({
+    required this.title,
+    required this.initialName,
+  });
+
+  final String title;
+  final String initialName;
+
+  @override
+  State<_CategoryNameDialog> createState() => _CategoryNameDialogState();
+}
+
+class _CategoryNameDialogState extends State<_CategoryNameDialog> {
+  late final TextEditingController _nameController;
+  bool _isClosing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _close([String? name]) {
+    if (_isClosing) return;
+    setState(() => _isClosing = true);
+    Navigator.of(context).pop(name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        key: const Key('categoryNameField'),
+        controller: _nameController,
+        autofocus: true,
+        decoration: InputDecoration(
+          labelText: localizations.templatesCategoryNameLabel,
+        ),
+        onSubmitted: _isClosing ? null : _close,
+      ),
+      actions: [
+        TextButton(
+          key: const Key('cancelCategoryNameButton'),
+          onPressed: _isClosing ? null : _close,
+          child: Text(localizations.cancelButton),
+        ),
+        FilledButton(
+          key: const Key('confirmCategoryNameButton'),
+          onPressed: _isClosing ? null : () => _close(_nameController.text),
+          child: Text(widget.title),
+        ),
+      ],
+    );
   }
 }
 

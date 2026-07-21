@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,8 @@ import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+import 'package:list_and_split/features/templates/domain/private_template.dart';
+import 'package:list_and_split/features/templates/domain/private_template_repository.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_detail_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/templates_screen.dart';
@@ -34,6 +38,216 @@ void main() {
     expect(find.byKey(const Key('templateSearchField')), findsOneWidget);
     expect(find.byKey(const Key('templateSortField')), findsOneWidget);
     expect(find.byKey(const Key('createTemplateButton')), findsOneWidget);
+  });
+
+  testWidgets('create category closes without disposing a mounted controller',
+      (tester) async {
+    final repository = FakePrivateTemplateRepository();
+
+    await _pump(
+      tester,
+      repository: repository,
+      lists: FakeActiveListRepository(),
+      child: const TemplatesScreen(),
+    );
+
+    await tester.tap(
+      find.byKey(const Key('manageTemplateCategoriesButton')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Create category'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('categoryNameField')),
+      'Groceries',
+    );
+    await tester.tap(find.byKey(const Key('confirmCategoryNameButton')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(repository.categories.single.name, 'Groceries');
+    expect(find.byKey(const Key('categoryNameField')), findsNothing);
+    expect(find.text('Template categories'), findsOneWidget);
+    expect(find.text('Groceries'), findsWidgets);
+  });
+
+  testWidgets('create category cancellation unmounts cleanly', (tester) async {
+    final repository = FakePrivateTemplateRepository();
+
+    await _pump(
+      tester,
+      repository: repository,
+      lists: FakeActiveListRepository(),
+      child: const TemplatesScreen(),
+    );
+
+    await tester.tap(
+      find.byKey(const Key('manageTemplateCategoriesButton')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Create category'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('categoryNameField')),
+      'Cancelled category',
+    );
+    await tester.tap(find.byKey(const Key('cancelCategoryNameButton')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(repository.categories, isEmpty);
+    expect(repository.mutationCalls, 0);
+    expect(find.byKey(const Key('categoryNameField')), findsNothing);
+    expect(find.text('Template categories'), findsOneWidget);
+  });
+
+  testWidgets('normalized duplicate rejection closes without framework errors',
+      (tester) async {
+    final repository = _DuplicateRejectingCategoryRepository();
+    await repository.createCategory('Groceries', requestId: 'existing');
+
+    await _pump(
+      tester,
+      repository: repository,
+      lists: FakeActiveListRepository(),
+      child: const TemplatesScreen(),
+    );
+
+    await tester.tap(
+      find.byKey(const Key('manageTemplateCategoriesButton')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Create category'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('categoryNameField')),
+      '  GROCERIES  ',
+    );
+    await tester.tap(find.byKey(const Key('confirmCategoryNameButton')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(repository.submittedName, 'GROCERIES');
+    expect(repository.categories.single.name, 'Groceries');
+    expect(repository.mutationCalls, 2);
+    expect(find.byKey(const Key('categoryNameField')), findsNothing);
+    expect(
+      find.text('Check the name, quantity, and selected items.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('rapid category confirmation submits and closes exactly once',
+      (tester) async {
+    final repository = _DelayedCategoryRepository();
+
+    await _pump(
+      tester,
+      repository: repository,
+      lists: FakeActiveListRepository(),
+      child: const TemplatesScreen(),
+    );
+
+    await tester.tap(
+      find.byKey(const Key('manageTemplateCategoriesButton')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Create category'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('categoryNameField')),
+      'One submission',
+    );
+    final confirm = find.byKey(const Key('confirmCategoryNameButton'));
+    await tester.tap(confirm);
+    await tester.tap(confirm, warnIfMissed: false);
+    await tester.pump();
+
+    expect(repository.createCategoryCalls, 1);
+    repository.release.complete();
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(repository.createCategoryCalls, 1);
+    expect(repository.categories.single.name, 'One submission');
+    expect(find.byKey(const Key('categoryNameField')), findsNothing);
+    expect(find.text('Template categories'), findsOneWidget);
+  });
+
+  testWidgets('rename category success and cancellation unmount cleanly',
+      (tester) async {
+    final repository = FakePrivateTemplateRepository();
+    await repository.createCategory('Original', requestId: 'existing');
+
+    await _pump(
+      tester,
+      repository: repository,
+      lists: FakeActiveListRepository(),
+      child: const TemplatesScreen(),
+    );
+
+    await tester.tap(
+      find.byKey(const Key('manageTemplateCategoriesButton')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Rename category'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('categoryNameField')),
+      'Renamed',
+    );
+    await tester.tap(find.byKey(const Key('confirmCategoryNameButton')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(repository.categories.single.name, 'Renamed');
+    expect(find.byKey(const Key('categoryNameField')), findsNothing);
+    expect(find.text('Template categories'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Rename category'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('categoryNameField')),
+      'Cancelled rename',
+    );
+    await tester.tap(find.byKey(const Key('cancelCategoryNameButton')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(repository.categories.single.name, 'Renamed');
+    expect(repository.mutationCalls, 2);
+    expect(find.byKey(const Key('categoryNameField')), findsNothing);
+    expect(find.text('Template categories'), findsOneWidget);
+  });
+
+  testWidgets('category dialog route disposal releases its controller safely',
+      (tester) async {
+    final repository = FakePrivateTemplateRepository();
+
+    await _pump(
+      tester,
+      repository: repository,
+      lists: FakeActiveListRepository(),
+      child: const TemplatesScreen(),
+    );
+
+    await tester.tap(
+      find.byKey(const Key('manageTemplateCategoriesButton')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Create category'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('categoryNameField')),
+      'Abandoned category',
+    );
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(repository.categories, isEmpty);
+    expect(repository.mutationCalls, 0);
   });
 
   testWidgets('selection preview disables zero and overflow confirmations',
@@ -164,3 +378,43 @@ ActiveListItem _listItem(String id, String name, int position) =>
       createdAt: DateTime.utc(2026, 7, 21),
       updatedAt: DateTime.utc(2026, 7, 21),
     );
+
+class _DuplicateRejectingCategoryRepository
+    extends FakePrivateTemplateRepository {
+  String? submittedName;
+
+  @override
+  Future<TemplateCategory> createCategory(
+    String name, {
+    required String requestId,
+  }) {
+    submittedName = name;
+    final normalized =
+        name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+    final duplicate = categories.any(
+      (category) =>
+          category.name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase() ==
+          normalized,
+    );
+    if (duplicate) {
+      mutationCalls += 1;
+      throw const PrivateTemplateFailure(PrivateTemplateFailureCode.invalid);
+    }
+    return super.createCategory(name, requestId: requestId);
+  }
+}
+
+class _DelayedCategoryRepository extends FakePrivateTemplateRepository {
+  final Completer<void> release = Completer<void>();
+  int createCategoryCalls = 0;
+
+  @override
+  Future<TemplateCategory> createCategory(
+    String name, {
+    required String requestId,
+  }) async {
+    createCategoryCalls += 1;
+    await release.future;
+    return super.createCategory(name, requestId: requestId);
+  }
+}
