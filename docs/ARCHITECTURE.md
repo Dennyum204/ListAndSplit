@@ -261,6 +261,13 @@ contiguous positive integer positions in one short transaction. Owner-or-member
 item access is rechecked inside each transaction; owner-only metadata and access
 operations never trust caller-supplied role or identity.
 
+Every list addition path enforces at most 200 current item rows under that same
+list lock. Completed rows count and physical deletion frees capacity. Capacity is
+not an invariant retroactively imposed on stored rows: a legacy over-capacity list
+remains readable and supports edit/complete/reorder/delete, but ordinary creation
+and template import remain blocked until its current count is below 200. The
+additive migration neither rewrites nor deletes existing items.
+
 Ownership transfer is one exact authenticated PostgreSQL RPC. It accepts only the
 list ID, target profile ID, expected list version, and expected target-access
 version. After the established pair lock and list lock, it requires the caller to
@@ -305,6 +312,55 @@ Broadcast is best-effort and has no replay or durable-history promise. Presence,
 Broadcast Replay, Postgres Changes client subscriptions, client sends, REST/Edge
 fanout, push delivery, and offline mutation are deliberately deferred.
 
+### Private template database and client boundary
+
+`public.template_categories`, `public.templates`, and `public.template_items` are
+an RPC-only caller-owned aggregate. All three enable and force RLS, use explicit
+restrictive direct-access rejection policies, and revoke table privileges from
+`PUBLIC`, `anon`, `authenticated`, and `service_role`. Auth-root profile deletion
+cascades the account's template rows; category deletion only uncategorizes affected
+templates.
+
+Exact `postgres`-owned `SECURITY DEFINER` RPCs derive only `auth.uid()`, require a
+confirmed completed profile, pin an empty `search_path`, fully qualify objects,
+revoke default execution, and grant exact signatures only to `authenticated`.
+Caller-scoped transaction locks serialize the 25-category and 100-template quotas;
+template-row locks serialize a 200-current-item capacity and every content/version
+mutation. Category names use a stored collapsed/lowercase comparison form for
+per-owner uniqueness. Category, template, and item UUIDs keep independent positive
+monotonic versions; deletion/recreation never reuses an identity.
+
+The template repository is the only Flutter Supabase boundary. Session-keyed
+Riverpod controllers own category/template search, single category filtering,
+sorting, detail state, mutation overlap protection, stale refresh, and preview
+selection. Mounted list and template controllers register authoritative refresh
+tasks with the existing account reconciliation registry. Sign-out, account
+deletion, invalid-session recovery, and identity replacement clear every private
+template payload.
+
+Cross-aggregate RPCs implement three atomic copies. Save-as-template locks the
+accessible active/archived source list and its selected items, checks the caller's
+template quota, and copies 1-200 names/quantities in current list order. Create-list
+locks the caller-owned template and selection, then creates one private active list
+with 1-200 uncompleted items. Existing-list import first protects the active
+destination under the established list authorization/lock, then validates the
+caller-owned template and selected source version; authoritative remaining
+capacity is `200 - current destination count`.
+
+Selections must be non-null, unique, complete, caller-owned current source IDs and
+match exact source/destination versions. Copy request IDs bind safe retries without
+storing a source relationship. Copied rows have new identities and no provenance
+foreign key. Duplicate normalized names are warning-only and still consume
+separate positions. Stale access/state/version/capacity rolls back all inserts,
+version changes, and Realtime messages; there is no partial or reduced import.
+
+Template/category table triggers reuse the private `account:<auth.uid()>`
+`invalidate`/`{"v":1}` contract and notify only the owner. Item mutations update
+the parent template, so its trigger is the fanout point. Copy/import into lists
+reuses the existing parent-list update fanout to every affected accepted account.
+No persistent notification, unread-badge write, public channel, or new transport
+contract is introduced.
+
 ### Account export boundary
 
 Account data export is a parameterless authenticated PostgreSQL RPC that derives
@@ -313,12 +369,13 @@ exactly one corresponding profile but deliberately does not require completed
 onboarding. This keeps export available from both verified incomplete Onboarding
 and completed Profile without exposing it to anonymous or unverified sessions.
 
-The RPC returns one `jsonb` schema-version-3 document built exclusively from
+The RPC returns one `jsonb` schema-version-4 document built exclusively from
 explicit key allowlists. Version `2` preserves all version-1 account/social roots
 and adds the deterministic `active_lists` array with active/archived owned lists and
 ordered items. Version `3` adds only caller-relative metadata for lists owned by
 others and excludes their items, owner identity, other participants, and internal
-authorization data. It is a hardened `SECURITY DEFINER`
+authorization data. Version `4` adds only the caller's private categories,
+templates, and ordered template items. It is a hardened `SECURITY DEFINER`
 boundary because it must read the caller's approved Auth columns and RPC-only
 social tables: ownership
 is `postgres`, `search_path` is empty, every object is qualified, default
@@ -352,7 +409,7 @@ changes. The file service writes pretty UTF-8 JSON to application-scoped
 temporary/cache storage and invokes the Android/iOS native share sheet with a
 privacy-safe UTC filename and JSON MIME type. It never falls back to public shared
 storage or promises guaranteed cache deletion. Production responses must be
-version `2`; the parser deliberately retains strict version-1 support for
+version `4`; the parser deliberately retains strict versions 1-3 support for
 historical fixtures and previously downloaded documents.
 
 ### Permanent account-deletion boundary
@@ -388,8 +445,10 @@ profile's Auth email exactly, returns only `true`, and never deletes or mutates.
 Auth Admin deletion of `auth.users` is the single atomic database root. Cascading
 foreign keys remove the profile, either direction of blocks, either relationship
 participant, notification recipient/actor rows, and notifications whose
-relationship disappears, plus every list owned by the profile and the list's
-items. A `BEFORE DELETE` profile trigger reserves only a
+relationship disappears, every list owned by the profile and the list's items,
+and every private category, template, and template item. Snapshot-created or
+imported list rows have no source dependency and remain governed only by their list
+owner. A `BEFORE DELETE` profile trigger reserves only a
 completed canonical username in `private.deleted_username_reservations` with an
 expiry exactly 30 days after deletion. A hardened availability helper coordinates
 concurrent profile deletion/onboarding, active reservations reject claims, and
@@ -579,11 +638,11 @@ binary.
 ### Server operation shape
 
 Operations that span records or enforce important invariants should be atomic and
-idempotent where retries are possible. The active/shared-list aggregate uses exact
-PostgreSQL RPCs because its validation, locking, version checks, and writes belong
-in one short database transaction. Future examples include accepting/saving a
-template copy, creating a template snapshot in an active list, and recording a
-ledger change; placement for those operations remains open.
+idempotent where retries are possible. The active/shared-list and private-template
+aggregates use exact PostgreSQL RPCs because their validation, locking, version
+checks, capacity enforcement, and writes belong in one short database transaction.
+Future public/sent-template and ledger operations still require separate placement
+decisions.
 
 ## Money boundary
 

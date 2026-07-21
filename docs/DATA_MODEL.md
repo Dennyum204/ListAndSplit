@@ -37,7 +37,7 @@ Future: List Item --< Item Assignment >-- List Member
 Active List --< Expense --1 payer / many participant shares--> List Member
 Active List --< Settlement --from/to--> List Member
 
-Profile --owns--> Template --< Template Group --< Template Item
+Profile --owns--> Template --< Template Item
 Profile --owns--> Personal Category --< category placement >-- Template
 
 Profile --receives--> Notification
@@ -102,13 +102,21 @@ status, versions, exact `quantity_thousandths`, nullable stable unit code, integ
 position, completion attribution/time, and approved timestamps; request
 idempotency keys and locking/authorization internals remain private.
 
+Schema version `3` adds caller-relative shared-list access metadata without list
+contents or other identities. Schema version `4` adds deterministic
+`template_categories` and `templates` arrays. Categories expose only their own
+identity, name, version, and timestamps. Each template exposes its own identity,
+nullable category identity, name, version, timestamps, and an ordered `items`
+array containing only item identity, name, exact integer quantity thousandths,
+position, version, and timestamps.
+
 Every nested object is built from an explicit field allowlist. The social arrays
 apply the same directional-block, caller-relative active-relationship, recipient,
 suppression, expiry, and either-direction block filters as their existing RPC
 projections. Arrays are never null. Raw table rows, Auth metadata, credentials,
 tokens, sessions, incoming blocks, dormant relationship internals, hidden actors,
 and future aggregate data are outside the contract. Later schema versions must add
-future template/shared-membership/ledger sections deliberately and compatibly.
+future public/shared-template or ledger sections deliberately and compatibly.
 
 ### Permanent deletion and username reservation
 
@@ -117,9 +125,11 @@ The profile foreign key cascades from Auth; both block participant references,
 both normalized relationship participant references, notification recipient and
 actor references, and the notification relationship reference cascade from the
 profile/relationship rows they protect. Owned-list and list-item foreign keys add
-the list aggregate to that same cascade. This removes every currently implemented
-application record involving the deleted account in the same root transaction,
-while unrelated rows remain unchanged.
+the list aggregate to that same cascade. Private category/template ownership
+foreign keys add the complete personal template aggregate. This removes every
+currently implemented application record involving the deleted account in the
+same root transaction, while unrelated rows, including lists created or filled
+from template snapshots, remain unchanged.
 
 Before a completed profile disappears, a trigger upserts
 `private.deleted_username_reservations` with exactly two fields:
@@ -339,6 +349,14 @@ idempotent no-op retries update neither. Expected versions prevent stale overwri
 with a stable `40001` conflict. Creation request UUIDs are checked against their
 payload for retry safety and never grant ownership.
 
+A list has a hard addition capacity of 200 current item rows. Completed and
+uncompleted rows count equally; physical deletion frees capacity immediately.
+The existing list-row lock serializes ordinary creation and template copy/import
+with every competing addition. Capacity is an insertion gate only: existing rows
+remain editable, completable, reorderable, and deletable at capacity. A legacy
+list above 200 remains intact and readable but cannot receive additions until its
+count falls below 200.
+
 No assignment or item-event table exists yet. Multi-member assignment and its
 authorization/audit rules remain open with the collaborative-list phase.
 
@@ -349,48 +367,83 @@ tokens to list members so notification delivery is not based solely on
 unvalidated client text. The storage and parsing model, editing behavior, and
 deduplication rules remain open.
 
-## Template aggregate and copy semantics
+## Private template aggregate and copy semantics
 
-### Template, group, and item
+### Private template category
 
-A template is owned by one profile, has private or public visibility, and contains
-ordered groups of reusable items. Groups contain ordered template items. Exact
-item fields should align with importable list-item content without sharing live
-records.
+`public.template_categories` is owned by one completed profile and has a UUID
+identity, canonical display name, normalized name, positive monotonic `bigint`
+version, a payload-bound creation request UUID, and database-owned creation/update
+times. Name normalization trims outer whitespace, collapses internal whitespace,
+and lowercases only the comparison form. `(owner_id, normalized_name)` is unique,
+while different owners may use the same normalized name. One owner may retain at
+most 25 current categories, including empty categories.
 
-### Personal categories
+### Private template and item
 
-A personal category is owned by one profile and organizes that user's templates.
-Whether a template can appear in one or many categories, and how uncategorized or
-copied templates are handled, is not yet decided. Categories are personal metadata
-and must not alter another user's source template.
+`public.templates` is owned by one completed profile and has a UUID identity,
+nullable category reference, non-empty trimmed name, positive monotonic `bigint`
+version, a payload-bound creation request UUID, and database-owned creation/update
+times. The category must have the same owner. Names need not be unique. Each
+template belongs to at most one category; null is Uncategorized. One owner may
+retain at most 100 templates.
 
-### Snapshot into an active list
+`public.template_items` has a UUID identity, one template reference, trimmed
+1-120-character name, exact integer `quantity_thousandths` from `1` through
+`999999999`, positive deterministic position, positive monotonic `bigint` version,
+a payload-bound creation request UUID, and database-owned creation/update times.
+It deliberately has no unit, completion, actor, reminder, date, membership,
+source-list, or destination-list field. Duplicate names are valid.
 
-Adding a template to an active list reads a consistent template version and creates
-new active-list item records. The operation must follow these rules:
+Every category, template, and item mutation derives the owner only from
+`auth.uid()`. Category/template counts are serialized by a caller-scoped
+transaction lock; template item counts and item mutations are serialized by the
+template-row lock. A template may retain at most 200 current items. Deletion frees
+capacity immediately; edit, reorder, and delete remain valid at capacity. Template
+and item versions never decrement or reset for an existing UUID. New identities
+after physical deletion begin independent lineages.
 
-- Imported items and any imported grouping metadata are copied by value and get
-  new identifiers.
-- Future template edits, visibility changes, or deletion cannot mutate or delete
-  imported active-list items.
-- The target list's authorization rules are validated server-side.
-- The snapshot is atomic: a retry cannot create an accidental partial or duplicate
-  import.
-- Optional provenance may identify the source/version for display or diagnostics,
-  but it is never a foreign-key dependency that grants access or drives updates.
+Renaming a category changes only that category's version. Deleting a category
+locks affected templates deterministically, advances each affected template once,
+sets its category to null, and deletes the category in one transaction. Template
+metadata changes advance the template version once. Item add/delete/reorder advance
+the template version once; item edit advances both template and item once.
 
-### Saving or receiving a template
+All three tables are RPC-only with enabled and forced RLS, explicit restrictive
+`FOR ALL` rejection policies for `anon` and `authenticated`, and no direct client
+or service-role table grants. Auth-root owner deletion cascades templates, items,
+and categories; category deletion does not delete templates.
 
-Saving a public template or accepting a template sent by a friend creates a deep,
-independent copy of the template, its groups, and its items, owned by the recipient.
-The source owner can no longer affect that copy. The copied template's default
-visibility, category placement, attribution display, and behavior if the source is
-removed are open decisions.
+### Shopping-list snapshot into a private template
 
-A sent-template action should reference the offered source/version while pending;
-acceptance creates the independent copy exactly once. A notification may point to
-the action but should not be the authoritative action-state record.
+An authenticated owner or accepted member may snapshot an accessible active or
+archived list into a new private template. The transaction validates the exact
+list version and 1-200 unique selected current item IDs against authoritative rows,
+locks the source list/items and the caller's template quota, then copies only name,
+quantity, and source order. Completed state, unit, attribution, participants,
+invitations, ownership, reminders, dates, and list state are excluded. The new
+template and items have new IDs and no live source dependency.
+
+### Creating or filling a list from a private template
+
+Creating a new list validates one exact caller-owned template version and 1-200
+unique selected current item IDs, creates one active caller-owned list, and copies
+the selected rows in template order as new uncompleted list items. Importing into
+an existing list additionally locks that active destination and rechecks normal
+owner/member authorization, exact list version, and remaining capacity as `200 -
+current item count`.
+
+Both operations validate every source identifier and reject null, duplicate,
+missing, foreign, or stale selections. Each copied row consumes one capacity place,
+including normalized duplicate names. Possible duplicate-name detection is a UI
+warning only and never merges quantities or rows. Copy/import request UUIDs bind
+retries without adding a source foreign key. An exact-capacity copy succeeds;
+overflow, authorization loss, source/destination staleness, or concurrent capacity
+loss rolls back every row, version change, and Realtime message.
+
+Public visibility, saving another account's template, sent-template actions,
+attribution/provenance presentation, and community feed behavior remain future
+aggregates and create no schema in this slice.
 
 ## Payment Control aggregate
 
@@ -558,7 +611,7 @@ anonymous denial unless public read is explicitly intended.
 | List items | RPC-only through the owner/accepted-member boundary; archived lists reject mutations |
 | Future assignments, notes, mentions | Authorized list members, with mutations limited by later accepted rules |
 | Invitations | Exact recipient and owner through versioned participant-access RPCs |
-| Private templates/categories | Owner only |
+| Private templates/categories | RPC-only owner access; copies into accessible lists recheck destination membership and state |
 | Public templates | Readable according to approved public-profile policy; mutation remains owner-only |
 | Template sends | Sender and recipient; acceptance only by recipient |
 | Expenses, shares, settlements, balances | Authorized members of the enabled active list, subject to final ledger roles |
@@ -578,8 +631,8 @@ explicit grants, protected search paths, and adversarial policy/function tests.
 - Support/administrator correction and audit rules for immutable usernames.
 - Avatar Storage, validation, replacement, retention, and deletion lifecycle.
 - Mention representation and parser ownership.
-- Template category cardinality, version/provenance representation, and copy
-  idempotency keys.
+- Public-template visibility/copy placement, sent-template version/provenance,
+  attribution, and offer idempotency.
 - Currency catalog, amount ranges, expense/settlement lifecycle, remainder and debt
   algorithms.
 - Future notification-type payload/localization, archive/preferences, physical

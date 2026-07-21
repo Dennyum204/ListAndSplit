@@ -102,7 +102,8 @@ Implemented slices:
   retry-safe creation.
 - Owner list items with exact integer-thousandths quantities, stable unit codes,
   add/edit/complete/reopen/delete, atomic deterministic reorder, and archived
-  read-only enforcement.
+  read-only enforcement. The next additive slice caps current rows at 200 without
+  changing or deleting legacy data.
 - RPC-only tables with forced RLS, explicit rejection policies, reviewed
   definer-rights functions, Auth-root deletion cascade, and account export schema
   version `3`.
@@ -131,14 +132,27 @@ Role lifecycle, ownership transfer, invitation retention/revocation,
 shared-resource blocking, archive/delete, item quantity/order, and online
 concurrency are resolved.
 
-## Phase 3 — Templates and community discovery (planned)
+## Phase 3 — Templates and community discovery (in progress)
 
 Goal: add reusable content while preserving strict copy independence.
 
-Candidate slices:
+Current private-template slice:
 
-- Private templates with ordered groups/items and personal categories.
-- Atomic snapshot import of a template into an active list.
+- Private templates with ordered items, optional single personal category,
+  100-template/25-category quotas, and 200 current items per template.
+- Private category create/rename/delete with normalized per-owner uniqueness,
+  visible empty categories, and atomic move to Uncategorized on deletion.
+- Saving an accessible active/archived list as an independent private template,
+  creating a new active list from a template, and atomic selected-item import into
+  an existing active list.
+- A non-destructive 200-current-item shopping-list capacity enforced for ordinary
+  creation and every copy/import path under existing list locks.
+- Search across template/item names, one category filter, Recently updated/A-Z/
+  Newest created sorts, private account Realtime reconciliation, and account export
+  schema version `4`/Auth-root deletion integration.
+
+Later candidate slices:
+
 - Public template visibility on profiles.
 - Saving a public template as an independent recipient-owned deep copy.
 - Sending a template to a friend with Accept/Decline and idempotent copy creation.
@@ -147,8 +161,9 @@ Candidate slices:
 - Tests proving that source changes/deletion never mutate snapshots or recipient
   copies.
 
-Required decisions include category cardinality/order, copy visibility and
-attribution, feed ranking/pagination, provenance, versioning, and send expiry.
+Private category cardinality, copy atomicity, capacity, and versioning are resolved.
+Public copy visibility/category placement and attribution, feed ranking/pagination,
+provenance presentation, and sent-template expiry remain open.
 
 ## Phase 4 — Payment Control ledger (planned)
 
@@ -225,7 +240,6 @@ future, explicit task with environment and cost approval.
 
 ## Sequencing decisions still open
 
-- Whether basic templates should precede full collaborative lists.
 - Which minimum persistent-notification capability belongs in later
   action-producing phases beyond the accepted friend-request foundation.
 - When the accepted compile-time configuration should expand into a full
