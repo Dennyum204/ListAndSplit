@@ -41,7 +41,7 @@ select is(
     'public.export_own_account_data()'::regprocedure,
     'pg_proc'
   ),
-  'Returns schema-version-3 own data with privacy-minimal caller-relative shared-list access.',
+  'Returns schema-version-4 own data including caller-owned categories, templates, and ordered template items.',
   'the export boundary has a precise durable comment'
 );
 
@@ -379,22 +379,24 @@ select is(
     'profile',
     'schema_version',
     'shared_list_access',
+    'template_categories',
+    'templates',
     'visible_notifications'
   ]::text[],
-  'the export has exactly the ten schema-version-three root keys'
+  'the export has exactly the twelve schema-version-four root keys'
 );
 
 select ok(
   (
     select document ->> 'product' = 'list_and_split'
-      and document -> 'schema_version' = '3'::jsonb
+      and document -> 'schema_version' = '4'::jsonb
       and (document ->> 'exported_at')::timestamptz
         between pg_catalog.transaction_timestamp()
         and pg_catalog.clock_timestamp()
     from account_export_documents
     where fixture = 'complete'
   ),
-  'the root contains the product, schema version three, and server export time'
+  'the root contains the product, schema version four, and server export time'
 );
 
 select is(
