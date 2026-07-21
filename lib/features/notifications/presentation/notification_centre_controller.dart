@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:list_and_split/features/community/domain/friendship_repository.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
+import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/features/notifications/domain/in_app_notification.dart';
 import 'package:list_and_split/features/notifications/domain/notification_repository.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
@@ -17,6 +19,8 @@ enum NotificationCentreMessage {
   relationshipChanged,
   readUpdateFailed,
   operationFailed,
+  invitationAccepted,
+  invitationDeclined,
 }
 
 class NotificationCentreState {
@@ -107,10 +111,16 @@ class NotificationCentreController
     required Future<void> Function() refreshUnreadCount,
     void Function()? invalidateFriendshipManagement,
     void Function()? invalidateCommunitySearch,
+    ActiveListRepository? activeListRepository,
+    ActiveListRepository Function()? readActiveListRepository,
+    void Function()? invalidateLists,
   })  : _refreshUnreadCount = refreshUnreadCount,
         _invalidateFriendshipManagement =
             invalidateFriendshipManagement ?? _noop,
         _invalidateCommunitySearch = invalidateCommunitySearch ?? _noop,
+        _readActiveListRepository = readActiveListRepository ??
+            (activeListRepository == null ? null : () => activeListRepository),
+        _invalidateLists = invalidateLists ?? _noop,
         super(const NotificationCentreState.loading());
 
   final NotificationRepository _notificationRepository;
@@ -118,6 +128,8 @@ class NotificationCentreController
   final Future<void> Function() _refreshUnreadCount;
   final void Function() _invalidateFriendshipManagement;
   final void Function() _invalidateCommunitySearch;
+  final ActiveListRepository Function()? _readActiveListRepository;
+  final void Function() _invalidateLists;
   int _loadGeneration = 0;
   bool _externalRefreshPending = false;
 
@@ -184,6 +196,13 @@ class NotificationCentreController
   }
 
   Future<bool> accept(InAppNotification notification) {
+    if (notification.type == InAppNotificationType.listInvitation) {
+      return _runListAction(
+        notification,
+        accept: true,
+        successMessage: NotificationCentreMessage.invitationAccepted,
+      );
+    }
     return _runAction(
       notification,
       mutation: _friendshipRepository.acceptFriendRequest,
@@ -192,11 +211,73 @@ class NotificationCentreController
   }
 
   Future<bool> decline(InAppNotification notification) {
+    if (notification.type == InAppNotificationType.listInvitation) {
+      return _runListAction(
+        notification,
+        accept: false,
+        successMessage: NotificationCentreMessage.invitationDeclined,
+      );
+    }
     return _runAction(
       notification,
       mutation: _friendshipRepository.declineFriendRequest,
       successMessage: NotificationCentreMessage.requestDeclined,
     );
+  }
+
+  Future<bool> _runListAction(
+    InAppNotification notification, {
+    required bool accept,
+    required NotificationCentreMessage successMessage,
+  }) async {
+    final repository = _readActiveListRepository?.call();
+    final listId = notification.activeListId;
+    final version = notification.expectedAccessVersion;
+    if (repository == null ||
+        listId == null ||
+        version == null ||
+        notification.actionStatus != NotificationActionStatus.actionable ||
+        state.isBusy(notification.id)) {
+      return false;
+    }
+    state = state.copyWith(
+      busyNotificationIds: {...state.busyNotificationIds, notification.id},
+      message: null,
+    );
+    try {
+      if (accept) {
+        await repository.acceptInvitation(
+          listId,
+          expectedAccessVersion: version,
+        );
+      } else {
+        await repository.declineInvitation(
+          listId,
+          expectedAccessVersion: version,
+        );
+      }
+      if (!mounted) return false;
+      _invalidateLists();
+      state =
+          state.copyWith(busyNotificationIds: _withoutBusy(notification.id));
+      await _loadFirstPage(message: successMessage);
+      return true;
+    } on ActiveListFailure catch (failure) {
+      if (!mounted) return false;
+      _invalidateLists();
+      await _reconcileActionFailure(
+        notification,
+        relationshipChanged: failure.code == ActiveListFailureCode.stale ||
+            failure.code == ActiveListFailureCode.unavailable ||
+            failure.code == ActiveListFailureCode.archived,
+      );
+      return false;
+    } catch (_) {
+      if (!mounted) return false;
+      _invalidateLists();
+      await _reconcileActionFailure(notification, relationshipChanged: false);
+      return false;
+    }
   }
 
   Future<void> _loadFirstPage({NotificationCentreMessage? message}) async {
@@ -363,7 +444,8 @@ class NotificationCentreController
       final actionStillCurrent = refreshed != null &&
           refreshed.actionStatus == NotificationActionStatus.actionable &&
           refreshed.expectedRelationshipVersion ==
-              original.expectedRelationshipVersion;
+              original.expectedRelationshipVersion &&
+          refreshed.expectedAccessVersion == original.expectedAccessVersion;
       final message = relationshipChanged || !actionStillCurrent
           ? NotificationCentreMessage.relationshipChanged
           : NotificationCentreMessage.operationFailed;
@@ -447,6 +529,8 @@ final notificationCentreControllerProvider = StateNotifierProvider.autoDispose<
     invalidateFriendshipManagement:
         ref.watch(invalidateFriendshipManagementProvider),
     invalidateCommunitySearch: ref.watch(invalidateCommunitySearchProvider),
+    readActiveListRepository: () => ref.read(activeListRepositoryProvider),
+    invalidateLists: ref.watch(invalidateActiveListsProvider),
   );
   ref.listen<int>(notificationRefreshSignalProvider, (_, __) {
     if (userId != null) controller.handleExternalRefresh();

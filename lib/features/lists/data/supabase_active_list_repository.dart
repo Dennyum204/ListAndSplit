@@ -76,6 +76,74 @@ class SupabaseActiveListRepository implements ActiveListRepository {
   }
 
   @override
+  Future<List<ActiveListParticipant>> listParticipants(String listId) async {
+    try {
+      return _rows(await _rpc('list_active_list_participants', params: {
+        'target_list_id': listId,
+      }))
+          .map(_participant)
+          .toList(growable: false);
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
+  Future<List<ActiveListAccessProfile>> listPendingInvitations(
+    String listId,
+  ) async {
+    try {
+      return _rows(await _rpc('list_pending_active_list_invitations', params: {
+        'target_list_id': listId,
+      }))
+          .map(_accessProfile)
+          .toList(growable: false);
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
+  Future<List<ActiveListAccessProfile>> listEligibleInvitees(
+    String listId,
+  ) async {
+    try {
+      return _rows(await _rpc('list_eligible_active_list_invitees', params: {
+        'target_list_id': listId,
+      }))
+          .map(_accessProfile)
+          .toList(growable: false);
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
+  Future<ActiveListInvitation> getInvitation(String listId) async {
+    try {
+      final json = _singleRow(await _rpc('get_active_list_invitation', params: {
+        'target_list_id': listId,
+      }));
+      return ActiveListInvitation(
+        listId: _uuid(json['list_id']),
+        listTitle: _boundedString(json['list_title'], 1, 80),
+        listStatus: ActiveListStatus.fromWire(_string(json['list_status'])),
+        owner: ActiveListParticipant(
+          profileId: _uuid(json['owner_profile_id']),
+          username: _string(json['owner_username']),
+          displayName: _string(json['owner_display_name']),
+          isOwner: true,
+        ),
+        accessVersion: _positiveInt(json['access_version']),
+        createdAt: _dateTime(json['created_at']),
+        stateChangedAt: _dateTime(json['state_changed_at']),
+      );
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
   Future<ActiveListSummary> createList(
     String title, {
     required String requestId,
@@ -281,6 +349,100 @@ class SupabaseActiveListRepository implements ActiveListRepository {
     }
   }
 
+  @override
+  Future<int> inviteMember(
+    String listId,
+    String profileId, {
+    int? expectedAccessVersion,
+  }) async {
+    try {
+      final row = _singleRow(await _rpc('invite_active_list_member', params: {
+        'target_list_id': listId,
+        'target_profile_id': profileId,
+        'expected_access_version': expectedAccessVersion,
+      }));
+      return _positiveInt(row['access_version']);
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
+  Future<int> cancelInvitation(
+    String listId,
+    String profileId, {
+    required int expectedAccessVersion,
+  }) =>
+      _accessMutation(
+        'cancel_active_list_invitation',
+        listId,
+        expectedAccessVersion,
+        profileId: profileId,
+      );
+
+  @override
+  Future<int> acceptInvitation(
+    String listId, {
+    required int expectedAccessVersion,
+  }) =>
+      _accessMutation(
+        'accept_active_list_invitation',
+        listId,
+        expectedAccessVersion,
+      );
+
+  @override
+  Future<int> declineInvitation(
+    String listId, {
+    required int expectedAccessVersion,
+  }) =>
+      _accessMutation(
+        'decline_active_list_invitation',
+        listId,
+        expectedAccessVersion,
+      );
+
+  @override
+  Future<int> removeMember(
+    String listId,
+    String profileId, {
+    required int expectedAccessVersion,
+  }) =>
+      _accessMutation(
+        'remove_active_list_member',
+        listId,
+        expectedAccessVersion,
+        profileId: profileId,
+      );
+
+  @override
+  Future<int> leaveList(
+    String listId, {
+    required int expectedAccessVersion,
+  }) =>
+      _accessMutation(
+        'leave_active_list',
+        listId,
+        expectedAccessVersion,
+      );
+
+  Future<int> _accessMutation(
+    String functionName,
+    String listId,
+    int expectedAccessVersion, {
+    String? profileId,
+  }) async {
+    try {
+      return _positiveInt(await _rpc(functionName, params: {
+        'target_list_id': listId,
+        if (profileId != null) 'target_profile_id': profileId,
+        'expected_access_version': expectedAccessVersion,
+      }));
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
+
   Future<ActiveListSummary> _listMutation(
     String functionName,
     Map<String, dynamic> params,
@@ -315,6 +477,22 @@ class SupabaseActiveListRepository implements ActiveListRepository {
         completedItemCount > itemCount) {
       throw const FormatException('invalid list projection');
     }
+    final isOwner = json['is_owner'] as bool? ?? true;
+    final ownerProfileId = json['owner_profile_id'] == null
+        ? null
+        : _uuid(json['owner_profile_id']);
+    final ownerUsername = json['owner_username'] as String?;
+    final ownerDisplayName = json['owner_display_name'] as String?;
+    final callerAccessVersion = json['caller_access_version'] == null
+        ? null
+        : _positiveInt(json['caller_access_version']);
+    if (!isOwner &&
+        (ownerProfileId == null ||
+            ownerUsername == null ||
+            ownerDisplayName == null ||
+            callerAccessVersion == null)) {
+      throw const FormatException('invalid shared list projection');
+    }
     return ActiveListSummary(
       id: _uuid(json['list_id']),
       title: _boundedString(json['title'], 1, 80),
@@ -325,8 +503,44 @@ class SupabaseActiveListRepository implements ActiveListRepository {
       createdAt: _dateTime(json['created_at']),
       updatedAt: _dateTime(json['updated_at']),
       archivedAt: archivedAt,
+      isOwner: isOwner,
+      ownerProfileId: ownerProfileId,
+      ownerUsername: ownerUsername,
+      ownerDisplayName: ownerDisplayName,
+      callerAccessVersion: callerAccessVersion,
     );
   }
+
+  static ActiveListParticipant _participant(Map<String, dynamic> json) {
+    final isOwner = json['is_owner'] as bool;
+    final accessVersion = json['access_version'] == null
+        ? null
+        : _positiveInt(json['access_version']);
+    if (isOwner != (accessVersion == null)) {
+      throw const FormatException('invalid participant projection');
+    }
+    return ActiveListParticipant(
+      profileId: _uuid(json['profile_id']),
+      username: _string(json['username']),
+      displayName: _string(json['display_name']),
+      isOwner: isOwner,
+      accessVersion: accessVersion,
+    );
+  }
+
+  static ActiveListAccessProfile _accessProfile(Map<String, dynamic> json) =>
+      ActiveListAccessProfile(
+        profileId: _uuid(json['profile_id']),
+        username: _string(json['username']),
+        displayName: _string(json['display_name']),
+        accessVersion: json['access_version'] == null
+            ? json['current_access_version'] == null
+                ? null
+                : _positiveInt(json['current_access_version'])
+            : _positiveInt(json['access_version']),
+        createdAt: _nullableDateTime(json['created_at']),
+        stateChangedAt: _nullableDateTime(json['state_changed_at']),
+      );
 
   static ActiveListItem _item(Map<String, dynamic> json) {
     final completedAt = _nullableDateTime(json['completed_at']);
@@ -375,6 +589,7 @@ class SupabaseActiveListRepository implements ActiveListRepository {
           '40001' => ActiveListFailureCode.stale,
           '23505' => ActiveListFailureCode.retryConflict,
           '55000' => ActiveListFailureCode.archived,
+          '54000' => ActiveListFailureCode.capacity,
           _ => ActiveListFailureCode.generic,
         },
       );

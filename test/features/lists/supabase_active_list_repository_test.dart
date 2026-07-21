@@ -54,6 +54,118 @@ void main() {
     expect(page.hasMore, isFalse);
   });
 
+  test('maps owned and shared list projections without widening privacy',
+      () async {
+    response = [
+      _summaryRow()
+        ..addAll({
+          'is_owner': false,
+          'owner_profile_id': '99999999-9999-4999-8999-999999999999',
+          'owner_username': 'owner_user',
+          'owner_display_name': 'Owner User',
+          'caller_access_version': 7,
+        }),
+    ];
+
+    final shared = (await repository.listLists(
+      status: ActiveListStatus.active,
+      limit: 20,
+    ))
+        .lists
+        .single;
+
+    expect(shared.isOwner, isFalse);
+    expect(shared.ownerUsername, 'owner_user');
+    expect(shared.ownerDisplayName, 'Owner User');
+    expect(shared.callerAccessVersion, 7);
+
+    response = [_summaryRow()];
+    final owned = await repository.getList(
+      '11111111-1111-4111-8111-111111111111',
+    );
+    expect(owned.isOwner, isTrue);
+    expect(owned.ownerProfileId, isNull);
+    expect(owned.callerAccessVersion, isNull);
+  });
+
+  test('maps participant, invitation, pending, and eligible projections',
+      () async {
+    const listId = '11111111-1111-4111-8111-111111111111';
+    response = [
+      {
+        'profile_id': '99999999-9999-4999-8999-999999999999',
+        'username': 'owner_user',
+        'display_name': 'Owner User',
+        'is_owner': true,
+        'access_version': null,
+      },
+      {
+        'profile_id': '88888888-8888-4888-8888-888888888888',
+        'username': 'member_user',
+        'display_name': 'Member User',
+        'is_owner': false,
+        'access_version': 4,
+      },
+    ];
+    final participants = await repository.listParticipants(listId);
+    expect(participants, hasLength(2));
+    expect(participants.first.isOwner, isTrue);
+    expect(participants.last.accessVersion, 4);
+
+    response = [
+      {
+        'profile_id': '77777777-7777-4777-8777-777777777777',
+        'username': 'pending_user',
+        'display_name': 'Pending User',
+        'access_version': 3,
+        'created_at': '2026-07-20T08:00:00.000Z',
+        'state_changed_at': '2026-07-20T09:00:00.000Z',
+      },
+    ];
+    final pending = await repository.listPendingInvitations(listId);
+    expect(pending.single.accessVersion, 3);
+
+    response = [
+      {
+        'profile_id': '66666666-6666-4666-8666-666666666666',
+        'username': 'eligible_user',
+        'display_name': 'Eligible User',
+        'current_access_version': 5,
+        'created_at': null,
+        'state_changed_at': null,
+      },
+    ];
+    final eligible = await repository.listEligibleInvitees(listId);
+    expect(eligible.single.accessVersion, 5);
+    expect(eligible.single.createdAt, isNull);
+
+    response = [
+      {
+        'list_id': listId,
+        'list_title': 'Shared trip',
+        'list_status': 'active',
+        'owner_profile_id': '99999999-9999-4999-8999-999999999999',
+        'owner_username': 'owner_user',
+        'owner_display_name': 'Owner User',
+        'access_version': 6,
+        'created_at': '2026-07-20T08:00:00.000Z',
+        'state_changed_at': '2026-07-20T09:00:00.000Z',
+      },
+    ];
+    final invitation = await repository.getInvitation(listId);
+    expect(invitation.owner.isOwner, isTrue);
+    expect(invitation.accessVersion, 6);
+    expect(
+      calls.map((call) => call.functionName),
+      [
+        'list_active_list_participants',
+        'list_pending_active_list_invitations',
+        'list_eligible_active_list_invitees',
+        'get_active_list_invitation',
+      ],
+    );
+  });
+
   test('creation uses a secure-shaped request id without treating it as owner',
       () async {
     final created = await repository.createList(
@@ -152,6 +264,71 @@ void main() {
     expect(calls[6].params?['ordered_item_ids'], [itemId]);
   });
 
+  test('membership RPCs carry only target IDs and exact access versions',
+      () async {
+    const listId = '11111111-1111-4111-8111-111111111111';
+    const profileId = '99999999-9999-4999-8999-999999999999';
+    response = [
+      {'access_version': 2},
+    ];
+    expect(await repository.inviteMember(listId, profileId), 2);
+    response = 3;
+    expect(
+      await repository.cancelInvitation(
+        listId,
+        profileId,
+        expectedAccessVersion: 2,
+      ),
+      3,
+    );
+    response = 4;
+    expect(
+      await repository.acceptInvitation(listId, expectedAccessVersion: 3),
+      4,
+    );
+    response = 5;
+    expect(
+      await repository.declineInvitation(listId, expectedAccessVersion: 4),
+      5,
+    );
+    response = 6;
+    expect(
+      await repository.removeMember(
+        listId,
+        profileId,
+        expectedAccessVersion: 5,
+      ),
+      6,
+    );
+    response = 7;
+    expect(await repository.leaveList(listId, expectedAccessVersion: 6), 7);
+
+    expect(calls.map((call) => call.functionName), [
+      'invite_active_list_member',
+      'cancel_active_list_invitation',
+      'accept_active_list_invitation',
+      'decline_active_list_invitation',
+      'remove_active_list_member',
+      'leave_active_list',
+    ]);
+    expect(calls[0].params, {
+      'target_list_id': listId,
+      'target_profile_id': profileId,
+      'expected_access_version': null,
+    });
+    expect(calls[1].params?['expected_access_version'], 2);
+    expect(calls[2].params, {
+      'target_list_id': listId,
+      'expected_access_version': 3,
+    });
+    expect(calls[4].params?['target_profile_id'], profileId);
+    expect(calls[5].params?['expected_access_version'], 6);
+    expect(
+      calls.every((call) => call.params?.containsKey('owner_id') != true),
+      isTrue,
+    );
+  });
+
   test('maps stable SQLSTATE classifications without backend details',
       () async {
     const cases = {
@@ -160,6 +337,7 @@ void main() {
       '40001': ActiveListFailureCode.stale,
       '23505': ActiveListFailureCode.retryConflict,
       '55000': ActiveListFailureCode.archived,
+      '54000': ActiveListFailureCode.capacity,
       'XX000': ActiveListFailureCode.generic,
     };
     for (final entry in cases.entries) {
@@ -219,6 +397,37 @@ void main() {
     ];
     await expectLater(
       repository.listItems('11111111-1111-4111-8111-111111111111'),
+      throwsA(isA<ActiveListFailure>()),
+    );
+
+    response = [
+      _summaryRow()
+        ..addAll({
+          'is_owner': false,
+          'owner_profile_id': '99999999-9999-4999-8999-999999999999',
+          'owner_username': 'owner_user',
+          'owner_display_name': 'Owner User',
+          'caller_access_version': null,
+        }),
+    ];
+    await expectLater(
+      repository.getList('11111111-1111-4111-8111-111111111111'),
+      throwsA(isA<ActiveListFailure>()),
+    );
+
+    response = [
+      {
+        'profile_id': '99999999-9999-4999-8999-999999999999',
+        'username': 'owner_user',
+        'display_name': 'Owner User',
+        'is_owner': true,
+        'access_version': 2,
+      },
+    ];
+    await expectLater(
+      repository.listParticipants(
+        '11111111-1111-4111-8111-111111111111',
+      ),
       throwsA(isA<ActiveListFailure>()),
     );
   });

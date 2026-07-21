@@ -41,7 +41,7 @@ select is(
     'public.export_own_account_data()'::regprocedure,
     'pg_proc'
   ),
-  'Returns the verified caller''s schema-version-2 allowlisted account export without persistence or mutation.',
+  'Returns schema-version-3 own data with privacy-minimal caller-relative shared-list access.',
   'the export boundary has a precise durable comment'
 );
 
@@ -378,22 +378,23 @@ select is(
     'product',
     'profile',
     'schema_version',
+    'shared_list_access',
     'visible_notifications'
   ]::text[],
-  'the export has exactly the nine schema-version-two root keys'
+  'the export has exactly the ten schema-version-three root keys'
 );
 
 select ok(
   (
     select document ->> 'product' = 'list_and_split'
-      and document -> 'schema_version' = '2'::jsonb
+      and document -> 'schema_version' = '3'::jsonb
       and (document ->> 'exported_at')::timestamptz
         between pg_catalog.transaction_timestamp()
         and pg_catalog.clock_timestamp()
     from account_export_documents
     where fixture = 'complete'
   ),
-  'the root contains the product, schema version two, and server export time'
+  'the root contains the product, schema version three, and server export time'
 );
 
 select is(

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
+import 'package:list_and_split/features/account/presentation/account_deletion_providers.dart';
 import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
 import 'package:list_and_split/features/community/presentation/blocked_users_controller.dart';
 import 'package:list_and_split/features/community/presentation/community_search_controller.dart';
@@ -22,10 +23,13 @@ final resetSessionStateProvider = Provider<void Function()>((ref) {
     ref.invalidate(ownProfileProvider);
     ref.invalidate(profileControllerProvider);
     ref.invalidate(accountDataExportControllerProvider);
+    ref.invalidate(accountDeletionImpactProvider);
     ref.invalidate(communitySearchControllerProvider);
     ref.invalidate(blockedUsersControllerProvider);
     ref.invalidate(friendshipManagementControllerProvider);
     ref.invalidate(activeListsControllerProvider);
+    ref.invalidate(activeListDetailControllerProvider);
+    ref.invalidate(activeListMembersControllerProvider);
     ref.invalidate(notificationUnreadCountControllerProvider);
     ref.invalidate(notificationCentreControllerProvider);
   };

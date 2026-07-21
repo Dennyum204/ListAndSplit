@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/features/notifications/domain/in_app_notification.dart';
 import 'package:list_and_split/features/notifications/domain/notification_repository.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_centre_screen.dart';
@@ -122,12 +123,45 @@ void main() {
     expect(find.text('Friends'), findsOneWidget);
     expect(find.text('Friend request accepted.'), findsOneWidget);
   });
+
+  testWidgets('list invitation accepts through the list repository boundary',
+      (tester) async {
+    final notifications = FakeNotificationRepository()
+      ..queuedPages.addAll([
+        [listInvitationNotification()],
+        [
+          listInvitationNotification(
+            actionStatus: NotificationActionStatus.accepted,
+            expectedAccessVersion: null,
+          ),
+        ],
+      ]);
+    final lists = FakeActiveListRepository();
+    await pumpCentre(
+      tester,
+      notifications: notifications,
+      activeLists: lists,
+    );
+
+    expect(find.text('Invitation to Shared trip'), findsOneWidget);
+    expect(
+      find.byKey(const Key('acceptNotification-list-n-1')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('acceptNotification-list-n-1')));
+    await tester.pumpAndSettle();
+
+    expect(lists.mutationCalls, 1);
+    expect(find.text('Member'), findsOneWidget);
+    expect(find.text('List invitation accepted.'), findsOneWidget);
+  });
 }
 
 Future<void> pumpCentre(
   WidgetTester tester, {
   required FakeNotificationRepository notifications,
   FakeFriendshipRepository? friendships,
+  FakeActiveListRepository? activeLists,
   ThemeMode themeMode = ThemeMode.light,
   bool settle = true,
 }) async {
@@ -139,6 +173,8 @@ Future<void> pumpCentre(
         friendshipRepositoryProvider.overrideWithValue(
           friendships ?? FakeFriendshipRepository(),
         ),
+        if (activeLists != null)
+          activeListRepositoryProvider.overrideWithValue(activeLists),
       ],
       child: MaterialApp(
         theme: AppTheme.light,
@@ -167,5 +203,26 @@ InAppNotification notification({
     actorDisplayName: 'Alpha User',
     actionStatus: actionStatus,
     expectedRelationshipVersion: expectedVersion,
+  );
+}
+
+InAppNotification listInvitationNotification({
+  NotificationActionStatus actionStatus = NotificationActionStatus.actionable,
+  int? expectedAccessVersion = 6,
+}) {
+  return InAppNotification(
+    id: 'list-n-1',
+    type: InAppNotificationType.listInvitation,
+    createdAt: DateTime.utc(2026, 7, 20, 8),
+    isRead: false,
+    actorProfileId: 'owner-1',
+    actorUsername: 'owner_user',
+    actorDisplayName: 'Owner User',
+    actionStatus: actionStatus,
+    expectedRelationshipVersion: null,
+    activeListId: 'list-1',
+    activeListTitle: 'Shared trip',
+    activeListStatus: 'active',
+    expectedAccessVersion: expectedAccessVersion,
   );
 }

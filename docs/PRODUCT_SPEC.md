@@ -70,7 +70,8 @@ are the evidence of implementation status.
   allowlisted Auth identity and profile fields, outgoing blocks, active
   caller-visible relationships, currently visible recipient notifications, and
   owned active lists with ordered items. Version `1` introduced the account/social
-  sections; version `2` adds the explicit `active_lists` root array. Collections
+  sections; version `2` adds the explicit `active_lists` root array; version `3`
+  adds privacy-minimal caller-relative shared-list access metadata. Collections
   are deterministic arrays and are empty rather than null.
 - The export includes nullable onboarding fields faithfully. It includes only the
   existing caller-visible block, relationship, and notification projections, so
@@ -143,9 +144,9 @@ are the evidence of implementation status.
 
 ### Active and shared lists
 
-The first implemented list slice is intentionally owner-only. Each list has one
-fully onboarded owner and no membership, role, invitation, assignment, note,
-mention, Realtime, offline-cache, template, or Payment Control record yet.
+Each list has one fully onboarded owner and may have retained, versioned non-owner
+access rows. Ownership transfer, assignment, note, mention, Realtime, offline cache,
+template, and Payment Control records are not implemented.
 
 - The owner can create, list, open, rename, archive, restore, and permanently
   delete a list. Duplicate titles are allowed; titles are trimmed and contain
@@ -157,8 +158,9 @@ mention, Realtime, offline-cache, template, or Payment Control record yet.
   including item changes and reorder, is rejected while archived. Restore is the
   only transition out of that state. Deleting a list permanently removes its
   current items after explicit confirmation.
-- The owner can add, edit, complete, reopen, reorder, and permanently delete
-  items. Item names are trimmed to 1-120 characters and duplicates are allowed.
+- The owner and accepted members can add, edit, complete, reopen, reorder, and
+  permanently delete items while the list is active. Only the owner can rename,
+  archive, restore, permanently delete, invite, cancel, or remove members.
 - Quantity defaults to `1`, must be positive, supports at most three decimal
   places, and is at most `999999.999`. Authority is an integer number of
   thousandths (`1` = `1000`, `1.5` = `1500`, `0.001` = `1`); Flutter never parses
@@ -178,10 +180,28 @@ mention, Realtime, offline-cache, template, or Payment Control record yet.
   Creation is retry-safe through a payload-bound client request UUID that never
   grants authority. Stale conflicts refresh instead of silently overwriting.
 
-Future collaborative lists still require accepted decisions for membership roles,
-friend-only invitations, removal/leaving/ownership transfer, assignments, notes and
-mentions, invitation notifications, shared-resource blocking, Realtime, and
-offline synchronization. Templates and Payment Control remain separate phases.
+- Only accepted friends can be invited. Invitations are persistent, do not expire,
+  reserve one of the 20 participant places, and retain one monotonic current access
+  row in `pending`, `member`, `declined`, `cancelled`, `removed`, or `left` state.
+  Accept, decline, cancel, remove, leave, and reinvite use exact versions and are
+  idempotent for completed retries. Owners cannot leave; members may leave archived
+  lists; ownership transfer is deferred.
+- Archiving atomically cancels pending invitations. Archived content remains readable,
+  members may leave and owners may remove members, but invitation creation/acceptance
+  and content mutation are rejected. Restore revives no access state.
+- Ending friendship cancels pending invitations and preserves accepted membership.
+  Blocking atomically separates the pair: an owner removes the member, a member
+  leaves when blocking the owner, and a member who blocks another member leaves
+  their shared third-party lists. Unblocking restores nothing and notification text
+  never discloses block direction or cause.
+- Routine item changes create no persistent notifications. Real invitation
+  transitions create one actionable notification for the exact access version;
+  owners receive generic accepted/declined/member-left information and removed
+  recipients receive generic information. A pending invitation remains actionable
+  beyond normal notification expiry; resolved notifications use normal retention.
+- Accepted participants see only profile ID, username, and display name for the owner
+  and accepted members. Pending recipients are visible only to the owner and that
+  recipient. Realtime implementation remains a separate slice.
 
 ### Templates
 
@@ -260,14 +280,12 @@ used in new UI or documentation.
 - Only the current row, version, creation and state-change times, most recent
   requester, and reopening controller are retained. Detailed audit history is not
   introduced; implemented account hard deletion cascades this current row.
-- The relationship row remains the authoritative action state when persistent
-  friend-request notifications are added. Realtime, push delivery, public
-  profiles, and shared lists remain separate slices from the implemented shell.
-- Only accepted friends can be invited to a shared active list.
+- The relationship row remains the authoritative friendship action state; the
+  retained list-access row independently remains authoritative for invitations.
 - A user's public templates can be viewed from that user's profile.
 - The community feed shows recent public templates from accepted friends.
-- Blocking effects on existing or future shared resources, including active-list
-  membership, remain unresolved and must be decided before shared lists ship.
+- Blocking applies the symmetric shared-list separation rules in the active/shared
+  list section. Friendship ending alone preserves accepted list membership.
   Reporting, moderation, evidence retention, and appeals remain future work.
 
 ### Payment Control
@@ -352,9 +370,8 @@ feature deep-link contracts remain open.
   visibility is not an authorization control.
 - The profile table remains owner-only. Cross-user identity is disclosed only by
   narrow block-aware contracts that return the approved minimal profile fields.
-- Blocks apply symmetrically to discovery and future community contact even though
-  each block record is directional. Effects on existing shared resources remain
-  unresolved.
+- Blocks apply symmetrically to discovery and contact even though each block record
+  is directional, and atomically apply the accepted shared-list separation rules.
 - Reporting and moderation are required before the public-content experience is
   considered mature, but their detailed behavior is not yet designed.
 

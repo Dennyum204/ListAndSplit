@@ -12,6 +12,18 @@ final accountDeletionRepositoryProvider = Provider<AccountDeletionRepository>(
   ),
 );
 
+final accountDeletionImpactProvider =
+    FutureProvider.autoDispose<AccountDeletionListImpact>((ref) async {
+  final repository = ref.watch(accountDeletionRepositoryProvider);
+  if (repository is AccountDeletionImpactRepository) {
+    return (repository as AccountDeletionImpactRepository).getListImpact();
+  }
+  return const AccountDeletionListImpact(
+    ownedSharedListCount: 0,
+    affectedParticipantCount: 0,
+  );
+});
+
 final accountDeletionControllerProvider = StateNotifierProvider.autoDispose<
     AccountDeletionController, AccountDeletionState>((ref) {
   final user = ref.watch(

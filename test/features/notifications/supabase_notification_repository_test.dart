@@ -83,6 +83,63 @@ void main() {
     }
   });
 
+  test('maps actionable and resolved list invitation projections', () async {
+    for (final entry in const {
+      'actionable': NotificationActionStatus.actionable,
+      'accepted': NotificationActionStatus.accepted,
+      'unavailable': NotificationActionStatus.unavailable,
+    }.entries) {
+      response = [
+        _row(
+          notificationType: 'list_invitation',
+          actionStatus: entry.key,
+          expectedVersion: null,
+          activeListId: 'list-1',
+          activeListTitle: 'Shared trip',
+          activeListStatus: 'active',
+          expectedAccessVersion: entry.key == 'actionable' ? 6 : null,
+        ),
+      ];
+
+      final result = await repository.listNotifications(limit: 20);
+
+      expect(result.single.type, InAppNotificationType.listInvitation);
+      expect(result.single.actionStatus, entry.value);
+      expect(result.single.activeListId, 'list-1');
+      expect(result.single.activeListTitle, 'Shared trip');
+      expect(
+        result.single.expectedAccessVersion,
+        entry.key == 'actionable' ? 6 : null,
+      );
+      expect(result.single.expectedRelationshipVersion, isNull);
+    }
+  });
+
+  test('maps informational list notifications as non-actionable', () async {
+    for (final type in const [
+      'list_invitation_accepted',
+      'list_invitation_declined',
+      'list_member_left',
+      'list_member_removed',
+    ]) {
+      response = [
+        _row(
+          notificationType: type,
+          actionStatus: 'unavailable',
+          expectedVersion: null,
+          activeListId: 'list-1',
+          activeListTitle: 'Shared trip',
+          activeListStatus: 'archived',
+        ),
+      ];
+
+      final result = await repository.listNotifications(limit: 20);
+
+      expect(result.single.activeListTitle, 'Shared trip');
+      expect(result.single.expectedAccessVersion, isNull);
+    }
+  });
+
   test('rejects malformed list and row payloads', () async {
     response = {'notification_id': 'notification-1'};
     await expectLater(
@@ -123,6 +180,41 @@ void main() {
       _row(expectedVersion: 0),
       _row(actionStatus: 'friends', expectedVersion: 4),
       _row(actionStatus: 'unavailable', expectedVersion: 4),
+    ]) {
+      response = [row];
+      await expectLater(
+        repository.listNotifications(limit: 20),
+        throwsA(isA<NotificationFailure>()),
+      );
+    }
+  });
+
+  test('rejects malformed or privacy-inconsistent list action shapes',
+      () async {
+    for (final row in [
+      _row(
+        notificationType: 'list_invitation',
+        expectedVersion: null,
+        expectedAccessVersion: 2,
+      ),
+      _row(
+        notificationType: 'list_invitation',
+        expectedVersion: null,
+        activeListId: 'list-1',
+        activeListTitle: ' Shared trip ',
+        activeListStatus: 'active',
+        expectedAccessVersion: 2,
+      ),
+      _row(
+        notificationType: 'list_member_left',
+        actionStatus: 'actionable',
+        expectedVersion: null,
+        activeListId: 'list-1',
+        activeListTitle: 'Shared trip',
+        activeListStatus: 'active',
+        expectedAccessVersion: 2,
+      ),
+      _row(activeListId: 'list-1'),
     ]) {
       response = [row];
       await expectLater(
@@ -186,6 +278,10 @@ Map<String, dynamic> _row({
   String createdAt = '2026-07-19T07:30:00.000Z',
   String actionStatus = 'actionable',
   int? expectedVersion = 4,
+  String? activeListId,
+  String? activeListTitle,
+  String? activeListStatus,
+  int? expectedAccessVersion,
 }) {
   return {
     'notification_id': 'notification-1',
@@ -197,6 +293,10 @@ Map<String, dynamic> _row({
     'actor_display_name': 'Beta User',
     'action_status': actionStatus,
     'expected_relationship_version': expectedVersion,
+    'active_list_id': activeListId,
+    'active_list_title': activeListTitle,
+    'active_list_status': activeListStatus,
+    'expected_access_version': expectedAccessVersion,
   };
 }
 

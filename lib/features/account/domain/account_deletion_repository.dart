@@ -30,3 +30,17 @@ abstract interface class AccountDeletionRepository {
 
   Future<void> clearLocalSession();
 }
+
+class AccountDeletionListImpact {
+  const AccountDeletionListImpact({
+    required this.ownedSharedListCount,
+    required this.affectedParticipantCount,
+  });
+
+  final int ownedSharedListCount;
+  final int affectedParticipantCount;
+}
+
+abstract interface class AccountDeletionImpactRepository {
+  Future<AccountDeletionListImpact> getListImpact();
+}

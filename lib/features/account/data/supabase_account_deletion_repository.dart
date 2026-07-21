@@ -23,8 +23,10 @@ typedef AccountDeletionFunctionInvoke = Future<void> Function(
 );
 typedef AccountDeletionGetUser = Future<String?> Function();
 typedef AccountDeletionLocalSignOut = Future<void> Function();
+typedef AccountDeletionImpactRpc = Future<Object?> Function();
 
-class SupabaseAccountDeletionRepository implements AccountDeletionRepository {
+class SupabaseAccountDeletionRepository
+    implements AccountDeletionRepository, AccountDeletionImpactRepository {
   SupabaseAccountDeletionRepository(
     SupabaseClient client, {
     AccountDeletionReauthenticate? reauthenticate,
@@ -32,6 +34,7 @@ class SupabaseAccountDeletionRepository implements AccountDeletionRepository {
     AccountDeletionFunctionInvoke? invokeDeletion,
     AccountDeletionGetUser? getUser,
     AccountDeletionLocalSignOut? localSignOut,
+    AccountDeletionImpactRpc? getListImpact,
   })  : _reauthenticate = reauthenticate ??
             ((email, password) async {
               final response = await client.auth.signInWithPassword(
@@ -73,13 +76,44 @@ class SupabaseAccountDeletionRepository implements AccountDeletionRepository {
         _getUser =
             getUser ?? (() async => (await client.auth.getUser()).user?.id),
         _localSignOut = localSignOut ??
-            (() => client.auth.signOut(scope: SignOutScope.local));
+            (() => client.auth.signOut(scope: SignOutScope.local)),
+        _getListImpact = getListImpact ??
+            (() => client.rpc<Object?>('get_account_deletion_list_impact'));
 
   final AccountDeletionReauthenticate _reauthenticate;
   final AccountDeletionCurrentSession _currentSession;
   final AccountDeletionFunctionInvoke _invokeDeletion;
   final AccountDeletionGetUser _getUser;
   final AccountDeletionLocalSignOut _localSignOut;
+  final AccountDeletionImpactRpc _getListImpact;
+
+  @override
+  Future<AccountDeletionListImpact> getListImpact() async {
+    try {
+      final response = await _getListImpact();
+      if (response is! List ||
+          response.length != 1 ||
+          response.single is! Map) {
+        throw const FormatException();
+      }
+      final row = Map<String, dynamic>.from(response.single as Map);
+      if (row.length != 2) throw const FormatException();
+      final listCount = row['owned_shared_list_count'];
+      final participantCount = row['affected_participant_count'];
+      if (listCount is! int ||
+          listCount < 0 ||
+          participantCount is! int ||
+          participantCount < 0) {
+        throw const FormatException();
+      }
+      return AccountDeletionListImpact(
+        ownedSharedListCount: listCount,
+        affectedParticipantCount: participantCount,
+      );
+    } catch (_) {
+      throw const AccountDeletionFailure(AccountDeletionFailureCode.retryable);
+    }
+  }
 
   @override
   Future<void> deleteOwnAccount({

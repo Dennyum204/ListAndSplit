@@ -13,10 +13,12 @@ class AccountDataExportDocument {
     required List<AccountActiveRelationship> activeRelationships,
     required List<AccountVisibleNotification> visibleNotifications,
     required List<AccountActiveListExport> activeLists,
+    List<AccountSharedListAccessExport> sharedListAccess = const [],
   })  : outgoingBlocks = List.unmodifiable(outgoingBlocks),
         activeRelationships = List.unmodifiable(activeRelationships),
         visibleNotifications = List.unmodifiable(visibleNotifications),
-        activeLists = List.unmodifiable(activeLists) {
+        activeLists = List.unmodifiable(activeLists),
+        sharedListAccess = List.unmodifiable(sharedListAccess) {
     if (product != supportedProduct ||
         !supportedSchemaVersions.contains(schemaVersion) ||
         authIdentity.id != profile.id) {
@@ -32,7 +34,12 @@ class AccountDataExportDocument {
     }
     _expectExactKeys(
       json,
-      schemaVersion == 1 ? _schemaOneRootKeys : _schemaTwoRootKeys,
+      switch (schemaVersion) {
+        1 => _schemaOneRootKeys,
+        2 => _schemaTwoRootKeys,
+        3 => _schemaThreeRootKeys,
+        _ => const <String>{},
+      },
     );
 
     return AccountDataExportDocument(
@@ -59,12 +66,17 @@ class AccountDataExportDocument {
           : _requiredObjects(json, 'active_lists')
               .map(AccountActiveListExport.fromJson)
               .toList(growable: false),
+      sharedListAccess: schemaVersion < 3
+          ? const []
+          : _requiredObjects(json, 'shared_list_access')
+              .map(AccountSharedListAccessExport.fromJson)
+              .toList(growable: false),
     );
   }
 
   static const supportedProduct = 'list_and_split';
-  static const supportedSchemaVersion = 2;
-  static const supportedSchemaVersions = {1, supportedSchemaVersion};
+  static const supportedSchemaVersion = 3;
+  static const supportedSchemaVersions = {1, 2, supportedSchemaVersion};
   static const _schemaOneRootKeys = {
     'product',
     'schema_version',
@@ -79,6 +91,10 @@ class AccountDataExportDocument {
     ..._schemaOneRootKeys,
     'active_lists',
   };
+  static const _schemaThreeRootKeys = {
+    ..._schemaTwoRootKeys,
+    'shared_list_access',
+  };
 
   final String product;
   final int schemaVersion;
@@ -89,6 +105,7 @@ class AccountDataExportDocument {
   final List<AccountActiveRelationship> activeRelationships;
   final List<AccountVisibleNotification> visibleNotifications;
   final List<AccountActiveListExport> activeLists;
+  final List<AccountSharedListAccessExport> sharedListAccess;
 
   Map<String, dynamic> toJson() => {
         'product': product,
@@ -105,10 +122,88 @@ class AccountDataExportDocument {
         'visible_notifications': visibleNotifications
             .map((notification) => notification.toJson())
             .toList(growable: false),
-        if (schemaVersion == 2)
+        if (schemaVersion >= 2)
           'active_lists': activeLists
               .map((activeList) => activeList.toJson())
               .toList(growable: false),
+        if (schemaVersion >= 3)
+          'shared_list_access': sharedListAccess
+              .map((access) => access.toJson())
+              .toList(growable: false),
+      };
+}
+
+enum AccountSharedListAccessState {
+  pending('pending'),
+  member('member'),
+  declined('declined'),
+  cancelled('cancelled'),
+  removed('removed'),
+  left('left');
+
+  const AccountSharedListAccessState(this.wireValue);
+  final String wireValue;
+}
+
+class AccountSharedListAccessExport {
+  AccountSharedListAccessExport({
+    required this.listId,
+    required this.listTitle,
+    required this.listStatus,
+    required this.accessState,
+    required this.accessVersion,
+    required this.createdAt,
+    required this.stateChangedAt,
+  });
+
+  factory AccountSharedListAccessExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, _keys);
+    final title = _requiredString(json, 'list_title');
+    if (title != title.trim() || title.length > 80) {
+      throw const AccountDataExportFailure();
+    }
+    final createdAt = _requiredUtcDateTime(json, 'created_at');
+    final stateChangedAt = _requiredUtcDateTime(json, 'state_changed_at');
+    if (stateChangedAt.isBefore(createdAt)) {
+      throw const AccountDataExportFailure();
+    }
+    return AccountSharedListAccessExport(
+      listId: _requiredUuid(json, 'list_id'),
+      listTitle: title,
+      listStatus: _activeListStatus(_requiredString(json, 'list_status')),
+      accessState: _sharedAccessState(_requiredString(json, 'access_state')),
+      accessVersion: _requiredPositiveInt(json, 'access_version'),
+      createdAt: createdAt,
+      stateChangedAt: stateChangedAt,
+    );
+  }
+
+  static const _keys = {
+    'list_id',
+    'list_title',
+    'list_status',
+    'access_state',
+    'access_version',
+    'created_at',
+    'state_changed_at',
+  };
+
+  final String listId;
+  final String listTitle;
+  final AccountActiveListStatus listStatus;
+  final AccountSharedListAccessState accessState;
+  final int accessVersion;
+  final DateTime createdAt;
+  final DateTime stateChangedAt;
+
+  Map<String, dynamic> toJson() => {
+        'list_id': listId,
+        'list_title': listTitle,
+        'list_status': listStatus.wireValue,
+        'access_state': accessState.wireValue,
+        'access_version': accessVersion,
+        'created_at': _encodeDateTime(createdAt),
+        'state_changed_at': _encodeDateTime(stateChangedAt),
       };
 }
 
@@ -702,6 +797,13 @@ AccountNotificationActionStatus _notificationStatus(String value) {
 AccountActiveListStatus _activeListStatus(String value) {
   return AccountActiveListStatus.values.firstWhere(
     (status) => status.wireValue == value,
+    orElse: () => throw const AccountDataExportFailure(),
+  );
+}
+
+AccountSharedListAccessState _sharedAccessState(String value) {
+  return AccountSharedListAccessState.values.firstWhere(
+    (state) => state.wireValue == value,
     orElse: () => throw const AccountDataExportFailure(),
   );
 }

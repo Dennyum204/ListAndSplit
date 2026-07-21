@@ -12,10 +12,12 @@ unread badge, deterministic pagination, safe versioned actions, and block-aware
 suppression. Versioned account-data export and immediate permanent self-service
 account deletion are available to authenticated email-verified users from
 completed Profile or incomplete Onboarding. The authenticated four-tab shell now
-provides functional owner-only Lists, a localized Templates placeholder, existing
+provides functional owned and shared Lists, a localized Templates placeholder, existing
 Community, and existing Profile; notifications remain available from the bell.
-Collaborative membership, real Templates, other notification types, Realtime/
-offline behavior, and the expense ledger remain planned work.
+Friend-only list invitations, accepted-member item collaboration, member management,
+and persistent list-access notifications are implemented. Real Templates, private
+Realtime Broadcast invalidation, offline behavior, and the expense ledger remain
+planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
@@ -191,21 +193,24 @@ duplicate and crossed sends create none. Listing and badge results exclude
 expired, suppressed, or block-hidden rows, and block creation permanently
 suppresses existing pair notifications in the same transaction.
 
-Owner-only active lists and items use only reviewed authenticated RPCs. The tables
+Active lists, items, and retained participant access rows use only reviewed
+authenticated RPCs. The tables
 have forced RLS, explicit direct-access rejection policies, and no client table
 grants. Titles and item names are trimmed/check-constrained while duplicates are
 allowed. Quantities are exact positive integer thousandths with stable nullable
 unit codes, positions are deterministic integers, archived lists are server-side
 read-only, and positive versions plus creation request UUIDs protect stale writes
-and retries. Account-root deletion cascades lists and items.
+and retries. Owners manage access; accepted members can read lists and mutate items
+while active. Capacity is 20 including the owner and pending invitations. Account-root
+deletion cascades owned lists, items, participant rows, and related notifications.
 
 The account lifecycle separates versioned account-data export from permanent
 deletion. Export uses a parameterless, allowlist-only RPC for any authenticated
 email-verified user, including before onboarding, followed by a validated UTF-8
 JSON file in app-scoped temporary cache and the native share sheet. The server
-retains no export file. Export schema version `2` adds both active and archived
-owned lists with their ordered items; creation request IDs and internal authority
-details remain excluded.
+retains no export file. Export schema version `3` preserves full owned-list export
+and adds only caller-relative metadata for lists owned by someone else; shared items,
+owner identity, other participants, and internal authority details remain excluded.
 
 Deletion is immediate and irreversible. Completed profiles confirm with their
 exact stored canonical username; incomplete profiles confirm with their exact
@@ -256,12 +261,13 @@ SQL into the Dashboard.
 ## Intentional deferrals
 
 The current slices do not implement unrestricted profile/directory search,
-avatars, collaborative memberships, real templates, notification types beyond
-friend requests,
-notification archive/preferences or physical cleanup, reporting, Realtime,
-server-side ledger logic, SQLite caching/offline synchronization, push delivery,
+avatars, ownership transfer, real templates, notification archive/preferences or
+physical cleanup, reporting, Realtime, server-side ledger logic, SQLite caching/
+offline synchronization, push delivery,
 Firebase setup, administrator-initiated deletion, or a production backend.
-Effects of blocks or friendship changes on future shared resources remain open.
+Private Realtime Broadcast remains the next focused list slice: payloads will be
+opaque invalidations, RPC repositories stay authoritative, and resume/manual refresh
+provide reconciliation. No offline mutation queue is accepted.
 Other open
 product and architecture choices are recorded in the project documentation and
 must be decided before their implementation slices.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
+import 'package:list_and_split/features/account/domain/account_deletion_repository.dart';
 import 'package:list_and_split/features/account/presentation/account_deletion_controller.dart';
 import 'package:list_and_split/features/account/presentation/account_deletion_providers.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
@@ -66,12 +67,27 @@ class AccountDeletionAction extends ConsumerWidget {
 
   Future<void> _openDialog(BuildContext context, WidgetRef ref) async {
     ref.read(accountDeletionControllerProvider.notifier).resetFeedback();
+    late final AccountDeletionListImpact impact;
+    try {
+      impact = await ref.read(accountDeletionImpactProvider.future);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text(AppLocalizations.of(context).operationFailedMessage)),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
     final deleted = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => _AccountDeletionDialog(
         email: email,
         confirmationTarget: confirmationTarget,
+        impact: impact,
       ),
     );
     if (deleted == true && context.mounted) onDeleted();
@@ -82,10 +98,12 @@ class _AccountDeletionDialog extends ConsumerStatefulWidget {
   const _AccountDeletionDialog({
     required this.email,
     required this.confirmationTarget,
+    required this.impact,
   });
 
   final String email;
   final String confirmationTarget;
+  final AccountDeletionListImpact impact;
 
   @override
   ConsumerState<_AccountDeletionDialog> createState() =>
@@ -126,6 +144,23 @@ class _AccountDeletionDialogState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(localizations.accountDeletionIrreversibleWarning),
+              if (widget.impact.ownedSharedListCount > 0) ...[
+                const SizedBox(height: 12),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    localizations.accountDeletionSharedListImpact(
+                      widget.impact.ownedSharedListCount,
+                      widget.impact.affectedParticipantCount,
+                    ),
+                    key: const Key('accountDeletionSharedListImpact'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Text(localizations.accountDeletionConfirmationInstruction),
               const SizedBox(height: 4),

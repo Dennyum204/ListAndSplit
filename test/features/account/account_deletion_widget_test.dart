@@ -58,6 +58,49 @@ void main() {
     expect(repository.deletionCalls, 0);
   });
 
+  testWidgets('shows authoritative shared-list impact without identities',
+      (tester) async {
+    final repository = FakeAccountDeletionRepository()
+      ..impact = const AccountDeletionListImpact(
+        ownedSharedListCount: 2,
+        affectedParticipantCount: 5,
+      );
+    await _pumpAction(tester, repository: repository);
+
+    await tester.tap(find.byKey(const Key('deleteAccountButton')));
+    await tester.pumpAndSettle();
+
+    expect(repository.impactCalls, 1);
+    expect(
+      find.byKey(const Key('accountDeletionSharedListImpact')),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        'permanently delete 2 shared lists you own and remove access for 5 non-owner participants',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('@'), findsNothing);
+  });
+
+  testWidgets('impact lookup failure never opens a misleading deletion dialog',
+      (tester) async {
+    final repository = FakeAccountDeletionRepository()
+      ..impactFailure = StateError('offline');
+    await _pumpAction(tester, repository: repository);
+
+    await tester.tap(find.byKey(const Key('deleteAccountButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('accountDeletionDialog')), findsNothing);
+    expect(
+      find.text('Something went wrong. Please try again.'),
+      findsOneWidget,
+    );
+    expect(repository.deletionCalls, 0);
+  });
+
   testWidgets('submits exact inputs, clears local session and reports success',
       (tester) async {
     final repository = FakeAccountDeletionRepository();
