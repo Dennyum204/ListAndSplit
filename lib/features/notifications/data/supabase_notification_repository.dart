@@ -150,6 +150,8 @@ class SupabaseNotificationRepository implements NotificationRepository {
           InAppNotificationType.listInvitationDeclined,
         'list_member_left' => InAppNotificationType.listMemberLeft,
         'list_member_removed' => InAppNotificationType.listMemberRemoved,
+        'list_ownership_transferred' =>
+          InAppNotificationType.listOwnershipTransferred,
         _ => throw const NotificationFailure(),
       };
 

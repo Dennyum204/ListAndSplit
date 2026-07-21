@@ -25,6 +25,10 @@ void main() {
       expect(find.text('Eligible User'), findsOneWidget);
       expect(find.byKey(const Key('removeMember-member-1')), findsOneWidget);
       expect(
+        find.byKey(const Key('transferOwnership-member-1')),
+        findsOneWidget,
+      );
+      expect(
         find.byKey(const Key('cancelInvitation-pending-1')),
         findsOneWidget,
       );
@@ -44,6 +48,7 @@ void main() {
     expect(find.text('Pending User'), findsNothing);
     expect(find.text('Invite friends'), findsNothing);
     expect(find.byIcon(Icons.person_remove_outlined), findsNothing);
+    expect(find.byIcon(Icons.manage_accounts_outlined), findsNothing);
     expect(repository.pendingCalls, 0);
     expect(repository.eligibleCalls, 0);
   });
@@ -69,6 +74,42 @@ void main() {
     expect(repository.removeCalls, 1);
     expect(repository.lastRemoveVersion, 4);
     expect(find.byKey(const Key('participant-member-1')), findsNothing);
+  });
+
+  testWidgets('ownership transfer names the member and requires confirmation',
+      (tester) async {
+    final repository = _MembersWidgetRepository(isOwner: true);
+    await _pump(tester, repository);
+
+    await tester.tap(find.byKey(const Key('transferOwnership-member-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Transfer list ownership?'), findsOneWidget);
+    expect(
+      find.text(
+        'Transfer ownership to Member User? They will become the sole owner and can rename, archive, delete, and manage members. You will remain a member.',
+      ),
+      findsOneWidget,
+    );
+    expect(repository.transferCalls, 0);
+
+    await tester.tap(find.text('Cancel').last);
+    await tester.pumpAndSettle();
+    expect(repository.transferCalls, 0);
+
+    await tester.tap(find.byKey(const Key('transferOwnership-member-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmTransferOwnershipButton')));
+    await tester.pumpAndSettle();
+
+    expect(repository.transferCalls, 1);
+    expect(repository.lastTransferListVersion, 2);
+    expect(repository.lastTransferAccessVersion, 4);
+    expect(
+      find.text('Ownership transferred. You remain a member.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('transferOwnership-owner-1')), findsNothing);
+    expect(find.text('Pending invitations'), findsNothing);
   });
 
   testWidgets('capacity error is specific and controls become usable again',
@@ -109,6 +150,9 @@ class _MembersWidgetRepository extends FakeActiveListRepository {
   var eligibleCalls = 0;
   var removeCalls = 0;
   int? lastRemoveVersion;
+  var transferCalls = 0;
+  int? lastTransferListVersion;
+  int? lastTransferAccessVersion;
   ActiveListFailure? inviteFailure;
 
   @override
@@ -150,6 +194,24 @@ class _MembersWidgetRepository extends FakeActiveListRepository {
     return super.removeMember(
       listId,
       profileId,
+      expectedAccessVersion: expectedAccessVersion,
+    );
+  }
+
+  @override
+  Future<ActiveListOwnershipTransferResult> transferOwnership(
+    String listId,
+    String profileId, {
+    required int expectedListVersion,
+    required int expectedAccessVersion,
+  }) {
+    transferCalls += 1;
+    lastTransferListVersion = expectedListVersion;
+    lastTransferAccessVersion = expectedAccessVersion;
+    return super.transferOwnership(
+      listId,
+      profileId,
+      expectedListVersion: expectedListVersion,
       expectedAccessVersion: expectedAccessVersion,
     );
   }

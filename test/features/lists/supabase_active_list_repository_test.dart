@@ -329,6 +329,76 @@ void main() {
     );
   });
 
+  test('ownership transfer sends exact locks and maps its allowlisted result',
+      () async {
+    const listId = '11111111-1111-4111-8111-111111111111';
+    const previousOwnerId = '88888888-8888-4888-8888-888888888888';
+    const targetId = '99999999-9999-4999-8999-999999999999';
+    response = [
+      {
+        'list_id': listId,
+        'previous_owner_profile_id': previousOwnerId,
+        'owner_profile_id': targetId,
+        'list_version': 8,
+        'previous_owner_access_version': 1,
+        'owner_access_version': 5,
+        'transferred_at': '2026-07-21T09:30:00.000Z',
+      },
+    ];
+
+    final result = await repository.transferOwnership(
+      listId,
+      targetId,
+      expectedListVersion: 7,
+      expectedAccessVersion: 4,
+    );
+
+    expect(calls.single.functionName, 'transfer_active_list_ownership');
+    expect(calls.single.params, {
+      'target_list_id': listId,
+      'target_profile_id': targetId,
+      'expected_list_version': 7,
+      'expected_target_access_version': 4,
+    });
+    expect(result.previousOwnerProfileId, previousOwnerId);
+    expect(result.ownerProfileId, targetId);
+    expect(result.listVersion, 8);
+    expect(result.previousOwnerAccessVersion, 1);
+    expect(result.ownerAccessVersion, 5);
+    expect(result.transferredAt, DateTime.utc(2026, 7, 21, 9, 30));
+  });
+
+  test('ownership transfer rejects mismatched authoritative projections',
+      () async {
+    response = [
+      {
+        'list_id': '11111111-1111-4111-8111-111111111111',
+        'previous_owner_profile_id': '88888888-8888-4888-8888-888888888888',
+        'owner_profile_id': '77777777-7777-4777-8777-777777777777',
+        'list_version': 8,
+        'previous_owner_access_version': 1,
+        'owner_access_version': 5,
+        'transferred_at': '2026-07-21T09:30:00.000Z',
+      },
+    ];
+
+    await expectLater(
+      repository.transferOwnership(
+        '11111111-1111-4111-8111-111111111111',
+        '99999999-9999-4999-8999-999999999999',
+        expectedListVersion: 7,
+        expectedAccessVersion: 4,
+      ),
+      throwsA(
+        isA<ActiveListFailure>().having(
+          (failure) => failure.code,
+          'code',
+          ActiveListFailureCode.transport,
+        ),
+      ),
+    );
+  });
+
   test('maps stable SQLSTATE classifications without backend details',
       () async {
     const cases = {

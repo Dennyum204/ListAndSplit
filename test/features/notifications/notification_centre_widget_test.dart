@@ -155,6 +155,22 @@ void main() {
     expect(find.text('Member'), findsOneWidget);
     expect(find.text('List invitation accepted.'), findsOneWidget);
   });
+
+  testWidgets('ownership transfer is informational and names the list',
+      (tester) async {
+    final notifications = FakeNotificationRepository()
+      ..notifications = [ownershipTransferNotification()];
+    await pumpCentre(tester, notifications: notifications);
+
+    expect(find.text('You now own Shared trip'), findsOneWidget);
+    expect(find.text('@owner_user'), findsOneWidget);
+    expect(
+      find.text('Ownership was transferred to you. You now control this list.'),
+      findsOneWidget,
+    );
+    expect(find.byType(FilledButton), findsNothing);
+    expect(find.byType(OutlinedButton), findsNothing);
+  });
 }
 
 Future<void> pumpCentre(
@@ -224,5 +240,22 @@ InAppNotification listInvitationNotification({
     activeListTitle: 'Shared trip',
     activeListStatus: 'active',
     expectedAccessVersion: expectedAccessVersion,
+  );
+}
+
+InAppNotification ownershipTransferNotification() {
+  return InAppNotification(
+    id: 'transfer-n-1',
+    type: InAppNotificationType.listOwnershipTransferred,
+    createdAt: DateTime.utc(2026, 7, 21, 9, 30),
+    isRead: false,
+    actorProfileId: 'owner-1',
+    actorUsername: 'owner_user',
+    actorDisplayName: 'Owner User',
+    actionStatus: NotificationActionStatus.unavailable,
+    expectedRelationshipVersion: null,
+    activeListId: 'list-1',
+    activeListTitle: 'Shared trip',
+    activeListStatus: 'active',
   );
 }
