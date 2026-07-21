@@ -12,7 +12,15 @@ import 'package:list_and_split/features/templates/domain/private_template.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
-enum _ListAction { saveTemplate, rename, archive, restore, delete, leave }
+enum _ListAction {
+  saveTemplate,
+  importTemplate,
+  rename,
+  archive,
+  restore,
+  delete,
+  leave,
+}
 
 class ActiveListDetailScreen extends ConsumerWidget {
   const ActiveListDetailScreen({required this.listId, super.key});
@@ -70,6 +78,13 @@ class ActiveListDetailScreen extends ConsumerWidget {
                 ),
                 if (!archived)
                   PopupMenuItem(
+                    value: _ListAction.importTemplate,
+                    child: Text(
+                      localizations.templatesImportFromTemplateButton,
+                    ),
+                  ),
+                if (!archived)
+                  PopupMenuItem(
                     value: _ListAction.rename,
                     child: Text(localizations.listRenameButton),
                   ),
@@ -98,6 +113,13 @@ class ActiveListDetailScreen extends ConsumerWidget {
                   value: _ListAction.saveTemplate,
                   child: Text(localizations.templatesSaveListButton),
                 ),
+                if (!archived)
+                  PopupMenuItem(
+                    value: _ListAction.importTemplate,
+                    child: Text(
+                      localizations.templatesImportFromTemplateButton,
+                    ),
+                  ),
                 PopupMenuItem(
                   value: _ListAction.leave,
                   child: Text(localizations.listLeaveButton),
@@ -157,6 +179,8 @@ class ActiveListDetailScreen extends ConsumerWidget {
     switch (action) {
       case _ListAction.saveTemplate:
         await _showSaveAsTemplate(context, ref);
+      case _ListAction.importTemplate:
+        await context.push<bool>(AppRoutes.listTemplateImport(listId));
       case _ListAction.rename:
         await _showRenameDialog(context, ref);
       case _ListAction.archive:

@@ -41,6 +41,24 @@ final privateTemplatesControllerProvider =
   return controller;
 });
 
+final privateTemplatePickerControllerProvider = StateNotifierProvider
+    .autoDispose
+    .family<PrivateTemplatesController, PrivateTemplatesState, String>(
+  (ref, _) {
+    final userId = ref.watch(verifiedUserIdProvider);
+    final controller = PrivateTemplatesController(
+      ref.watch(privateTemplateRepositoryProvider),
+      hasAuthenticatedUser: userId != null,
+    );
+    ref.listen<int>(privateTemplatesRefreshSignalProvider, (_, __) {
+      unawaited(controller.reconcile());
+    });
+    registerForReconciliation(ref, controller.reconcile);
+    if (userId != null) unawaited(controller.load());
+    return controller;
+  },
+);
+
 final privateTemplateDetailControllerProvider =
     StateNotifierProvider.autoDispose.family<PrivateTemplateDetailController,
         PrivateTemplateDetailState, String>(

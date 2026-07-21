@@ -9,6 +9,7 @@ import 'package:list_and_split/features/notifications/presentation/notification_
 import 'package:list_and_split/features/templates/domain/private_template.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/private_templates_controller.dart';
+import 'package:list_and_split/features/templates/presentation/template_selection_dialog.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 enum _TemplateAction { edit, createList, import, delete }
@@ -328,9 +329,9 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
         .detail
         .valueOrNull;
     if (detail == null) return;
-    final selection = await showDialog<_SelectionInput>(
+    final selection = await showDialog<TemplateSelectionInput>(
       context: context,
-      builder: (_) => _TemplateSelectionDialog(
+      builder: (_) => TemplateSelectionDialog(
         title: AppLocalizations.of(context).templatesCreateListTitle,
         items: detail.items,
         remainingCapacity: privateTemplateItemCapacity,
@@ -391,12 +392,13 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
     final detail = state.detail.valueOrNull;
     final prepared = state.destination;
     if (detail == null || prepared == null) return;
-    final selection = await showDialog<_SelectionInput>(
+    final selection = await showDialog<TemplateSelectionInput>(
       context: context,
-      builder: (_) => _TemplateSelectionDialog(
+      builder: (_) => TemplateSelectionDialog(
         title: AppLocalizations.of(context).templatesImportTitle,
         items: detail.items,
         remainingCapacity: prepared.remainingCapacity,
+        destinationName: prepared.detail.summary.title,
         duplicateIds: prepared.duplicateItemIds,
         confirmLabel: AppLocalizations.of(context).templatesConfirmImportButton,
       ),
@@ -580,178 +582,6 @@ class _TemplateItemDialogState extends State<_TemplateItemDialog> {
             Navigator.pop(context, _ItemInput(name, quantity));
           },
           child: Text(localizations.saveButton),
-        ),
-      ],
-    );
-  }
-}
-
-class _SelectionInput {
-  const _SelectionInput(this.selectedIds, this.title);
-  final Set<String> selectedIds;
-  final String? title;
-}
-
-class _TemplateSelectionDialog extends StatefulWidget {
-  const _TemplateSelectionDialog({
-    required this.title,
-    required this.items,
-    required this.remainingCapacity,
-    required this.confirmLabel,
-    this.initialTitle,
-    this.duplicateIds = const {},
-  });
-
-  final String title;
-  final List<PrivateTemplateItem> items;
-  final int remainingCapacity;
-  final String confirmLabel;
-  final String? initialTitle;
-  final Set<String> duplicateIds;
-
-  @override
-  State<_TemplateSelectionDialog> createState() =>
-      _TemplateSelectionDialogState();
-}
-
-class _TemplateSelectionDialogState extends State<_TemplateSelectionDialog> {
-  late TemplateSelection _selection;
-  TextEditingController? _titleController;
-
-  @override
-  void initState() {
-    super.initState();
-    _selection = TemplateSelection.all(
-      widget.items.map((item) => item.id),
-      remainingCapacity: widget.remainingCapacity,
-    );
-    if (widget.initialTitle != null) {
-      _titleController = TextEditingController(text: widget.initialTitle);
-    }
-  }
-
-  @override
-  void dispose() {
-    _titleController?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final localizations = AppLocalizations.of(context);
-    final titleValid = _titleController == null ||
-        (_titleController!.text.trim().isNotEmpty &&
-            _titleController!.text.trim().length <= 80);
-    return AlertDialog(
-      title: Text(widget.title),
-      content: SizedBox(
-        width: 520,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_titleController != null) ...[
-              TextField(
-                key: const Key('templateListTitleField'),
-                controller: _titleController,
-                decoration: InputDecoration(
-                  labelText: localizations.listsTitleLabel,
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 8),
-            ],
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    localizations.templatesSelectionCount(
-                      _selection.selectedCount,
-                      widget.items.length,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => setState(() {
-                    _selection = TemplateSelection.all(
-                      widget.items.map((item) => item.id),
-                      remainingCapacity: widget.remainingCapacity,
-                    );
-                  }),
-                  child: Text(localizations.templatesSelectAllButton),
-                ),
-                TextButton(
-                  onPressed: () => setState(() {
-                    _selection = TemplateSelection(
-                      availableItemIds: widget.items.map((item) => item.id),
-                      selectedItemIds: const [],
-                      remainingCapacity: widget.remainingCapacity,
-                    );
-                  }),
-                  child: Text(localizations.templatesClearSelectionButton),
-                ),
-              ],
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                localizations.templatesRemainingCapacity(
-                  widget.remainingCapacity,
-                ),
-              ),
-            ),
-            if (_selection.selectedCount > widget.remainingCapacity)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  localizations.templatesCapacityExceeded,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                ),
-              ),
-            const Divider(),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: widget.items.length,
-                itemBuilder: (context, index) {
-                  final item = widget.items[index];
-                  return CheckboxListTile(
-                    key: Key('select-template-item-${item.id}'),
-                    value: _selection.selectedItemIds.contains(item.id),
-                    title: Text(item.name),
-                    subtitle: Text(
-                      widget.duplicateIds.contains(item.id)
-                          ? '${item.quantity.format()} · ${localizations.templatesPossibleDuplicate}'
-                          : item.quantity.format(),
-                    ),
-                    onChanged: (_) => setState(() {
-                      _selection = _selection.toggled(item.id);
-                    }),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(localizations.cancelButton),
-        ),
-        FilledButton(
-          key: const Key('confirmTemplateSelectionButton'),
-          onPressed: !_selection.canConfirm || !titleValid
-              ? null
-              : () => Navigator.pop(
-                    context,
-                    _SelectionInput(
-                      _selection.selectedItemIds,
-                      _titleController?.text.trim(),
-                    ),
-                  ),
-          child: Text(widget.confirmLabel),
         ),
       ],
     );

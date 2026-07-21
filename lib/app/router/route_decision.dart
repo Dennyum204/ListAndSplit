@@ -19,6 +19,17 @@ abstract final class AppRoutes {
   static const friendships = '/community/friendships';
   static const blockedUsers = '/community/blocked';
   static const notifications = '/notifications';
+
+  static String listDetail(String listId) => '$lists/$listId';
+
+  static String listTemplateImport(String listId) =>
+      '${listDetail(listId)}/import-template';
+
+  static String listTemplateImportPreview(
+    String listId,
+    String templateId,
+  ) =>
+      '${listTemplateImport(listId)}/$templateId';
 }
 
 class AppRouteDecision {

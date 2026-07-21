@@ -286,7 +286,10 @@ A private template can be used in two ways:
 2. Import selected template items into an existing active shopping list where the
    caller may normally add items. Remaining capacity is `200` minus the
    authoritative current destination-item count. Confirmation is disabled for no
-   selection or a selection larger than that remaining capacity.
+   selection or a selection larger than that remaining capacity. The user may
+   start from a template and choose a destination, or start from an already-open
+   active list and choose one of their private templates. The list-first path
+   keeps that list fixed through preview and returns directly to it after success.
 
 Both previews select all items by default and preserve selected template order.
 Every imported row is a new independent list item. Possible duplicates are marked

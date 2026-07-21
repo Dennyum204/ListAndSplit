@@ -144,7 +144,8 @@ Current private-template slice:
   visible empty categories, and atomic move to Uncategorized on deletion.
 - Saving an accessible active/archived list as an independent private template,
   creating a new active list from a template, and atomic selected-item import into
-  an existing active list.
+  an existing active list from either template detail or the already-open active
+  list with a fixed destination.
 - A non-destructive 200-current-item shopping-list capacity enforced for ordinary
   creation and every copy/import path under existing list locks.
 - Search across template/item names, one category filter, Recently updated/A-Z/

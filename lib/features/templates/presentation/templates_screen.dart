@@ -8,30 +8,11 @@ import 'package:list_and_split/features/templates/presentation/private_template_
 import 'package:list_and_split/features/templates/presentation/private_templates_controller.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
-class TemplatesScreen extends ConsumerStatefulWidget {
+class TemplatesScreen extends ConsumerWidget {
   const TemplatesScreen({super.key});
 
   @override
-  ConsumerState<TemplatesScreen> createState() => _TemplatesScreenState();
-}
-
-class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
-  late final TextEditingController _searchController;
-
-  @override
-  void initState() {
-    super.initState();
-    _searchController = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(privateTemplatesControllerProvider);
     ref.listen<PrivateTemplatesState>(privateTemplatesControllerProvider,
@@ -68,7 +49,8 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         key: const Key('createTemplateButton'),
-        onPressed: state.isMutating ? null : () => _showCreateTemplate(context),
+        onPressed:
+            state.isMutating ? null : () => _showCreateTemplate(context, ref),
         icon: const Icon(Icons.add),
         label: Text(localizations.templatesCreateButton),
       ),
@@ -76,77 +58,25 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 760),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: TextField(
-                    key: const Key('templateSearchField'),
-                    controller: _searchController,
-                    textInputAction: TextInputAction.search,
-                    decoration: InputDecoration(
-                      hintText: localizations.templatesSearchHint,
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchController.text.isEmpty
-                          ? null
-                          : IconButton(
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {});
-                                ref
-                                    .read(privateTemplatesControllerProvider
-                                        .notifier)
-                                    .setSearch('');
-                              },
-                              icon: const Icon(Icons.clear),
-                            ),
-                    ),
-                    onChanged: (_) => setState(() {}),
-                    onSubmitted: (value) => ref
-                        .read(privateTemplatesControllerProvider.notifier)
-                        .setSearch(value),
+            child: _PrivateTemplateCatalog(
+              state: state,
+              onRefresh: () =>
+                  ref.read(privateTemplatesControllerProvider.notifier).load(),
+              onSearch: (value) => ref
+                  .read(privateTemplatesControllerProvider.notifier)
+                  .setSearch(value),
+              onFilter: (categoryId, uncategorized) => ref
+                  .read(privateTemplatesControllerProvider.notifier)
+                  .setFilter(
+                    categoryId: categoryId,
+                    uncategorized: uncategorized,
                   ),
-                ),
-                _TemplateFilters(state: state),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: DropdownButtonFormField<PrivateTemplateSort>(
-                    key: const Key('templateSortField'),
-                    // ignore: deprecated_member_use
-                    value: state.sort,
-                    decoration: InputDecoration(
-                      labelText: localizations.templatesSortLabel,
-                      isDense: true,
-                    ),
-                    items: [
-                      DropdownMenuItem(
-                        value: PrivateTemplateSort.recent,
-                        child: Text(localizations.templatesSortRecent),
-                      ),
-                      DropdownMenuItem(
-                        value: PrivateTemplateSort.alphabetic,
-                        child: Text(localizations.templatesSortAlphabetic),
-                      ),
-                      DropdownMenuItem(
-                        value: PrivateTemplateSort.newest,
-                        child: Text(localizations.templatesSortNewest),
-                      ),
-                    ],
-                    onChanged: state.isMutating
-                        ? null
-                        : (sort) {
-                            if (sort != null) {
-                              ref
-                                  .read(privateTemplatesControllerProvider
-                                      .notifier)
-                                  .setSort(sort);
-                            }
-                          },
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Expanded(child: _TemplatesBody(state: state)),
-              ],
+              onSort: (sort) => ref
+                  .read(privateTemplatesControllerProvider.notifier)
+                  .setSort(sort),
+              onSelected: (template) => context.push(
+                '${AppRoutes.templates}/${template.id}',
+              ),
             ),
           ),
         ),
@@ -154,7 +84,10 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
     );
   }
 
-  Future<void> _showCreateTemplate(BuildContext context) async {
+  Future<void> _showCreateTemplate(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final state = ref.read(privateTemplatesControllerProvider);
     final input = await showDialog<_NamedCategoryInput>(
       context: context,
@@ -165,7 +98,7 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
         categories: state.categories.valueOrNull ?? const [],
       ),
     );
-    if (input == null || !mounted) return;
+    if (input == null || !context.mounted) return;
     await ref.read(privateTemplatesControllerProvider.notifier).createTemplate(
           input.name,
           categoryId: input.categoryId,
@@ -182,13 +115,199 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
   }
 }
 
-class _TemplateFilters extends ConsumerWidget {
-  const _TemplateFilters({required this.state});
+class PrivateTemplatePickerScreen extends ConsumerWidget {
+  const PrivateTemplatePickerScreen({
+    required this.destinationListId,
+    super.key,
+  });
 
-  final PrivateTemplatesState state;
+  final String destinationListId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final localizations = AppLocalizations.of(context);
+    final provider = privateTemplatePickerControllerProvider(destinationListId);
+    final state = ref.watch(provider);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(localizations.templatesImportPickerTitle),
+        actions: [
+          IconButton(
+            onPressed: state.isMutating
+                ? null
+                : () => ref.read(provider.notifier).load(),
+            tooltip: localizations.templatesRefreshTooltip,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: _PrivateTemplateCatalog(
+              state: state,
+              onRefresh: () => ref.read(provider.notifier).load(),
+              onSearch: (value) => ref.read(provider.notifier).setSearch(value),
+              onFilter: (categoryId, uncategorized) =>
+                  ref.read(provider.notifier).setFilter(
+                        categoryId: categoryId,
+                        uncategorized: uncategorized,
+                      ),
+              onSort: (sort) => ref.read(provider.notifier).setSort(sort),
+              onSelected: (template) async {
+                final imported = await context.push<bool>(
+                  AppRoutes.listTemplateImportPreview(
+                    destinationListId,
+                    template.id,
+                  ),
+                );
+                if (imported == true && context.mounted) {
+                  context.pop(true);
+                }
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+typedef _SetTemplateFilter = Future<void> Function(
+  String? categoryId,
+  bool uncategorized,
+);
+
+class _PrivateTemplateCatalog extends StatefulWidget {
+  const _PrivateTemplateCatalog({
+    required this.state,
+    required this.onRefresh,
+    required this.onSearch,
+    required this.onFilter,
+    required this.onSort,
+    required this.onSelected,
+  });
+
+  final PrivateTemplatesState state;
+  final Future<void> Function() onRefresh;
+  final Future<void> Function(String) onSearch;
+  final _SetTemplateFilter onFilter;
+  final Future<void> Function(PrivateTemplateSort) onSort;
+  final ValueChanged<PrivateTemplateSummary> onSelected;
+
+  @override
+  State<_PrivateTemplateCatalog> createState() =>
+      _PrivateTemplateCatalogState();
+}
+
+class _PrivateTemplateCatalogState extends State<_PrivateTemplateCatalog> {
+  late final TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(text: widget.state.search);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PrivateTemplateCatalog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state.search != widget.state.search &&
+        _searchController.text != widget.state.search) {
+      _searchController.text = widget.state.search;
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final state = widget.state;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: TextField(
+            key: const Key('templateSearchField'),
+            controller: _searchController,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: localizations.templatesSearchHint,
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchController.text.isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                        widget.onSearch('');
+                      },
+                      icon: const Icon(Icons.clear),
+                    ),
+            ),
+            onChanged: (_) => setState(() {}),
+            onSubmitted: widget.onSearch,
+          ),
+        ),
+        _TemplateFilters(state: state, onFilter: widget.onFilter),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: DropdownButtonFormField<PrivateTemplateSort>(
+            key: const Key('templateSortField'),
+            // ignore: deprecated_member_use
+            value: state.sort,
+            decoration: InputDecoration(
+              labelText: localizations.templatesSortLabel,
+              isDense: true,
+            ),
+            items: [
+              DropdownMenuItem(
+                value: PrivateTemplateSort.recent,
+                child: Text(localizations.templatesSortRecent),
+              ),
+              DropdownMenuItem(
+                value: PrivateTemplateSort.alphabetic,
+                child: Text(localizations.templatesSortAlphabetic),
+              ),
+              DropdownMenuItem(
+                value: PrivateTemplateSort.newest,
+                child: Text(localizations.templatesSortNewest),
+              ),
+            ],
+            onChanged: state.isMutating
+                ? null
+                : (sort) {
+                    if (sort != null) widget.onSort(sort);
+                  },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: _TemplatesBody(
+            state: state,
+            onRefresh: widget.onRefresh,
+            onSelected: widget.onSelected,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TemplateFilters extends StatelessWidget {
+  const _TemplateFilters({required this.state, required this.onFilter});
+
+  final PrivateTemplatesState state;
+  final _SetTemplateFilter onFilter;
+
+  @override
+  Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final categories =
         state.categories.valueOrNull ?? const <TemplateCategory>[];
@@ -204,9 +323,7 @@ class _TemplateFilters extends ConsumerWidget {
               key: const Key('allTemplatesFilter'),
               selected: state.categoryId == null && !state.uncategorizedOnly,
               label: Text(localizations.templatesAllFilter),
-              onSelected: (_) => ref
-                  .read(privateTemplatesControllerProvider.notifier)
-                  .setFilter(),
+              onSelected: (_) => onFilter(null, false),
             ),
           ),
           Padding(
@@ -215,9 +332,7 @@ class _TemplateFilters extends ConsumerWidget {
               key: const Key('uncategorizedTemplatesFilter'),
               selected: state.uncategorizedOnly,
               label: Text(localizations.templatesUncategorizedFilter),
-              onSelected: (_) => ref
-                  .read(privateTemplatesControllerProvider.notifier)
-                  .setFilter(uncategorized: true),
+              onSelected: (_) => onFilter(null, true),
             ),
           ),
           for (final category in categories)
@@ -226,9 +341,7 @@ class _TemplateFilters extends ConsumerWidget {
               child: ChoiceChip(
                 selected: state.categoryId == category.id,
                 label: Text(category.name),
-                onSelected: (_) => ref
-                    .read(privateTemplatesControllerProvider.notifier)
-                    .setFilter(categoryId: category.id),
+                onSelected: (_) => onFilter(category.id, false),
               ),
             ),
         ],
@@ -237,13 +350,19 @@ class _TemplateFilters extends ConsumerWidget {
   }
 }
 
-class _TemplatesBody extends ConsumerWidget {
-  const _TemplatesBody({required this.state});
+class _TemplatesBody extends StatelessWidget {
+  const _TemplatesBody({
+    required this.state,
+    required this.onRefresh,
+    required this.onSelected,
+  });
 
   final PrivateTemplatesState state;
+  final Future<void> Function() onRefresh;
+  final ValueChanged<PrivateTemplateSummary> onSelected;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     return state.templates.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -252,8 +371,7 @@ class _TemplatesBody extends ConsumerWidget {
         title: localizations.templatesLoadFailed,
         description: '',
         action: FilledButton.tonal(
-          onPressed: () =>
-              ref.read(privateTemplatesControllerProvider.notifier).load(),
+          onPressed: onRefresh,
           child: Text(localizations.templatesRetryButton),
         ),
       ),
@@ -273,8 +391,7 @@ class _TemplatesBody extends ConsumerWidget {
           );
         }
         return RefreshIndicator(
-          onRefresh: () =>
-              ref.read(privateTemplatesControllerProvider.notifier).load(),
+          onRefresh: onRefresh,
           child: ListView.separated(
             key: const Key('templatesList'),
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
@@ -296,9 +413,7 @@ class _TemplatesBody extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push(
-                    '${AppRoutes.templates}/${template.id}',
-                  ),
+                  onTap: () => onSelected(template),
                 ),
               );
             },
