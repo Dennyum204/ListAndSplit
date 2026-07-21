@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
@@ -61,6 +63,7 @@ class ActiveListsController extends StateNotifier<ActiveListsState> {
   final bool _hasAuthenticatedUser;
   final CreationRequestIdGenerator _requestIdGenerator;
   int _loadGeneration = 0;
+  bool _reconciliationPending = false;
   String? _pendingCreateTitle;
   String? _pendingCreateRequestId;
 
@@ -97,6 +100,41 @@ class ActiveListsController extends StateNotifier<ActiveListsState> {
         archivedLists: AsyncError(error, stackTrace),
         message: ActiveListsMessage.operationFailed,
       );
+    }
+  }
+
+  Future<void> reconcile() async {
+    if (!_hasAuthenticatedUser) return;
+    if (state.isCreating || state.loadingMoreStatus != null) {
+      _reconciliationPending = true;
+      return;
+    }
+    _reconciliationPending = false;
+    final generation = ++_loadGeneration;
+    try {
+      final pages = await Future.wait([
+        _repository.listLists(
+          status: ActiveListStatus.active,
+          limit: activeListPageSize,
+        ),
+        _repository.listLists(
+          status: ActiveListStatus.archived,
+          limit: activeListPageSize,
+        ),
+      ]);
+      if (!mounted || generation != _loadGeneration) return;
+      state = ActiveListsState(
+        activeLists: AsyncData(pages[0].lists),
+        archivedLists: AsyncData(pages[1].lists),
+        activeCursor: pages[0].nextCursor,
+        archivedCursor: pages[1].nextCursor,
+        activeHasMore: pages[0].hasMore,
+        archivedHasMore: pages[1].hasMore,
+        message: state.message,
+      );
+    } catch (_) {
+      // Realtime is best-effort: retain usable cached projections and manual
+      // refresh when a background reconciliation fails.
     }
   }
 
@@ -162,6 +200,7 @@ class ActiveListsController extends StateNotifier<ActiveListsState> {
         status,
         ActiveListPage(lists: combined, hasMore: page.hasMore),
       );
+      _drainReconciliation();
     } catch (_) {
       if (!mounted) return;
       state = ActiveListsState(
@@ -173,6 +212,7 @@ class ActiveListsController extends StateNotifier<ActiveListsState> {
         archivedHasMore: state.archivedHasMore,
         message: ActiveListsMessage.operationFailed,
       );
+      _drainReconciliation();
     }
   }
 
@@ -257,5 +297,12 @@ class ActiveListsController extends StateNotifier<ActiveListsState> {
       archivedHasMore: state.archivedHasMore,
       message: message,
     );
+    _drainReconciliation();
+  }
+
+  void _drainReconciliation() {
+    if (!_reconciliationPending || !mounted) return;
+    _reconciliationPending = false;
+    unawaited(reconcile());
   }
 }

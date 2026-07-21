@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/features/community/domain/community_repository.dart';
 import 'package:list_and_split/features/community/domain/friendship_repository.dart';
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
@@ -68,6 +69,7 @@ class FriendshipManagementController
   final void Function() _invalidateSearch;
   final void Function() _invalidateNotifications;
   int _loadGeneration = 0;
+  bool _externalRefreshPending = false;
 
   Future<void> load() async {
     final generation = ++_loadGeneration;
@@ -94,6 +96,26 @@ class FriendshipManagementController
         busyProfileIds: state.busyProfileIds,
         message: FriendshipManagementMessage.operationFailed,
       );
+    }
+  }
+
+  Future<void> reconcile() async {
+    if (state.busyProfileIds.isNotEmpty) {
+      _externalRefreshPending = true;
+      return;
+    }
+    _externalRefreshPending = false;
+    final generation = ++_loadGeneration;
+    try {
+      final relationships =
+          await _friendshipRepository.listActiveRelationships();
+      if (!mounted || generation != _loadGeneration) return;
+      state = FriendshipManagementState(
+        relationships: AsyncData(relationships),
+        message: state.message,
+      );
+    } catch (_) {
+      // Preserve the last usable projection on transient Realtime failure.
     }
   }
 
@@ -241,10 +263,12 @@ class FriendshipManagementController
       } else {
         _finishAction(profileId, message: successMessage);
       }
+      _externalRefreshPending = false;
       return true;
     } catch (_) {
       if (!mounted) return false;
       _finishAction(profileId, message: reportRefreshFailureAs);
+      _drainExternalRefresh();
       return false;
     }
   }
@@ -265,6 +289,16 @@ class FriendshipManagementController
           if (busyProfileId != profileId) busyProfileId,
       };
 
+  void _drainExternalRefresh() {
+    if (!_externalRefreshPending ||
+        !mounted ||
+        state.busyProfileIds.isNotEmpty) {
+      return;
+    }
+    _externalRefreshPending = false;
+    unawaited(reconcile());
+  }
+
   static void _noop() {}
 }
 
@@ -272,13 +306,16 @@ final friendshipManagementControllerProvider =
     StateNotifierProvider.autoDispose<FriendshipManagementController,
         FriendshipManagementState>((ref) {
   ref.watch(verifiedUserIdProvider);
-  ref.watch(friendshipManagementRefreshSignalProvider);
   final controller = FriendshipManagementController(
     ref.watch(friendshipRepositoryProvider),
     ref.watch(communityRepositoryProvider),
     invalidateSearch: ref.watch(invalidateCommunitySearchProvider),
     invalidateNotifications: ref.watch(invalidateNotificationsProvider),
   );
+  ref.listen<int>(friendshipManagementRefreshSignalProvider, (_, __) {
+    unawaited(controller.reconcile());
+  });
+  registerForReconciliation(ref, controller.reconcile);
   unawaited(controller.load());
   return controller;
 });

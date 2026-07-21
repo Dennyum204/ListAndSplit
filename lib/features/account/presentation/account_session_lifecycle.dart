@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/app/reconciliation/account_reconciliation_providers.dart';
 import 'package:list_and_split/app/session_state_reset.dart';
 import 'package:list_and_split/core/config/configuration_provider.dart';
+import 'package:list_and_split/core/supabase/supabase_client_provider.dart';
 import 'package:list_and_split/features/account/domain/account_deletion_repository.dart';
 import 'package:list_and_split/features/account/presentation/account_deletion_providers.dart';
 import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
@@ -54,6 +56,8 @@ class _AccountSessionLifecycleState
           result == AuthoritativeAccountState.invalidSession) {
         await repository.clearLocalSession();
         ref.read(resetSessionStateProvider)();
+      } else if (ref.read(supabaseRuntimeReadyProvider)) {
+        ref.read(accountReconciliationCoordinatorProvider).resume();
       }
     } finally {
       _isValidating = false;
@@ -64,6 +68,9 @@ class _AccountSessionLifecycleState
   Widget build(BuildContext context) {
     if (ref.watch(appConfigurationProvider).isConfigured) {
       ref.watch(authSessionProvider);
+      if (ref.watch(supabaseRuntimeReadyProvider)) {
+        ref.watch(accountReconciliationCoordinatorProvider);
+      }
     }
     return widget.child;
   }
