@@ -13,13 +13,17 @@ import 'package:list_and_split/features/community/domain/friendship_summary.dart
 import 'package:list_and_split/features/community/presentation/community_providers.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
+import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
+import 'package:list_and_split/features/lists/presentation/active_lists_screen.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+import 'package:list_and_split/features/split/domain/list_split_repository.dart';
 import 'package:list_and_split/features/split/presentation/list_split_providers.dart';
 import 'package:list_and_split/features/split/presentation/list_split_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
+import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fake_list_split_repository.dart';
 import '../../helpers/fake_private_template_repository.dart';
@@ -61,6 +65,55 @@ void main() {
           .listId,
       splitListId,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'access removal closes an expense editor and exits with one message',
+      (tester) async {
+    final expense = splitExpense();
+    final lists = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..itemsByList[splitListId] = [];
+    final split = FakeListSplitRepository(
+      initial: enabledSplitOverview(expenses: [expense]),
+    );
+    final container = await _pumpApp(tester, lists: lists, split: split);
+    final router = container.read(appRouterProvider);
+
+    router.go(AppRoutes.listSplit(splitListId));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('splitExpense-${expense.id}')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('splitExpenseDescriptionField')),
+      'Unsaved replacement',
+    );
+
+    lists.failure = const ActiveListFailure(ActiveListFailureCode.unavailable);
+    split.failure = const ListSplitFailure(ListSplitFailureCode.unavailable);
+    final detailController = container.read(
+      activeListDetailControllerProvider(splitListId).notifier,
+    );
+    final splitController = container.read(
+      listSplitControllerProvider(splitListId).notifier,
+    );
+    await Future.wait([
+      detailController.reconcile(),
+      splitController.reconcile(),
+      splitController.reconcile(),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ExpenseFormDialog), findsNothing);
+    expect(find.byType(ActiveListsScreen), findsOneWidget);
+    final listsContext = tester.element(find.byType(ActiveListsScreen));
+    final message = AppLocalizations.of(listsContext).listAccessRevokedMessage;
+    expect(find.text(message), findsOneWidget);
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.lists);
+    expect(split.updateCalls, 0);
+    expect(split.overview.expenses.single.description, expense.description);
     expect(tester.takeException(), isNull);
   });
 }

@@ -844,7 +844,7 @@
   "listLeaveTitle": "Leave this list?",
   "listLeaveDescription": "You will lose access. The owner may invite you again later.",
   "listLeftMessage": "You left the list.",
-  "listAccessRevokedMessage": "Your access to this list changed. The latest Lists view was loaded.",
+  "listAccessRevokedMessage": "You no longer have access to this list. The latest Lists view was loaded.",
   "listInvitationAcceptButton": "Accept",
   "listInvitationDeclineButton": "Decline",
   "listInvitationAcceptedMessage": "List invitation accepted.",

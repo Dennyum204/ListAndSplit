@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/features/split/domain/list_split.dart';
@@ -19,13 +17,6 @@ class ListSplitScreen extends ConsumerWidget {
     final state = ref.watch(listSplitControllerProvider(listId));
     final overview = state.overview.valueOrNull;
     final localizations = AppLocalizations.of(context);
-    ref.listen<ListSplitState>(listSplitControllerProvider(listId),
-        (previous, next) {
-      if (next.message == ListSplitMessage.unavailable &&
-          previous?.message != ListSplitMessage.unavailable) {
-        context.go(AppRoutes.lists);
-      }
-    });
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -601,6 +592,7 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
     _dialogRoute ??= ModalRoute.of(context);
     final provider = listSplitControllerProvider(widget.listId);
     final state = ref.watch(provider);
+    final unavailable = state.message == ListSplitMessage.unavailable;
     final overview = state.overview.valueOrNull ?? widget.initialOverview;
     final currency = overview.currency ?? widget.initialOverview.currency!;
     ListSplitExpense? liveExpense;
@@ -612,7 +604,9 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
         }
       }
     }
-    if ((widget.expense != null && liveExpense == null) || !overview.writable) {
+    if (unavailable ||
+        (widget.expense != null && liveExpense == null) ||
+        !overview.writable) {
       _scheduleClose();
     }
     final currentExpense = liveExpense ?? widget.expense;
@@ -649,7 +643,8 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
           (id) => beneficiaryChoices.any((entry) => entry.id == id),
         );
     final localizations = AppLocalizations.of(context);
-    final formEnabled = overview.writable &&
+    final formEnabled = !unavailable &&
+        overview.writable &&
         !state.isMutating &&
         !_submitted &&
         !_dialogClosing;

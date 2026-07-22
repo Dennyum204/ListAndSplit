@@ -359,6 +359,47 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+      'current-user access removal closes the editor and discards unsaved edits',
+      (tester) async {
+    final expense = splitExpense();
+    final repository = FakeListSplitRepository(
+      initial: enabledSplitOverview(expenses: [expense]),
+    );
+    final container = await _pump(
+      tester,
+      repository,
+      authenticatedProfileId: splitMemberProfileId,
+    );
+    await tester.tap(find.byKey(ValueKey('splitExpense-${expense.id}')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('splitExpenseDescriptionField')),
+      'Unsaved replacement',
+    );
+
+    repository.failure =
+        const ListSplitFailure(ListSplitFailureCode.unavailable);
+    final controller =
+        container.read(listSplitControllerProvider(splitListId).notifier);
+    await Future.wait([controller.reconcile(), controller.reconcile()]);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ExpenseFormDialog), findsNothing);
+    expect(find.byKey(const Key('saveSplitExpenseButton')), findsNothing);
+    expect(repository.updateCalls, 0);
+    expect(
+        repository.overview.expenses.single.description, expense.description);
+    expect(
+      repository.overview.participants
+          .map((participant) => participant.balanceMinor),
+      enabledSplitOverview(expenses: [expense])
+          .participants
+          .map((participant) => participant.balanceMinor),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('removed selected payer clears safely and requires reselection',
       (tester) async {
     final repository = FakeListSplitRepository();

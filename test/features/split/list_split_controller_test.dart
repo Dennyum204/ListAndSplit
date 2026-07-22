@@ -312,6 +312,28 @@ void main() {
     controller.dispose();
   });
 
+  test('unavailable reconciliation discards the cached writable projection',
+      () async {
+    final expense = splitExpense();
+    final repository = FakeListSplitRepository(
+      initial: enabledSplitOverview(expenses: [expense]),
+    );
+    final controller = _controller(repository);
+    await controller.load();
+
+    repository.failure =
+        const ListSplitFailure(ListSplitFailureCode.unavailable);
+    await Future.wait([controller.reconcile(), controller.reconcile()]);
+
+    expect(controller.state.overview.hasError, isTrue);
+    expect(controller.state.overview.valueOrNull, isNull);
+    expect(controller.state.message, ListSplitMessage.unavailable);
+    expect(controller.state.isMutating, isFalse);
+    expect(repository.updateCalls, 0);
+    expect(repository.overview.expenses.single, expense);
+    controller.dispose();
+  });
+
   test('session reset reconstructs list-scoped Split state', () {
     final repository = FakeListSplitRepository();
     final container = ProviderContainer(
