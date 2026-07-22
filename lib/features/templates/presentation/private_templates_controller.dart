@@ -422,6 +422,11 @@ class PrivateTemplateDetailController
       return;
     }
     await load();
+    if (!mounted) return;
+    if (state.message == PrivateTemplatesMessage.unavailable) {
+      state = state.copyWith(clearDestination: true);
+      return;
+    }
     final destinationId = state.destination?.detail.summary.id;
     if (destinationId != null) await prepareImport(destinationId);
   }
@@ -543,7 +548,10 @@ class PrivateTemplateDetailController
       final summary = values[0] as ActiveListSummary;
       final items = values[1] as List<ActiveListItem>;
       if (summary.status != ActiveListStatus.active) {
-        state = state.copyWith(message: PrivateTemplatesMessage.unavailable);
+        state = state.copyWith(
+          clearDestination: true,
+          message: PrivateTemplatesMessage.unavailable,
+        );
         return false;
       }
       final template = state.detail.valueOrNull;
@@ -559,10 +567,17 @@ class PrivateTemplateDetailController
         clearMessage: true,
       );
       return true;
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        state =
-            state.copyWith(message: PrivateTemplatesMessage.operationFailed);
+        final unavailable = error is ActiveListFailure &&
+            (error.code == ActiveListFailureCode.unavailable ||
+                error.code == ActiveListFailureCode.archived);
+        state = state.copyWith(
+          clearDestination: unavailable,
+          message: unavailable
+              ? PrivateTemplatesMessage.unavailable
+              : PrivateTemplatesMessage.operationFailed,
+        );
       }
       return false;
     }
@@ -677,9 +692,14 @@ class PrivateTemplateDetailController
       state = state.copyWith(isMutating: false, message: failureMessage);
       if (failure.code == PrivateTemplateFailureCode.stale ||
           failure.code == PrivateTemplateFailureCode.capacity ||
-          failure.code == PrivateTemplateFailureCode.archived) {
+          failure.code == PrivateTemplateFailureCode.archived ||
+          failure.code == PrivateTemplateFailureCode.unavailable) {
         await load();
-        await prepareImport(destination.detail.summary.id);
+        if (mounted && state.message != PrivateTemplatesMessage.unavailable) {
+          await prepareImport(destination.detail.summary.id);
+        } else if (mounted) {
+          state = state.copyWith(clearDestination: true);
+        }
       }
       if (mounted) state = state.copyWith(message: failureMessage);
       _drainReconciliation();

@@ -354,6 +354,14 @@ foreign key. Duplicate normalized names are warning-only and still consume
 separate positions. Stale access/state/version/capacity rolls back all inserts,
 version changes, and Realtime messages; there is no partial or reduced import.
 
+Existing-list import has two presentation entry points over that same controller,
+repository method, and RPC. Template detail may choose a destination list; active
+list detail may open a caller-private template picker with the destination list ID
+fixed in the Lists branch. The picker reuses template search, category filtering,
+sorting, and immutable template IDs. Both paths use the same selection preview,
+duplicate detection, expected versions, request IDs, authoritative refresh, and
+mounted list-detail invalidation.
+
 Template/category table triggers reuse the private `account:<auth.uid()>`
 `invalidate`/`{"v":1}` contract and notify only the owner. Item mutations update
 the parent template, so its trigger is the fanout point. Copy/import into lists

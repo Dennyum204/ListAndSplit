@@ -30,6 +30,7 @@ import 'package:list_and_split/features/profile/presentation/profile_providers.d
 import 'package:list_and_split/features/profile/presentation/profile_screen.dart';
 import 'package:list_and_split/features/templates/presentation/templates_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_detail_screen.dart';
+import 'package:list_and_split/features/templates/presentation/private_template_import_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _listsNavigatorKey = GlobalKey<NavigatorState>();
@@ -160,6 +161,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                         builder: (context, state) => ActiveListMembersScreen(
                           listId: state.pathParameters['listId']!,
                         ),
+                      ),
+                      GoRoute(
+                        path: 'import-template',
+                        builder: (context, state) =>
+                            PrivateTemplatePickerScreen(
+                          destinationListId: state.pathParameters['listId']!,
+                        ),
+                        routes: [
+                          GoRoute(
+                            path: ':templateId',
+                            builder: (context, state) =>
+                                PrivateTemplateImportScreen(
+                              destinationListId:
+                                  state.pathParameters['listId']!,
+                              templateId: state.pathParameters['templateId']!,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

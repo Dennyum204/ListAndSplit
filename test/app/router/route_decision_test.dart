@@ -123,6 +123,19 @@ void main() {
     expect(complete.redirect(AppRoutes.signIn), AppRoutes.lists);
   });
 
+  test(
+      'list-first template import routes carry immutable list and template IDs',
+      () {
+    expect(
+      AppRoutes.listTemplateImport('list-1'),
+      '/lists/list-1/import-template',
+    );
+    expect(
+      AppRoutes.listTemplateImportPreview('list-1', 'template-2'),
+      '/lists/list-1/import-template/template-2',
+    );
+  });
+
   test('community routes preserve verification and onboarding gates', () {
     expect(
       decision(session: const AuthSessionState.signedOut())

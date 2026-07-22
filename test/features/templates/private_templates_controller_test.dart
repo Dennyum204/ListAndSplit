@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
+import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
+import 'package:list_and_split/features/templates/domain/private_template.dart';
 import 'package:list_and_split/features/templates/domain/private_template_repository.dart';
 import 'package:list_and_split/features/templates/presentation/private_templates_controller.dart';
 
@@ -141,6 +143,139 @@ void main() {
     expect(controller.state.destination?.remainingCapacity, 1);
     controller.dispose();
   });
+
+  test('lost destination access clears the prepared import authority',
+      () async {
+    final templates = FakePrivateTemplateRepository();
+    final summary = await templates.createTemplate(
+      'Shop',
+      requestId: 'template-request',
+    );
+    await templates.createItem(
+      summary.id,
+      'Coffee',
+      requestId: 'item-one',
+      expectedTemplateVersion: 1,
+    );
+    final lists = FakeActiveListRepository()
+      ..activeLists = [_listSummary(itemCount: 0)]
+      ..itemsByList['list-1'] = [];
+    final controller = PrivateTemplateDetailController(
+      templates,
+      lists,
+      summary.id,
+      invalidateTemplates: () {},
+      invalidateLists: () {},
+      invalidateListDetail: (_) {},
+    );
+    await controller.load();
+    expect(await controller.prepareImport('list-1'), isTrue);
+
+    lists.failure = const ActiveListFailure(ActiveListFailureCode.unavailable);
+    expect(await controller.prepareImport('list-1'), isFalse);
+
+    expect(controller.state.destination, isNull);
+    expect(controller.state.message, PrivateTemplatesMessage.unavailable);
+    controller.dispose();
+  });
+
+  test('deleted template rejection clears a stale prepared destination',
+      () async {
+    final templates = FakePrivateTemplateRepository();
+    final summary = await templates.createTemplate(
+      'Shop',
+      requestId: 'template-request',
+    );
+    await templates.createItem(
+      summary.id,
+      'Coffee',
+      requestId: 'item-one',
+      expectedTemplateVersion: 1,
+    );
+    final lists = FakeActiveListRepository()
+      ..activeLists = [_listSummary(itemCount: 0)]
+      ..itemsByList['list-1'] = [];
+    final controller = PrivateTemplateDetailController(
+      templates,
+      lists,
+      summary.id,
+      invalidateTemplates: () {},
+      invalidateLists: () {},
+      invalidateListDetail: (_) {},
+    );
+    await controller.load();
+    await controller.prepareImport('list-1');
+    templates.failure = const PrivateTemplateFailure(
+      PrivateTemplateFailureCode.unavailable,
+    );
+
+    final succeeded = await controller.importSelected(
+      [controller.state.detail.asData!.value.items.single.id],
+    );
+
+    expect(succeeded, isFalse);
+    expect(controller.state.destination, isNull);
+    expect(controller.state.message, PrivateTemplatesMessage.unavailable);
+    controller.dispose();
+  });
+
+  test('membership loss during submission clears the fixed destination',
+      () async {
+    final templates = _UnavailableImportRepository();
+    final summary = await templates.createTemplate(
+      'Shop',
+      requestId: 'template-request',
+    );
+    await templates.createItem(
+      summary.id,
+      'Coffee',
+      requestId: 'item-one',
+      expectedTemplateVersion: 1,
+    );
+    final lists = FakeActiveListRepository()
+      ..activeLists = [_listSummary(itemCount: 0)]
+      ..itemsByList['list-1'] = [];
+    final controller = PrivateTemplateDetailController(
+      templates,
+      lists,
+      summary.id,
+      invalidateTemplates: () {},
+      invalidateLists: () {},
+      invalidateListDetail: (_) {},
+    );
+    await controller.load();
+    await controller.prepareImport('list-1');
+    lists.failure = const ActiveListFailure(ActiveListFailureCode.unavailable);
+
+    final succeeded = await controller.importSelected(
+      [controller.state.detail.asData!.value.items.single.id],
+    );
+
+    expect(succeeded, isFalse);
+    expect(templates.importCalls, 1);
+    expect(controller.state.destination, isNull);
+    expect(controller.state.message, PrivateTemplatesMessage.unavailable);
+    controller.dispose();
+  });
+}
+
+class _UnavailableImportRepository extends FakePrivateTemplateRepository {
+  int importCalls = 0;
+
+  @override
+  Future<TemplateImportResult> importIntoList(
+    String templateId,
+    List<String> selectedItemIds,
+    String listId, {
+    required List<String> itemRequestIds,
+    required int expectedTemplateVersion,
+    required int expectedListVersion,
+  }) async {
+    importCalls += 1;
+    throw const PrivateTemplateFailure(
+      PrivateTemplateFailureCode.unavailable,
+    );
+  }
 }
 
 ActiveListSummary _listSummary({required int itemCount}) => ActiveListSummary(

@@ -144,6 +144,9 @@ void main() {
           .onChanged,
       isNull,
     );
+    await tester.tap(find.byKey(const Key('listActionsButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('Import from template'), findsNothing);
   });
 
   testWidgets('detail add form localizes units and retains invalid quantity',
@@ -473,6 +476,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('memberListActionsButton')));
     await tester.pumpAndSettle();
+    expect(find.text('Import from template'), findsOneWidget);
     await tester.tap(find.text('Leave list').last);
     await tester.pumpAndSettle();
     expect(find.text('Leave this list?'), findsOneWidget);
@@ -508,6 +512,9 @@ void main() {
           .onChanged,
       isNull,
     );
+    await tester.tap(find.byKey(const Key('memberListActionsButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('Import from template'), findsNothing);
   });
 
   testWidgets('revoked member mutation returns safely to Lists',
