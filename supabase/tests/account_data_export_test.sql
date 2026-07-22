@@ -41,7 +41,7 @@ select is(
     'public.export_own_account_data()'::regprocedure,
     'pg_proc'
   ),
-  'Returns schema-version-4 own data including caller-owned categories, templates, and ordered template items.',
+  'Returns schema-version-5 own data with Split nested only in fully exported caller-owned lists.',
   'the export boundary has a precise durable comment'
 );
 
@@ -389,14 +389,14 @@ select is(
 select ok(
   (
     select document ->> 'product' = 'list_and_split'
-      and document -> 'schema_version' = '4'::jsonb
+      and document -> 'schema_version' = '5'::jsonb
       and (document ->> 'exported_at')::timestamptz
         between pg_catalog.transaction_timestamp()
         and pg_catalog.clock_timestamp()
     from account_export_documents
     where fixture = 'complete'
   ),
-  'the root contains the product, schema version four, and server export time'
+  'the root contains the product, schema version five, and server export time'
 );
 
 select is(
@@ -630,12 +630,13 @@ select is(
     'created_at',
     'id',
     'items',
+    'split',
     'status',
     'title',
     'updated_at',
     'version'
   ]::text[],
-  'exported lists use only the eight approved fields'
+  'exported lists use only the nine approved fields including nullable Split'
 );
 
 select ok(

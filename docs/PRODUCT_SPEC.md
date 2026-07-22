@@ -15,7 +15,9 @@ are the evidence of implementation status.
 - Collaboration is based on mutual, accepted friendships rather than followers.
 - Reusable content is copied by value. A user's active list or saved template must
   not change because its source changes later.
-- Payment Control records expenses and settlements; it does not move real money.
+- **Split** is the current product and UI name for the optional expense ledger
+  previously described as Payment Control. It records expenses and, in a later
+  slice, settlements; it never moves real money.
 - Monetary values use integer minor units throughout. Floating-point money is
   prohibited.
 - The mobile information architecture has four primary destinations. Notifications
@@ -72,7 +74,8 @@ are the evidence of implementation status.
   owned active lists with ordered items. Version `1` introduced the account/social
   sections; version `2` adds the explicit `active_lists` root array; version `3`
   adds privacy-minimal caller-relative shared-list access metadata; version `4`
-  adds private template categories, templates, and ordered template items.
+  adds private template categories, templates, and ordered template items; version
+  `5` adds Split data nested only under the caller's fully exported owned lists.
   Collections are deterministic arrays and are empty rather than null.
 - The export includes nullable onboarding fields faithfully. It includes only the
   existing caller-visible block, relationship, and notification projections, so
@@ -91,7 +94,8 @@ are the evidence of implementation status.
   metadata, another person's email or Auth data, incoming blocks, raw dormant
   relationship state, reopening/requester internals, suppressed/expired/
   block-hidden notifications, server logs, security records, other participants
-  or shared-list contents, public/shared-template data, or ledger data.
+  or shared-list contents, public/shared-template data, or Split data from a list
+  the caller does not own. Shared-list export remains privacy-minimal metadata.
 - Export is generated synchronously on demand and returned to the caller. The
   server retains no export file or export record. The mobile app validates and
   pretty-prints the versioned document, writes it to OS-managed temporary/cache
@@ -126,7 +130,9 @@ are the evidence of implementation status.
   attached to a deleted relationship, every owned list and item, and every private
   template, template item, and category. No
   application cleanup transaction is committed separately before the Auth
-  deletion.
+  deletion. On another owner's list, the deleted account's Split identity is
+  anonymized in that same root transaction while its integer expense arithmetic
+  remains valid.
 - Deleting a completed profile reserves only its canonical username for exactly
   30 days from deletion. The private reservation contains no email, Auth user ID,
   profile ID, display name, or copied user data. Active reservations block
@@ -141,9 +147,9 @@ are the evidence of implementation status.
   missing/invalid Auth user signs that device out; transient network failures
   preserve its session.
 - Re-registration after deletion creates a new Auth UUID and restores no profile,
-  blocks, relationships, notifications, or other data. Every future list,
-  template, Storage, ledger, moderation/legal-retention, or administrator-deletion
-  aggregate must extend this contract before shipping. This product lifecycle is
+  blocks, relationships, notifications, or other data. Every future Storage,
+  settlement, moderation/legal-retention, or administrator-deletion aggregate
+  must extend this contract before shipping. This product lifecycle is
   not a claim of complete legal or regulatory compliance. Hosted deletion QA uses
   separately authorized disposable accounts and must never delete or modify
   Fernando or Susana.
@@ -151,8 +157,9 @@ are the evidence of implementation status.
 ### Active and shared lists
 
 Each list has one fully onboarded owner and retained, versioned access rows.
-Assignment, note, mention, offline cache, template, and Payment Control records
-are not implemented.
+Assignment, note, mention, and offline cache records are not implemented. Private
+templates and the first Split expense-ledger slice use separate list-integrated
+aggregates.
 
 - The owner can create, list, open, rename, archive, restore, and permanently
   delete a list. Duplicate titles are allowed; titles are trimmed and contain
@@ -373,21 +380,51 @@ copies succeed; duplicate-name rows each consume one place.
   list section. Friendship ending alone preserves accepted list membership.
   Reporting, moderation, evidence retention, and appeals remain future work.
 
-### Payment Control
+### Split expense ledger
 
-- Payment Control is an expense ledger inside an active list where it has been
-  enabled. It is explicitly not payment processing.
-- Each Payment-Control-enabled list uses exactly one currency.
-- An expense records one payer and a selected set of participating list members.
-- Expenses support equal splitting and exact custom shares.
-- All amounts and shares use integer minor units. Values such as binary
-  floating-point `double` amounts are invalid at every layer.
-- Members can record settlements between list members.
-- Authoritative balance and debt calculations run server-side and are covered by
-  unit tests.
-
-Currency support, equal-split remainder allocation, editing/reversal rules, and
-the presentation of simplified debts remain open decisions.
+- Split is an optional expense ledger inside a main list, not payment processing.
+  Only the current owner can enable it. An enabled list has exactly one validated
+  currency: this slice supports `CHF` and `EUR`, both with two decimal minor-unit
+  digits. The owner may change currency only before the first expense exists.
+- Expenses store and calculate positive amounts as integer minor units only.
+  Descriptions are trimmed to 1-120 characters, amounts are `1` through
+  `999999999` minor units, and a list may contain at most 200 current expenses.
+  Physical expense deletion immediately frees capacity; existing over-capacity
+  data remains readable/editable/deletable but cannot grow.
+- The owner and current accepted, unblocked members may create, edit, and delete
+  expenses while the list is active. Archived lists retain readable Split history
+  and balances but reject every Split mutation. These operations create no
+  persistent notification or unread-badge change.
+- A new expense has one eligible current payer and a non-empty subset of eligible
+  current participants. The payer need not be a beneficiary. PR #14 supports only
+  equal splitting; custom amounts and percentages remain future work.
+- For total `A` and `N` selected participants, each share begins at
+  `floor(A / N)`. The first `A mod N` participants in ascending immutable
+  list-scoped participant-ID order receive one additional minor unit. Explicit
+  stored shares therefore sum exactly to the expense total and are stable across
+  devices.
+- A participant's authoritative balance is total paid minus total owed. Positive
+  means they are owed money, negative means they owe money, and zero means settled
+  up. Balances are derived rather than stored, never display negative zero, and
+  always sum exactly to zero for the list.
+- Split retains a list-scoped participant identity and display snapshot separately
+  from live membership. Removing a member preserves their understandable identity,
+  expenses, shares, and paid/owed totals. A removed person cannot enter a new
+  expense; an edit may retain only their associations already on that expense.
+  Once removed from that expense they cannot be re-added until accepted again.
+  Reaccepting the same account reuses its existing list identity. Permanent account
+  deletion instead clears the snapshots and live link, leaving a localized generic
+  deleted-participant identity and preserving arithmetic without retaining deleted
+  profile data. A member accepted after Split is enabled receives or reuses exactly
+  one financial identity and becomes eligible without re-enabling Split.
+- Creates use a payload-bound request UUID for safe lost-response retries. Creates,
+  edits, and deletes are atomic, version checked, and reconcile stale
+  membership, archive, deletion, and concurrent changes to authoritative state.
+  Private account Realtime invalidations refresh mounted Split projections and
+  forms; manual refresh and resume reconciliation remain available.
+- Settlements/payouts, settlement recommendations, custom shares, conversion,
+  guests, receipts, categories, charts, recurring expenses, and debt
+  simplification are deferred.
 
 ### Notifications and actionable requests
 
@@ -508,9 +545,8 @@ choose them:
 - Public-template copied visibility/category defaults, attribution and provenance
   display, and community-feed ranking/retention.
 - Invitation and sent-template expiry, revocation, and idempotent re-acceptance.
-- Supported currencies, currency immutability after ledger use, equal-split
-  remainder allocation, expense correction, settlement reversal, and debt
-  simplification rules.
+- Exact custom-share validation, settlement direction/reversal, settlement
+  recommendations, and debt-simplification/display rules.
 - Notification archive/delete/preferences, future types, push-safe payloads,
   physical cleanup, and account-lifecycle retention beyond the accepted
   friend-request behavior.

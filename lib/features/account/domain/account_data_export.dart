@@ -25,7 +25,10 @@ class AccountDataExportDocument {
         templates = List.unmodifiable(templates) {
     if (product != supportedProduct ||
         !supportedSchemaVersions.contains(schemaVersion) ||
-        authIdentity.id != profile.id) {
+        authIdentity.id != profile.id ||
+        activeLists.any(
+          (activeList) => activeList.includesSplitField != (schemaVersion >= 5),
+        )) {
       throw const AccountDataExportFailure();
     }
   }
@@ -43,6 +46,7 @@ class AccountDataExportDocument {
         2 => _schemaTwoRootKeys,
         3 => _schemaThreeRootKeys,
         4 => _schemaFourRootKeys,
+        5 => _schemaFiveRootKeys,
         _ => const <String>{},
       },
     );
@@ -69,7 +73,12 @@ class AccountDataExportDocument {
       activeLists: schemaVersion == 1
           ? const []
           : _requiredObjects(json, 'active_lists')
-              .map(AccountActiveListExport.fromJson)
+              .map(
+                (activeList) => AccountActiveListExport.fromJson(
+                  activeList,
+                  includeSplit: schemaVersion >= 5,
+                ),
+              )
               .toList(growable: false),
       sharedListAccess: schemaVersion < 3
           ? const []
@@ -90,8 +99,8 @@ class AccountDataExportDocument {
   }
 
   static const supportedProduct = 'list_and_split';
-  static const supportedSchemaVersion = 4;
-  static const supportedSchemaVersions = {1, 2, 3, supportedSchemaVersion};
+  static const supportedSchemaVersion = 5;
+  static const supportedSchemaVersions = {1, 2, 3, 4, supportedSchemaVersion};
   static const _schemaOneRootKeys = {
     'product',
     'schema_version',
@@ -115,6 +124,7 @@ class AccountDataExportDocument {
     'template_categories',
     'templates',
   };
+  static const _schemaFiveRootKeys = _schemaFourRootKeys;
 
   final String product;
   final int schemaVersion;
@@ -720,10 +730,19 @@ class AccountActiveListExport {
     required this.updatedAt,
     required this.archivedAt,
     required List<AccountActiveListItemExport> items,
-  }) : items = List.unmodifiable(items);
+    this.split,
+    this.includesSplitField = false,
+  }) : items = List.unmodifiable(items) {
+    if (!includesSplitField && split != null) {
+      throw const AccountDataExportFailure();
+    }
+  }
 
-  factory AccountActiveListExport.fromJson(Map<String, dynamic> json) {
-    _expectExactKeys(json, _keys);
+  factory AccountActiveListExport.fromJson(
+    Map<String, dynamic> json, {
+    bool includeSplit = false,
+  }) {
+    _expectExactKeys(json, includeSplit ? _schemaFiveKeys : _legacyKeys);
     final title = _requiredString(json, 'title');
     if (title != title.trim() || title.length > 80) {
       throw const AccountDataExportFailure();
@@ -744,10 +763,14 @@ class AccountActiveListExport {
       items: _requiredObjects(json, 'items')
           .map(AccountActiveListItemExport.fromJson)
           .toList(growable: false),
+      split: includeSplit && json['split'] != null
+          ? AccountListSplitExport.fromJson(_requiredObject(json, 'split'))
+          : null,
+      includesSplitField: includeSplit,
     );
   }
 
-  static const _keys = {
+  static const _legacyKeys = {
     'id',
     'title',
     'status',
@@ -757,6 +780,7 @@ class AccountActiveListExport {
     'archived_at',
     'items',
   };
+  static const _schemaFiveKeys = {..._legacyKeys, 'split'};
 
   final String id;
   final String title;
@@ -766,6 +790,8 @@ class AccountActiveListExport {
   final DateTime updatedAt;
   final DateTime? archivedAt;
   final List<AccountActiveListItemExport> items;
+  final AccountListSplitExport? split;
+  final bool includesSplitField;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -776,6 +802,297 @@ class AccountActiveListExport {
         'updated_at': _encodeDateTime(updatedAt),
         'archived_at': _encodeNullableDateTime(archivedAt),
         'items': items.map((item) => item.toJson()).toList(growable: false),
+        if (includesSplitField) 'split': split?.toJson(),
+      };
+}
+
+class AccountListSplitExport {
+  AccountListSplitExport({
+    required this.settings,
+    required List<AccountListSplitParticipantExport> participants,
+    required List<AccountListSplitExpenseExport> expenses,
+  })  : participants = List.unmodifiable(participants),
+        expenses = List.unmodifiable(expenses) {
+    final participantIds = participants.map((entry) => entry.id).toSet();
+    if (participantIds.length != participants.length ||
+        expenses.any((expense) => !expense.referencesOnly(participantIds))) {
+      throw const AccountDataExportFailure();
+    }
+  }
+
+  factory AccountListSplitExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, _keys);
+    return AccountListSplitExport(
+      settings: AccountListSplitSettingsExport.fromJson(
+        _requiredObject(json, 'settings'),
+      ),
+      participants: _requiredObjects(json, 'participants')
+          .map(AccountListSplitParticipantExport.fromJson)
+          .toList(growable: false),
+      expenses: _requiredObjects(json, 'expenses')
+          .map(AccountListSplitExpenseExport.fromJson)
+          .toList(growable: false),
+    );
+  }
+
+  static const _keys = {'settings', 'participants', 'expenses'};
+
+  final AccountListSplitSettingsExport settings;
+  final List<AccountListSplitParticipantExport> participants;
+  final List<AccountListSplitExpenseExport> expenses;
+
+  Map<String, dynamic> toJson() => {
+        'settings': settings.toJson(),
+        'participants': participants
+            .map((participant) => participant.toJson())
+            .toList(growable: false),
+        'expenses':
+            expenses.map((expense) => expense.toJson()).toList(growable: false),
+      };
+}
+
+class AccountListSplitSettingsExport {
+  const AccountListSplitSettingsExport({
+    required this.currencyCode,
+    required this.version,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory AccountListSplitSettingsExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, _keys);
+    final currencyCode = _requiredString(json, 'currency_code');
+    final createdAt = _requiredUtcDateTime(json, 'created_at');
+    final updatedAt = _requiredUtcDateTime(json, 'updated_at');
+    if (!currencyCodes.contains(currencyCode) ||
+        updatedAt.isBefore(createdAt)) {
+      throw const AccountDataExportFailure();
+    }
+    return AccountListSplitSettingsExport(
+      currencyCode: currencyCode,
+      version: _requiredPositiveInt(json, 'version'),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
+
+  static const currencyCodes = {'CHF', 'EUR'};
+  static const _keys = {
+    'currency_code',
+    'version',
+    'created_at',
+    'updated_at',
+  };
+
+  final String currencyCode;
+  final int version;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  Map<String, dynamic> toJson() => {
+        'currency_code': currencyCode,
+        'version': version,
+        'created_at': _encodeDateTime(createdAt),
+        'updated_at': _encodeDateTime(updatedAt),
+      };
+}
+
+class AccountListSplitParticipantExport {
+  const AccountListSplitParticipantExport({
+    required this.id,
+    required this.profileId,
+    required this.username,
+    required this.displayName,
+    required this.isAnonymized,
+    required this.isCurrent,
+  });
+
+  factory AccountListSplitParticipantExport.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    _expectExactKeys(json, _keys);
+    final profileId = _nullableUuid(json, 'profile_id');
+    final username = _nullableString(json, 'username');
+    final displayName = _nullableString(json, 'display_name');
+    final isAnonymized = _requiredBool(json, 'is_anonymized');
+    final isCurrent = _requiredBool(json, 'is_current');
+    if (isAnonymized != (profileId == null) ||
+        (isAnonymized && isCurrent) ||
+        (isAnonymized && (username != null || displayName != null)) ||
+        (!isAnonymized && (username == null || displayName == null))) {
+      throw const AccountDataExportFailure();
+    }
+    return AccountListSplitParticipantExport(
+      id: _requiredUuid(json, 'id'),
+      profileId: profileId,
+      username: username,
+      displayName: displayName,
+      isAnonymized: isAnonymized,
+      isCurrent: isCurrent,
+    );
+  }
+
+  static const _keys = {
+    'id',
+    'profile_id',
+    'username',
+    'display_name',
+    'is_anonymized',
+    'is_current',
+  };
+
+  final String id;
+  final String? profileId;
+  final String? username;
+  final String? displayName;
+  final bool isAnonymized;
+  final bool isCurrent;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'profile_id': profileId,
+        'username': username,
+        'display_name': displayName,
+        'is_anonymized': isAnonymized,
+        'is_current': isCurrent,
+      };
+}
+
+class AccountListSplitExpenseExport {
+  AccountListSplitExpenseExport({
+    required this.id,
+    required this.description,
+    required this.amountMinor,
+    required this.payerParticipantId,
+    required this.creatorParticipantId,
+    required this.lastEditorParticipantId,
+    required this.version,
+    required this.createdAt,
+    required this.updatedAt,
+    required List<String> beneficiaryParticipantIds,
+    required List<AccountListSplitShareExport> shares,
+  })  : beneficiaryParticipantIds = List.unmodifiable(
+          beneficiaryParticipantIds,
+        ),
+        shares = List.unmodifiable(shares) {
+    final beneficiaryIds = beneficiaryParticipantIds.toSet();
+    final shareIds = shares.map((share) => share.participantId).toSet();
+    if (beneficiaryParticipantIds.isEmpty ||
+        beneficiaryIds.length != beneficiaryParticipantIds.length ||
+        shares.length != beneficiaryParticipantIds.length ||
+        shareIds.length != shares.length ||
+        !shareIds.containsAll(beneficiaryIds) ||
+        shares.fold<int>(0, (sum, share) => sum + share.amountMinor) !=
+            amountMinor ||
+        updatedAt.isBefore(createdAt)) {
+      throw const AccountDataExportFailure();
+    }
+  }
+
+  factory AccountListSplitExpenseExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, _keys);
+    final description = _requiredString(json, 'description');
+    final amountMinor = _requiredPositiveInt(json, 'amount_minor');
+    if (description != description.trim() ||
+        description.length > 120 ||
+        amountMinor > 999999999) {
+      throw const AccountDataExportFailure();
+    }
+    return AccountListSplitExpenseExport(
+      id: _requiredUuid(json, 'id'),
+      description: description,
+      amountMinor: amountMinor,
+      payerParticipantId: _requiredUuid(json, 'payer_participant_id'),
+      creatorParticipantId: _requiredUuid(json, 'creator_participant_id'),
+      lastEditorParticipantId: _requiredUuid(
+        json,
+        'last_editor_participant_id',
+      ),
+      version: _requiredPositiveInt(json, 'version'),
+      createdAt: _requiredUtcDateTime(json, 'created_at'),
+      updatedAt: _requiredUtcDateTime(json, 'updated_at'),
+      beneficiaryParticipantIds: _requiredArray(
+        json,
+        'beneficiary_participant_ids',
+        (value) => _uuidValue(value),
+      ),
+      shares: _requiredObjects(json, 'shares')
+          .map(AccountListSplitShareExport.fromJson)
+          .toList(growable: false),
+    );
+  }
+
+  static const _keys = {
+    'id',
+    'description',
+    'amount_minor',
+    'payer_participant_id',
+    'creator_participant_id',
+    'last_editor_participant_id',
+    'version',
+    'created_at',
+    'updated_at',
+    'beneficiary_participant_ids',
+    'shares',
+  };
+
+  final String id;
+  final String description;
+  final int amountMinor;
+  final String payerParticipantId;
+  final String creatorParticipantId;
+  final String lastEditorParticipantId;
+  final int version;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final List<String> beneficiaryParticipantIds;
+  final List<AccountListSplitShareExport> shares;
+
+  bool referencesOnly(Set<String> participantIds) =>
+      participantIds.containsAll({
+        payerParticipantId,
+        creatorParticipantId,
+        lastEditorParticipantId,
+        ...beneficiaryParticipantIds,
+      });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'description': description,
+        'amount_minor': amountMinor,
+        'payer_participant_id': payerParticipantId,
+        'creator_participant_id': creatorParticipantId,
+        'last_editor_participant_id': lastEditorParticipantId,
+        'version': version,
+        'created_at': _encodeDateTime(createdAt),
+        'updated_at': _encodeDateTime(updatedAt),
+        'beneficiary_participant_ids': beneficiaryParticipantIds,
+        'shares': shares.map((share) => share.toJson()).toList(growable: false),
+      };
+}
+
+class AccountListSplitShareExport {
+  const AccountListSplitShareExport({
+    required this.participantId,
+    required this.amountMinor,
+  });
+
+  factory AccountListSplitShareExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, _keys);
+    return AccountListSplitShareExport(
+      participantId: _requiredUuid(json, 'participant_id'),
+      amountMinor: _requiredNonNegativeInt(json, 'amount_minor'),
+    );
+  }
+
+  static const _keys = {'participant_id', 'amount_minor'};
+
+  final String participantId;
+  final int amountMinor;
+
+  Map<String, dynamic> toJson() => {
+        'participant_id': participantId,
+        'amount_minor': amountMinor,
       };
 }
 
@@ -938,6 +1255,13 @@ String _requiredUuid(Map<String, dynamic> json, String key) {
   return value;
 }
 
+String? _nullableUuid(Map<String, dynamic> json, String key) {
+  if (json[key] == null) return null;
+  return _requiredUuid(json, key);
+}
+
+String _uuidValue(Object? value) => _requiredUuid({'value': value}, 'value');
+
 int _requiredInt(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is! int) throw const AccountDataExportFailure();
@@ -948,6 +1272,22 @@ int _requiredPositiveInt(Map<String, dynamic> json, String key) {
   final value = _requiredInt(json, key);
   if (value < 1) throw const AccountDataExportFailure();
   return value;
+}
+
+int _requiredNonNegativeInt(Map<String, dynamic> json, String key) {
+  final value = _requiredInt(json, key);
+  if (value < 0) throw const AccountDataExportFailure();
+  return value;
+}
+
+List<T> _requiredArray<T>(
+  Map<String, dynamic> json,
+  String key,
+  T Function(Object? value) parse,
+) {
+  final value = json[key];
+  if (value is! List) throw const AccountDataExportFailure();
+  return value.map(parse).toList(growable: false);
 }
 
 int? _nullablePositiveInt(Map<String, dynamic> json, String key) {

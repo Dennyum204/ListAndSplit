@@ -369,6 +369,57 @@ reuses the existing parent-list update fanout to every affected accepted account
 No persistent notification, unread-badge write, public channel, or new transport
 contract is introduced.
 
+### Split database and client boundary
+
+`public.active_list_split_settings`, `public.active_list_split_participants`,
+`public.active_list_expenses`, and `public.active_list_expense_shares` form one
+list-scoped RPC-only aggregate. Every table enables and forces RLS, has an explicit
+restrictive direct-client rejection policy, and revokes table privileges from
+`PUBLIC`, `anon`, `authenticated`, and `service_role`. List deletion cascades the
+entire aggregate.
+
+The independently generated persistent Split participant UUID is the financial
+identity; it is never copied from or derived from an Auth/profile ID. Its nullable live
+`profile_id` uses `ON DELETE SET NULL`, while allowlisted username and display-name
+snapshots keep membership-removal history understandable. A profile-deletion
+trigger clears both snapshots and the live link in the same Auth-root transaction;
+the participant and integer financial history remain valid without retaining
+deleted profile data or a deletion timestamp. A partial unique key reuses the same
+identity for a live profile that leaves and rejoins the list. Acceptance after Split
+enablement materializes or reuses exactly one identity, and ownership transfer uses
+those same identities. Expenses and shares use same-list
+composite foreign keys, so cross-list identities cannot be attached accidentally.
+
+Exact `postgres`-owned `SECURITY DEFINER` RPCs derive only `auth.uid()`, require a
+verified completed profile, pin an empty `search_path`, fully qualify objects,
+revoke default execution, and grant exact signatures only to `authenticated`.
+Reads require current unblocked owner/member access and return explicit
+projections. The owner-only setup RPC validates `CHF`/`EUR`. Mutation RPCs lock the
+list and settings rows, recheck active access, validate positive expected versions,
+eligibility and the 200-expense capacity, then create or replace an expense and
+all explicit shares in one short transaction. Rejected or stale work changes no
+row, version, notification, or Realtime output.
+
+Expense creation includes a caller-generated request UUID unique within the list.
+It is payload-bound, grants no authority, makes an identical lost-response retry
+idempotent, rejects conflicting reuse, and is excluded from reads and export.
+
+New expenses accept only current owner/accepted-member identities. An edit may
+retain an ineligible historical payer or beneficiary only if that exact identity
+is already attached to that expense; omitting it removes that exception until the
+account becomes eligible again. Shares are integer minor units and the server
+allocates the remainder in ascending participant UUID order. Read RPCs derive paid,
+owed, and net balances from expense/share rows and never persist a balance cache.
+
+Flutter keeps Split under the Lists feature behind a dedicated repository,
+session-scoped Riverpod controller, and list-ID route. Widgets own only display and
+intent. Currency parsing uses decimal text and integer minor units without
+`double`. Mounted overview/form controllers register with the existing
+reconciliation registry. Settings/expense changes reuse private account Broadcast
+fanout to every current accepted list account; membership/list changes already
+invalidate those accounts. Authoritative refresh handles reconnect, resume,
+archive, removal, deletion, and concurrent expense changes.
+
 ### Account export boundary
 
 Account data export is a parameterless authenticated PostgreSQL RPC that derives
@@ -377,13 +428,16 @@ exactly one corresponding profile but deliberately does not require completed
 onboarding. This keeps export available from both verified incomplete Onboarding
 and completed Profile without exposing it to anonymous or unverified sessions.
 
-The RPC returns one `jsonb` schema-version-4 document built exclusively from
+The RPC returns one `jsonb` schema-version-5 document built exclusively from
 explicit key allowlists. Version `2` preserves all version-1 account/social roots
 and adds the deterministic `active_lists` array with active/archived owned lists and
 ordered items. Version `3` adds only caller-relative metadata for lists owned by
 others and excludes their items, owner identity, other participants, and internal
 authorization data. Version `4` adds only the caller's private categories,
-templates, and ordered template items. It is a hardened `SECURITY DEFINER`
+templates, and ordered template items. Version `5` nests Split settings,
+participant live-or-anonymous state, expenses, payer/editor identities, and
+allocated shares only inside the caller's fully exported owned lists. Shared-list
+access stays metadata-only. It is a hardened `SECURITY DEFINER`
 boundary because it must read the caller's approved Auth columns and RPC-only
 social tables: ownership
 is `postgres`, `search_path` is empty, every object is qualified, default
@@ -417,7 +471,7 @@ changes. The file service writes pretty UTF-8 JSON to application-scoped
 temporary/cache storage and invokes the Android/iOS native share sheet with a
 privacy-safe UTC filename and JSON MIME type. It never falls back to public shared
 storage or promises guaranteed cache deletion. Production responses must be
-version `4`; the parser deliberately retains strict versions 1-3 support for
+version `5`; the parser deliberately retains strict versions 1-4 support for
 historical fixtures and previously downloaded documents.
 
 ### Permanent account-deletion boundary
@@ -454,7 +508,11 @@ Auth Admin deletion of `auth.users` is the single atomic database root. Cascadin
 foreign keys remove the profile, either direction of blocks, either relationship
 participant, notification recipient/actor rows, and notifications whose
 relationship disappears, every list owned by the profile and the list's items,
-and every private category, template, and template item. Snapshot-created or
+and every private category, template, and template item. Before a non-owner profile
+disappears, its Split participant rows atomically clear profile snapshots and
+become anonymous; existing expenses/shares remain list-owned and mathematically
+valid. Owned-list deletion still cascades all of that list's Split rows.
+Snapshot-created or
 imported list rows have no source dependency and remain governed only by their list
 owner. A `BEFORE DELETE` profile trigger reserves only a
 completed canonical username in `private.deleted_username_reservations` with an
@@ -649,8 +707,8 @@ Operations that span records or enforce important invariants should be atomic an
 idempotent where retries are possible. The active/shared-list and private-template
 aggregates use exact PostgreSQL RPCs because their validation, locking, version
 checks, capacity enforcement, and writes belong in one short database transaction.
-Future public/sent-template and ledger operations still require separate placement
-decisions.
+Future public/sent-template, settlement, and custom-share operations still require
+separate placement decisions.
 
 ## Money boundary
 
@@ -658,12 +716,14 @@ decisions.
   unsigned integers in the currency's minor unit, as appropriate to the concept.
 - Flutter, JSON contracts, SQL, and tests must not convert authoritative money to
   binary floating point.
-- A Payment-Control-enabled active list has one currency; expenses inherit that
-  context rather than performing foreign-exchange conversion.
-- The server validates participant membership, share totals, settlement endpoints,
-  and all calculation invariants.
-- Derived balances/debts may be displayed or cached, but the client is not their
-  authority.
+- A Split-enabled active list has one validated currency (`CHF` or `EUR` in the
+  first slice); expenses inherit that context and no conversion occurs.
+- The server validates current eligibility, historical-participant preservation,
+  amount/count limits, and exact equal-share totals. Equal-split remainders follow
+  ascending immutable list-participant ID order.
+- Balances are computed on demand as paid minus owed from expenses and shares. No
+  mutable balance aggregate is stored. Settlements and simplified debts are not
+  part of the first Split slice.
 
 ## Implemented realtime and planned offline model
 
@@ -696,8 +756,10 @@ writes are implemented.
   view-model transitions with repository fakes rather than a live backend.
 - Test RLS policies, database constraints, triggers, and functions with allowed
   and denied identities for every business migration.
-- Payment server tests must cover integer arithmetic, equal and exact shares,
-  validation, settlements, balances, and debt output.
+- Split server tests cover integer arithmetic, equal-share remainders, eligibility,
+  historical identity, exact share conservation, balances, versions, deletion, and
+  authorization. Later custom-share, settlement, and debt slices must add their own
+  calculation coverage before shipping.
 - Logging must redact tokens, secrets, personal content, and notification payloads.
   A concrete telemetry/crash-reporting service has not been selected.
 

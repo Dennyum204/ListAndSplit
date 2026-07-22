@@ -765,7 +765,7 @@ select lives_ok(
 
 select ok(
   (
-    select schema_version=4
+    select schema_version=5
       and pg_catalog.jsonb_array_length(template_categories) >= 1
       and pg_catalog.jsonb_array_length(templates) >= 1
     from pg_catalog.jsonb_to_record(public.export_own_account_data())

@@ -22,6 +22,8 @@ abstract final class AppRoutes {
 
   static String listDetail(String listId) => '$lists/$listId';
 
+  static String listSplit(String listId) => '${listDetail(listId)}/split';
+
   static String listTemplateImport(String listId) =>
       '${listDetail(listId)}/import-template';
 
