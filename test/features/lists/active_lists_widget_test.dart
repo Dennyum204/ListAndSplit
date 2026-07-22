@@ -563,7 +563,7 @@ void main() {
     expect(find.text('Lists landing'), findsOneWidget);
     expect(
       find.text(
-        'Your access to this list changed. The latest Lists view was loaded.',
+        'You no longer have access to this list. The latest Lists view was loaded.',
       ),
       findsOneWidget,
     );

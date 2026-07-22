@@ -77,6 +77,65 @@ Map<String, dynamic> validAccountDataExportJson({
                 'created_at': '2026-07-19T05:00:00.000Z',
                 'updated_at': '2026-07-19T08:00:00.000Z',
                 'archived_at': null,
+                if (schemaVersion >= 5)
+                  'split': {
+                    'settings': {
+                      'currency_code': 'CHF',
+                      'version': 2,
+                      'created_at': '2026-07-19T06:00:00.000Z',
+                      'updated_at': '2026-07-19T07:00:00.000Z',
+                    },
+                    'participants': [
+                      {
+                        'id': 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                        'profile_id': '11111111-1111-4111-8111-111111111111',
+                        'username': 'alpha_user',
+                        'display_name': 'Alpha User',
+                        'is_anonymized': false,
+                        'is_current': true,
+                      },
+                      {
+                        'id': 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                        'profile_id': '33333333-3333-4333-8333-333333333333',
+                        'username': 'gamma_user',
+                        'display_name': 'Gamma User',
+                        'is_anonymized': false,
+                        'is_current': true,
+                      },
+                    ],
+                    'expenses': [
+                      {
+                        'id': 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+                        'description': 'Shared coffee',
+                        'amount_minor': 1001,
+                        'payer_participant_id':
+                            'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                        'creator_participant_id':
+                            'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                        'last_editor_participant_id':
+                            'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                        'version': 2,
+                        'created_at': '2026-07-19T06:30:00.000Z',
+                        'updated_at': '2026-07-19T07:00:00.000Z',
+                        'beneficiary_participant_ids': [
+                          'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                          'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                        ],
+                        'shares': [
+                          {
+                            'participant_id':
+                                'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                            'amount_minor': 501,
+                          },
+                          {
+                            'participant_id':
+                                'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                            'amount_minor': 500,
+                          },
+                        ],
+                      },
+                    ],
+                  },
                 'items': [
                   {
                     'id': '66666666-6666-4666-8666-666666666666',
@@ -100,6 +159,7 @@ Map<String, dynamic> validAccountDataExportJson({
                 'created_at': '2026-07-17T05:00:00.000Z',
                 'updated_at': '2026-07-18T08:00:00.000Z',
                 'archived_at': '2026-07-18T08:00:00.000Z',
+                if (schemaVersion >= 5) 'split': null,
                 'items': <Object?>[],
               },
             ],

@@ -18,8 +18,11 @@ Friend-only list invitations, accepted-member item collaboration, member managem
 and persistent list-access notifications are implemented. Private account-scoped
 Supabase Broadcast now reconciles connected devices through the existing RPC
 repositories without carrying application data. Private templates support independent
-list snapshots and atomic selected-item list creation/import. Public/shared templates,
-offline behavior, push delivery, and the expense ledger remain planned work.
+list snapshots and atomic selected-item list creation/import. List-scoped Split
+supports owner-selected CHF/EUR, exact integer equal-share expenses, derived balances,
+historical participants, and the same private reconciliation path. Public/shared
+templates, offline behavior, push delivery, settlements, and custom shares remain
+planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
@@ -169,6 +172,11 @@ client key. Never put a Supabase `service_role` key, secret key, access token,
 database password, signing material, or other privileged credential in Flutter or
 Git.
 
+Split tables are likewise RPC-only: direct client operations are explicitly denied
+and every read/mutation rechecks current unblocked list access. Hardened transactional
+functions enforce currency, integer money, equal-share, participant, version, archive,
+and capacity invariants; opaque Realtime invalidations carry no financial content.
+
 Community discovery and block management use only the reviewed
 `find_profile_by_username`, `block_profile`, `unblock_profile`, and
 `list_blocked_profiles` RPC contracts. The `user_blocks` table has RLS enabled but
@@ -264,7 +272,8 @@ SQL into the Dashboard.
 
 The current slices do not implement unrestricted profile/directory search,
 avatars, public/shared/sent templates, notification archive/preferences or
-physical cleanup, reporting, server-side ledger logic, SQLite caching/offline
+physical cleanup, reporting, settlements, custom expense shares, simplified debts,
+SQLite caching/offline
 synchronization, push delivery,
 Firebase setup, administrator-initiated deletion, or a production backend.
 Private Realtime Broadcast is implemented as best-effort account invalidation:

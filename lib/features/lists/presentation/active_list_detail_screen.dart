@@ -13,6 +13,7 @@ import 'package:list_and_split/features/templates/presentation/private_template_
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 enum _ListAction {
+  split,
   saveTemplate,
   importTemplate,
   rename,
@@ -73,6 +74,10 @@ class ActiveListDetailScreen extends ConsumerWidget {
               onSelected: (action) => _handleAction(context, ref, action),
               itemBuilder: (context) => [
                 PopupMenuItem(
+                  value: _ListAction.split,
+                  child: Text(localizations.splitTitle),
+                ),
+                PopupMenuItem(
                   value: _ListAction.saveTemplate,
                   child: Text(localizations.templatesSaveListButton),
                 ),
@@ -109,6 +114,10 @@ class ActiveListDetailScreen extends ConsumerWidget {
               enabled: !state.isMutating,
               onSelected: (action) => _handleAction(context, ref, action),
               itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: _ListAction.split,
+                  child: Text(localizations.splitTitle),
+                ),
                 PopupMenuItem(
                   value: _ListAction.saveTemplate,
                   child: Text(localizations.templatesSaveListButton),
@@ -177,6 +186,8 @@ class ActiveListDetailScreen extends ConsumerWidget {
     final controller =
         ref.read(activeListDetailControllerProvider(listId).notifier);
     switch (action) {
+      case _ListAction.split:
+        await context.push<void>(AppRoutes.listSplit(listId));
       case _ListAction.saveTemplate:
         await _showSaveAsTemplate(context, ref);
       case _ListAction.importTemplate:

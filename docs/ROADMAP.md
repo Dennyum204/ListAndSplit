@@ -166,24 +166,27 @@ Private category cardinality, copy atomicity, capacity, and versioning are resol
 Public copy visibility/category placement and attribution, feed ranking/pagination,
 provenance presentation, and sent-template expiry remain open.
 
-## Phase 4 — Payment Control ledger (planned)
+## Phase 4 — Split expense ledger (in progress)
 
 Goal: provide an optional, correct expense ledger inside active lists without
 processing payments.
 
-Candidate slices:
+Current first slice:
 
-- Enable Payment Control with a single list currency and explicit lifecycle rules.
-- Record expenses with one payer and selected participants.
-- Support equal splits with deterministic integer remainder allocation.
-- Support exact custom integer-minor-unit shares with server validation.
-- Record settlements between list members.
-- Calculate authoritative balances and debts server-side.
-- Add comprehensive server unit tests, RLS tests, and client presentation tests.
+- Owner-enabled list-scoped Split with one `CHF`/`EUR` currency, immutable after
+  the first expense until the list is empty again.
+- Versioned active-list expense create/edit/delete for current owners and accepted
+  members, with persistent historical financial identities.
+- Transactional equal splits in integer minor units with deterministic UUID-order
+  remainder allocation and on-demand paid-minus-owed balances.
+- Archived read-only history, private Realtime invalidation/reconciliation,
+  caller-owned-list Split export, and hard-deletion-safe anonymization.
+- Comprehensive server constraint/RLS/RPC and Flutter repository/controller/widget
+  coverage.
 
-This phase must not start schema implementation until supported currencies, amount
-ranges, rounding/remainder, correction/reversal, member-removal, and debt-output
-rules are accepted. Payment-provider or money-transfer integration is out of scope.
+Later slices require separate accepted decisions for custom shares, settlements and
+reversals, recommendations, and simplified debt output. Payment-provider or
+money-transfer integration remains out of scope.
 
 ## Phase 5 — Offline tolerance and push delivery (planned later)
 

@@ -28,6 +28,7 @@ import 'package:list_and_split/features/profile/domain/user_profile.dart';
 import 'package:list_and_split/features/profile/presentation/onboarding_screen.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_screen.dart';
+import 'package:list_and_split/features/split/presentation/list_split_screen.dart';
 import 'package:list_and_split/features/templates/presentation/templates_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_detail_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_import_screen.dart';
@@ -159,6 +160,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       GoRoute(
                         path: 'members',
                         builder: (context, state) => ActiveListMembersScreen(
+                          listId: state.pathParameters['listId']!,
+                        ),
+                      ),
+                      GoRoute(
+                        path: 'split',
+                        builder: (context, state) => ListSplitScreen(
                           listId: state.pathParameters['listId']!,
                         ),
                       ),

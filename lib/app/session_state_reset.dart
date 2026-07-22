@@ -12,6 +12,7 @@ import 'package:list_and_split/features/notifications/presentation/notification_
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_controller.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+import 'package:list_and_split/features/split/presentation/list_split_providers.dart';
 import 'package:list_and_split/core/supabase/supabase_client_provider.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 
@@ -38,6 +39,8 @@ final resetSessionStateProvider = Provider<void Function()>((ref) {
     ref.invalidate(activeListsControllerProvider);
     ref.invalidate(activeListDetailControllerProvider);
     ref.invalidate(activeListMembersControllerProvider);
+    ref.invalidate(listSplitRefreshSignalProvider);
+    ref.invalidate(listSplitControllerProvider);
     ref.invalidate(privateTemplatesControllerProvider);
     ref.invalidate(privateTemplateDetailControllerProvider);
     ref.invalidate(notificationUnreadCountControllerProvider);

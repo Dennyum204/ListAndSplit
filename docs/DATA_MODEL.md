@@ -34,8 +34,8 @@ Profile --owns--> Active List --< List Item
 Active List --< retained participant access >-- Profile
 
 Future: List Item --< Item Assignment >-- List Member
-Active List --< Expense --1 payer / many participant shares--> List Member
-Active List --< Settlement --from/to--> List Member
+Active List --< Split Participant --payer/beneficiary--> Expense / allocated share
+Future: Active List --< Settlement --from/to--> Split Participant
 
 Profile --owns--> Template --< Template Item
 Profile --owns--> Personal Category --< category placement >-- Template
@@ -110,13 +110,20 @@ nullable category identity, name, version, timestamps, and an ordered `items`
 array containing only item identity, name, exact integer quantity thousandths,
 position, version, and timestamps.
 
+Schema version `5` adds a nullable `split` object to each fully exported owned
+list. When enabled it allowlists currency/settings, persistent financial
+participants and their live-or-anonymized display state, ordered expenses, payer
+and editor participant IDs, and ordered allocated shares. Balances are omitted
+because they are reproducible from those integer records. Shared-list access stays
+metadata-only and never includes another owner's Split contents.
+
 Every nested object is built from an explicit field allowlist. The social arrays
 apply the same directional-block, caller-relative active-relationship, recipient,
 suppression, expiry, and either-direction block filters as their existing RPC
 projections. Arrays are never null. Raw table rows, Auth metadata, credentials,
 tokens, sessions, incoming blocks, dormant relationship internals, hidden actors,
 and future aggregate data are outside the contract. Later schema versions must add
-future public/shared-template or ledger sections deliberately and compatibly.
+future public/shared-template or settlement sections deliberately and compatibly.
 
 ### Permanent deletion and username reservation
 
@@ -126,8 +133,11 @@ both normalized relationship participant references, notification recipient and
 actor references, and the notification relationship reference cascade from the
 profile/relationship rows they protect. Owned-list and list-item foreign keys add
 the list aggregate to that same cascade. Private category/template ownership
-foreign keys add the complete personal template aggregate. This removes every
-currently implemented application record involving the deleted account in the
+foreign keys add the complete personal template aggregate. Owned-list deletion
+cascades that list's Split aggregate. For a deleted non-owner in another person's
+list, a profile-deletion trigger clears the Split participant's snapshots and live
+profile link while preserving list-owned expense/share arithmetic. This removes or
+anonymizes every currently implemented record involving the deleted account in the
 same root transaction, while unrelated rows, including lists created or filled
 from template snapshots, remain unchanged.
 
@@ -445,59 +455,71 @@ Public visibility, saving another account's template, sent-template actions,
 attribution/provenance presentation, and community feed behavior remain future
 aggregates and create no schema in this slice.
 
-## Payment Control aggregate
+## Split expense-ledger aggregate
 
-Payment Control exists only for an active list where it is enabled. It is a ledger,
-not a payment rail.
+Split exists only for a main list where the owner has enabled it. It is a ledger,
+not a payment rail. The physical aggregate comprises list settings, persistent
+list-scoped financial participants, expenses, and explicit allocated shares.
 
 ### Currency and integer representation
 
-- A list has one currency for its ledger.
-- Expense totals, exact shares, settlements, balances, and debts use integer minor
-  units (`amount_minor` conceptually).
-- Currency code validation and the minor-unit exponent source must be consistent on
-  client and server. Supported currencies and zero-/three-decimal behavior remain
-  open.
-- Changing a list currency after ledger activity must not reinterpret existing
-  integers; whether it is prohibited or handled through a separate workflow is an
-  open decision.
+- A list has one currency for its ledger. The first explicit catalog is exactly
+  `CHF` and `EUR`; both use two minor-unit decimal digits.
+- Expense totals, shares, and balances use signed or unsigned `bigint` minor units
+  as appropriate. Accepted expense totals are `1` through `999999999`.
+- Flutter parses/formats decimal text directly to/from integers. Neither Flutter,
+  JSON, SQL, nor tests use binary floating point as monetary authority.
+- Only the owner sets currency. It may change only while the authoritative expense
+  count is zero, so existing integers are never reinterpreted.
 
 Use a sufficiently wide integer type and explicit range validation. Never infer an
 amount by multiplying a floating-point value.
 
 ### Expense, payer, participants, and shares
 
-An expense belongs to one enabled active list, has one payer who is a list member,
-an integer total, and one or more selected participating members. A participant
-share records each participant's integer obligation.
+Each enabled list owns independently generated persistent financial participant
+UUIDs distinct from current access, Auth, and profile IDs. A live identity links to
+one profile and snapshots its username/display name. The partial
+`(list_id, profile_id)` uniqueness boundary reuses it after leave/removal and
+reacceptance. Acceptance after Split enablement materializes or reuses exactly one
+identity; ownership transfer keeps those same identities. Account deletion changes
+the row to an anonymous state with null profile/snapshots and no deletion timestamp;
+membership removal alone does not.
 
-Expected invariants:
+An expense belongs to one enabled list, has a trimmed 1-120-character description,
+a positive bounded integer total, one payer participant, creator/last-editor
+participant IDs, timestamps, a positive version, and one or more explicit shares.
+Same-list composite foreign keys prevent cross-list references. At most 200 current
+expenses may exist; physical deletion frees capacity without modifying legacy
+over-capacity data. Direct client writes are denied.
 
-- Payer and participants are active list members at the time required by the final
-  lifecycle rules.
-- Exact custom shares sum exactly to the expense total.
-- Equal splitting produces integer shares whose sum is exactly the total; the
-  deterministic remainder allocation rule is not yet chosen.
-- Negative/zero amount rules, payer participation, expense editing, member removal,
-  and correction/audit behavior require explicit decisions.
+Creation also stores a payload-bound request UUID unique within the list. Matching
+lost-response retries are idempotent; reuse for different content is invalid. The
+request UUID is never returned or exported.
+
+For new expenses, payer and beneficiaries must be the current owner or accepted
+unblocked members; the payer may be outside the beneficiary subset. On edit, an
+ineligible historical participant may remain only in roles already held on that
+expense and cannot be newly introduced. Equal split uses `floor(total / count)`;
+the first `total mod count` immutable participant UUIDs in ascending order each
+receive one additional unit. Stored shares are non-negative and their sum equals
+the positive expense total. Create/update/delete RPCs replace the entire share set
+atomically and enforce list/settings/expense versions.
 
 ### Settlement
 
-A settlement records an integer amount transferred conceptually from one list
-member to another within the ledger. It records a debt adjustment, not proof that
-List & Split processed money. Sender/recipient terminology, direction, reversal,
-attachments, and validation against current debt are open decisions.
+A future settlement records an integer amount transferred conceptually between two
+Split participants. It records a debt adjustment, not proof that List & Split
+processed money. Sender/recipient terminology, direction, reversal, attachments,
+and validation against current debt are open decisions.
 
 ### Balances and debts
 
-Balances and pairwise/simplified debts are derived server-side from authoritative
-expenses, shares, and settlements. They are not client-authored source records.
-Any cached projection must be reproducible from the ledger and transactionally
-consistent enough for the selected design.
-
-The calculation implementation requires unit tests for integer conservation,
-rounding/remainders, exact shares, settlements, zero balances, multiple payers,
-deterministic output, invalid inputs, and relevant lifecycle corrections.
+Current balances are derived server-side on demand from authoritative expenses and
+shares as `total_paid - total_owed`. Positive means receivable, negative means owed,
+zero means settled, and all participant nets sum exactly to zero. A mutable balance
+aggregate is prohibited. Pairwise/simplified debts and settlement effects remain
+future scope.
 
 ## Notifications and actions
 
@@ -614,7 +636,7 @@ anonymous denial unless public read is explicitly intended.
 | Private templates/categories | RPC-only owner access; copies into accessible lists recheck destination membership and state |
 | Public templates | Readable according to approved public-profile policy; mutation remains owner-only |
 | Template sends | Sender and recipient; acceptance only by recipient |
-| Expenses, shares, settlements, balances | Authorized members of the enabled active list, subject to final ledger roles |
+| Split settings, participants, expenses, shares, balances | RPC-only current unblocked owner/member reads; owner-only setup; active owner/member expense mutations |
 | Notifications | Recipient only; related actors do not gain notification-row access |
 | Storage objects | Same ownership/membership rules as the parent application record |
 | Future reports | Strictly limited to the reporter and authorized moderation paths |
@@ -633,7 +655,7 @@ explicit grants, protected search paths, and adversarial policy/function tests.
 - Mention representation and parser ownership.
 - Public-template visibility/copy placement, sent-template version/provenance,
   attribution, and offer idempotency.
-- Currency catalog, amount ranges, expense/settlement lifecycle, remainder and debt
+- Exact custom-share, settlement/reversal, recommendation, and debt-simplification
   algorithms.
 - Future notification-type payload/localization, archive/preferences, physical
   cleanup, account-lifecycle retention, and push-token tables.

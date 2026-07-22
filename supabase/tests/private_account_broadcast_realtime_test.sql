@@ -87,8 +87,8 @@ select is(
       and not trigger_record.tgisinternal
       and trigger_record.tgname like '%broadcast_invalidation%'
   ),
-  10::bigint,
-  'the reviewed list, participant, notification, relationship, block, profile, category, and template triggers exist'
+  11::bigint,
+  'the reviewed list, participant, notification, relationship, block, profile, category, template, and Split triggers exist'
 );
 
 select ok(

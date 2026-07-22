@@ -282,12 +282,12 @@ select is(public.leave_active_list(
  'member may leave an archived list'
 );
 
--- Export v4 preserves the privacy-minimal v3 shared access and deletion impact.
+-- Export v5 preserves the privacy-minimal v3 shared access and deletion impact.
 set local "request.jwt.claim.sub" = '10000000-0000-4000-8000-000000000001';
 select ok(
- public.export_own_account_data()->>'schema_version'='4'
+ public.export_own_account_data()->>'schema_version'='5'
  and public.export_own_account_data() ? 'shared_list_access',
- 'export schema v4 preserves the shared access root'
+ 'export schema v5 preserves the shared access root'
 );
 set local "request.jwt.claim.sub" = '10000000-0000-4000-8000-000000000002';
 select ok(

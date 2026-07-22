@@ -116,6 +116,111 @@ void main() {
       expect(document.toJson(), contains('templates'));
     });
 
+    test('maps schema-v5 owned-list Split with exact integer shares', () {
+      final document = AccountDataExportDocument.fromJson(
+        validAccountDataExportJson(schemaVersion: 5),
+      );
+
+      expect(document.schemaVersion, 5);
+      final split = document.activeLists.first.split!;
+      expect(split.settings.currencyCode, 'CHF');
+      expect(split.settings.version, 2);
+      expect(split.participants, hasLength(2));
+      expect(split.participants.first.username, 'alpha_user');
+      expect(split.expenses.single.description, 'Shared coffee');
+      expect(split.expenses.single.amountMinor, 1001);
+      expect(
+        split.expenses.single.shares.map((share) => share.amountMinor),
+        [501, 500],
+      );
+      expect(document.activeLists.last.includesSplitField, isTrue);
+      expect(document.activeLists.last.split, isNull);
+      expect(document.toJson(), validAccountDataExportJson(schemaVersion: 5));
+    });
+
+    test('keeps schema-v1 through v4 owned-list shapes strict and compatible',
+        () {
+      for (final version in [1, 2, 3, 4]) {
+        final json = validAccountDataExportJson(schemaVersion: version);
+        final document = AccountDataExportDocument.fromJson(json);
+        expect(document.toJson(), json);
+        expect(
+          document.activeLists.every((list) => !list.includesSplitField),
+          isTrue,
+        );
+      }
+
+      final legacyWithSplit = validAccountDataExportJson(schemaVersion: 4);
+      (legacyWithSplit['active_lists'] as List)
+          .cast<Map<String, dynamic>>()
+          .first['split'] = null;
+      expect(
+        () => AccountDataExportDocument.fromJson(legacyWithSplit),
+        throwsA(isA<AccountDataExportFailure>()),
+      );
+    });
+
+    test('rejects malformed or privacy-expanded schema-v5 Split data', () {
+      Map<String, dynamic> splitOf(Map<String, dynamic> root) =>
+          ((root['active_lists'] as List).first
+              as Map<String, dynamic>)['split'] as Map<String, dynamic>;
+
+      final missingSplit = validAccountDataExportJson(schemaVersion: 5);
+      ((missingSplit['active_lists'] as List).first as Map<String, dynamic>)
+          .remove('split');
+
+      final leakedBalance = validAccountDataExportJson(schemaVersion: 5);
+      ((splitOf(leakedBalance)['participants'] as List).first
+          as Map<String, dynamic>)['balance_minor'] = 0;
+
+      final leakedRequest = validAccountDataExportJson(schemaVersion: 5);
+      ((splitOf(leakedRequest)['expenses'] as List).first
+              as Map<String, dynamic>)['creation_request_id'] =
+          'ffffffff-ffff-4fff-8fff-ffffffffffff';
+
+      final badShareTotal = validAccountDataExportJson(schemaVersion: 5);
+      (((splitOf(badShareTotal)['expenses'] as List).first
+              as Map<String, dynamic>)['shares'] as List)
+          .cast<Map<String, dynamic>>()
+          .last['amount_minor'] = 499;
+
+      final unknownActor = validAccountDataExportJson(schemaVersion: 5);
+      ((splitOf(unknownActor)['expenses'] as List).first
+              as Map<String, dynamic>)['last_editor_participant_id'] =
+          'ffffffff-ffff-4fff-8fff-ffffffffffff';
+
+      final currentAnonymized = validAccountDataExportJson(schemaVersion: 5);
+      final currentAnonymizedSplit = splitOf(currentAnonymized);
+      final originalParticipants =
+          currentAnonymizedSplit['participants'] as List;
+      final currentAnonymizedParticipant = Map<String, dynamic>.from(
+        originalParticipants.first as Map,
+      )
+        ..['profile_id'] = null
+        ..['username'] = null
+        ..['display_name'] = null
+        ..['is_anonymized'] = true
+        ..['is_current'] = true;
+      currentAnonymizedSplit['participants'] = <Object?>[
+        currentAnonymizedParticipant,
+        ...originalParticipants.skip(1),
+      ];
+
+      for (final json in [
+        missingSplit,
+        leakedBalance,
+        leakedRequest,
+        badShareTotal,
+        unknownActor,
+        currentAnonymized,
+      ]) {
+        expect(
+          () => AccountDataExportDocument.fromJson(json),
+          throwsA(isA<AccountDataExportFailure>()),
+        );
+      }
+    });
+
     test('schema versions 1 and 2 never fabricate shared-list access', () {
       for (final version in [1, 2]) {
         final document = AccountDataExportDocument.fromJson(
@@ -139,7 +244,7 @@ void main() {
     });
 
     test('rejects unsupported schema versions', () {
-      final json = validAccountDataExportJson()..['schema_version'] = 5;
+      final json = validAccountDataExportJson()..['schema_version'] = 6;
 
       expect(
         () => AccountDataExportDocument.fromJson(json),
