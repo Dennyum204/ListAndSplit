@@ -118,12 +118,87 @@ class SupabaseListSplitRepository implements ListSplitRepository {
         },
       );
 
+  @override
+  Future<ListSplitSettlementPage> listSettlements(
+    String listId, {
+    int pageSize = splitSettlementHistoryPageSize,
+    ListSplitSettlementCursor? cursor,
+  }) async {
+    if (pageSize < 1 || pageSize > splitSettlementHistoryMaxPageSize) {
+      throw const ListSplitFailure(ListSplitFailureCode.invalid);
+    }
+    return _historyCall(
+      'list_active_list_settlements',
+      {
+        'target_list_id': listId,
+        'page_size': pageSize,
+        'cursor_created_at': cursor?.createdAt.toIso8601String(),
+        'cursor_id': cursor?.id,
+      },
+    );
+  }
+
+  @override
+  Future<ListSplitOverview> recordSettlement(
+    String listId, {
+    required String payerParticipantId,
+    required String recipientParticipantId,
+    required int amountMinor,
+    required String? note,
+    required String requestId,
+    required int expectedSplitVersion,
+  }) =>
+      _call(
+        'record_active_list_settlement',
+        {
+          'target_list_id': listId,
+          'payer_participant_id': payerParticipantId,
+          'recipient_participant_id': recipientParticipantId,
+          'new_amount_minor': amountMinor,
+          'new_note': note,
+          'creation_request_id': requestId,
+          'expected_split_version': expectedSplitVersion,
+        },
+      );
+
+  @override
+  Future<ListSplitOverview> reverseSettlement(
+    String listId,
+    String settlementId, {
+    required String reason,
+    required String requestId,
+    required int expectedSplitVersion,
+  }) =>
+      _call(
+        'reverse_active_list_settlement',
+        {
+          'target_list_id': listId,
+          'target_settlement_id': settlementId,
+          'reversal_reason': reason,
+          'reversal_request_id': requestId,
+          'expected_split_version': expectedSplitVersion,
+        },
+      );
+
   Future<ListSplitOverview> _call(
     String functionName,
     Map<String, dynamic> params,
   ) async {
     try {
       return _overview(_object(await _rpc(functionName, params: params)));
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  Future<ListSplitSettlementPage> _historyCall(
+    String functionName,
+    Map<String, dynamic> params,
+  ) async {
+    try {
+      return _settlementPage(
+        _object(await _rpc(functionName, params: params)),
+      );
     } catch (error) {
       throw _failure(error);
     }
@@ -141,6 +216,7 @@ class SupabaseListSplitRepository implements ListSplitRepository {
       'settings',
       'participants',
       'expenses',
+      'suggestions',
     });
     final listId = _uuid(json['list_id']);
     final listStatus = SplitListStatus.fromWire(_string(json['list_status']));
@@ -169,6 +245,9 @@ class SupabaseListSplitRepository implements ListSplitRepository {
     if (!enabled && (participants.isNotEmpty || expenses.isNotEmpty)) {
       throw const FormatException('disabled Split contains records');
     }
+    final suggestions = _objects(json['suggestions'])
+        .map((entry) => _suggestion(entry, participantIds))
+        .toList(growable: false);
     final paidByParticipant = {for (final id in participantIds) id: 0};
     final owedByParticipant = {for (final id in participantIds) id: 0};
     for (final expense in expenses) {
@@ -179,11 +258,24 @@ class SupabaseListSplitRepository implements ListSplitRepository {
             owedByParticipant[share.participantId]! + share.amountMinor;
       }
     }
+    var totalSettlementPaid = 0;
+    var totalSettlementReceived = 0;
+    var totalBalance = 0;
     for (final participant in participants) {
       if (participant.paidMinor != paidByParticipant[participant.id] ||
           participant.owedMinor != owedByParticipant[participant.id]) {
         throw const FormatException('invalid participant balances');
       }
+      totalSettlementPaid += participant.settlementPaidMinor;
+      totalSettlementReceived += participant.settlementReceivedMinor;
+      totalBalance += participant.balanceMinor;
+    }
+    if (totalSettlementPaid != totalSettlementReceived || totalBalance != 0) {
+      throw const FormatException('unbalanced settlement projection');
+    }
+    final expectedSuggestions = _deriveSuggestions(participants);
+    if (!_sameSuggestions(suggestions, expectedSuggestions)) {
+      throw const FormatException('invalid settlement suggestions');
     }
     return ListSplitOverview(
       listId: listId,
@@ -196,6 +288,7 @@ class SupabaseListSplitRepository implements ListSplitRepository {
       settings: settings,
       participants: participants,
       expenses: expenses,
+      suggestions: suggestions,
     );
   }
 
@@ -227,6 +320,8 @@ class SupabaseListSplitRepository implements ListSplitRepository {
       'is_current',
       'paid_minor',
       'owed_minor',
+      'settlement_paid_minor',
+      'settlement_received_minor',
       'balance_minor',
     });
     final profileId = _nullableUuid(json['profile_id']);
@@ -236,8 +331,11 @@ class SupabaseListSplitRepository implements ListSplitRepository {
     final isCurrent = _boolean(json['is_current']);
     final paid = _nonNegativeInt(json['paid_minor']);
     final owed = _nonNegativeInt(json['owed_minor']);
+    final settlementPaid = _nonNegativeInt(json['settlement_paid_minor']);
+    final settlementReceived =
+        _nonNegativeInt(json['settlement_received_minor']);
     final balance = _integer(json['balance_minor']);
-    if (balance != paid - owed ||
+    if (balance != paid - owed + settlementPaid - settlementReceived ||
         isAnonymized != (profileId == null) ||
         (isAnonymized && isCurrent) ||
         (isAnonymized && (username != null || displayName != null)) ||
@@ -253,8 +351,100 @@ class SupabaseListSplitRepository implements ListSplitRepository {
       isCurrent: isCurrent,
       paidMinor: paid,
       owedMinor: owed,
+      settlementPaidMinor: settlementPaid,
+      settlementReceivedMinor: settlementReceived,
       balanceMinor: balance,
     );
+  }
+
+  static ListSettlementSuggestion _suggestion(
+    Map<String, dynamic> json,
+    Set<String> participantIds,
+  ) {
+    _expectExactKeys(
+      json,
+      const {
+        'payer_participant_id',
+        'recipient_participant_id',
+        'amount_minor',
+      },
+    );
+    final payerId = _uuid(json['payer_participant_id']);
+    final recipientId = _uuid(json['recipient_participant_id']);
+    final amount = _positiveInt(json['amount_minor']);
+    if (payerId == recipientId ||
+        !participantIds.contains(payerId) ||
+        !participantIds.contains(recipientId)) {
+      throw const FormatException('invalid settlement suggestion');
+    }
+    return ListSettlementSuggestion(
+      payerParticipantId: payerId,
+      recipientParticipantId: recipientId,
+      amountMinor: amount,
+    );
+  }
+
+  static List<ListSettlementSuggestion> _deriveSuggestions(
+    List<ListSplitParticipant> participants,
+  ) {
+    final debtors = participants
+        .where((entry) => entry.balanceMinor < 0)
+        .map((entry) => [entry.id, entry.balanceMinor])
+        .toList()
+      ..sort((left, right) {
+        final balanceOrder = (left[1] as int).compareTo(right[1] as int);
+        return balanceOrder != 0
+            ? balanceOrder
+            : (left[0] as String).compareTo(right[0] as String);
+      });
+    final creditors = participants
+        .where((entry) => entry.balanceMinor > 0)
+        .map((entry) => [entry.id, entry.balanceMinor])
+        .toList()
+      ..sort((left, right) {
+        final balanceOrder = (right[1] as int).compareTo(left[1] as int);
+        return balanceOrder != 0
+            ? balanceOrder
+            : (left[0] as String).compareTo(right[0] as String);
+      });
+    final result = <ListSettlementSuggestion>[];
+    var debtorIndex = 0;
+    var creditorIndex = 0;
+    while (debtorIndex < debtors.length && creditorIndex < creditors.length) {
+      final debtorBalance = debtors[debtorIndex][1] as int;
+      final creditorBalance = creditors[creditorIndex][1] as int;
+      final amount =
+          (-debtorBalance < creditorBalance) ? -debtorBalance : creditorBalance;
+      result.add(
+        ListSettlementSuggestion(
+          payerParticipantId: debtors[debtorIndex][0] as String,
+          recipientParticipantId: creditors[creditorIndex][0] as String,
+          amountMinor: amount,
+        ),
+      );
+      debtors[debtorIndex][1] = debtorBalance + amount;
+      creditors[creditorIndex][1] = creditorBalance - amount;
+      if (debtors[debtorIndex][1] == 0) debtorIndex += 1;
+      if (creditors[creditorIndex][1] == 0) creditorIndex += 1;
+    }
+    return result;
+  }
+
+  static bool _sameSuggestions(
+    List<ListSettlementSuggestion> actual,
+    List<ListSettlementSuggestion> expected,
+  ) {
+    if (actual.length != expected.length) return false;
+    for (var index = 0; index < actual.length; index += 1) {
+      if (actual[index].payerParticipantId !=
+              expected[index].payerParticipantId ||
+          actual[index].recipientParticipantId !=
+              expected[index].recipientParticipantId ||
+          actual[index].amountMinor != expected[index].amountMinor) {
+        return false;
+      }
+    }
+    return true;
   }
 
   static ListSplitExpense _expense(
@@ -332,6 +522,123 @@ class SupabaseListSplitRepository implements ListSplitRepository {
     );
   }
 
+  static ListSplitSettlementPage _settlementPage(
+    Map<String, dynamic> json,
+  ) {
+    _expectExactKeys(
+      json,
+      const {'list_id', 'currency_code', 'entries', 'next_cursor'},
+    );
+    final listId = _uuid(json['list_id']);
+    final currency = json['currency_code'] == null
+        ? null
+        : SplitCurrency.fromCode(_string(json['currency_code']));
+    final entries =
+        _objects(json['entries']).map(_settlement).toList(growable: false);
+    final ids = entries.map((entry) => entry.id).toSet();
+    if (entries.length > splitSettlementHistoryMaxPageSize ||
+        ids.length != entries.length ||
+        (currency == null && entries.isNotEmpty)) {
+      throw const FormatException('invalid settlement history');
+    }
+    for (var index = 1; index < entries.length; index += 1) {
+      final previous = entries[index - 1];
+      final current = entries[index];
+      if (previous.createdAt.isBefore(current.createdAt) ||
+          (previous.createdAt == current.createdAt &&
+              previous.id.compareTo(current.id) < 0)) {
+        throw const FormatException('unordered settlement history');
+      }
+    }
+    ListSplitSettlementCursor? cursor;
+    if (json['next_cursor'] != null) {
+      final cursorJson = _object(json['next_cursor']);
+      _expectExactKeys(cursorJson, const {'created_at', 'id'});
+      cursor = ListSplitSettlementCursor(
+        createdAt: _dateTime(cursorJson['created_at']),
+        id: _uuid(cursorJson['id']),
+      );
+      if (entries.isEmpty) {
+        throw const FormatException('cursor without settlement entries');
+      }
+      final last = entries.last;
+      if (cursor.createdAt != last.createdAt || cursor.id != last.id) {
+        throw const FormatException('cursor does not match settlement page');
+      }
+    }
+    return ListSplitSettlementPage(
+      listId: listId,
+      currency: currency,
+      entries: List.unmodifiable(entries),
+      nextCursor: cursor,
+    );
+  }
+
+  static ListSplitSettlement _settlement(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {
+        'id',
+        'payer_participant_id',
+        'recipient_participant_id',
+        'recorded_by_participant_id',
+        'amount_minor',
+        'note',
+        'created_at',
+        'reversal',
+        'can_reverse',
+      },
+    );
+    final payerId = _uuid(json['payer_participant_id']);
+    final recipientId = _uuid(json['recipient_participant_id']);
+    if (payerId == recipientId) {
+      throw const FormatException('invalid settlement endpoints');
+    }
+    final createdAt = _dateTime(json['created_at']);
+    final note = _nullableBoundedString(
+      json['note'],
+      min: 1,
+      max: splitSettlementNoteMaxLength,
+    );
+    ListSplitSettlementReversal? reversal;
+    if (json['reversal'] != null) {
+      final reversalJson = _object(json['reversal']);
+      _expectExactKeys(
+        reversalJson,
+        const {'reversed_by_participant_id', 'reason', 'created_at'},
+      );
+      final reversalCreatedAt = _dateTime(reversalJson['created_at']);
+      if (reversalCreatedAt.isBefore(createdAt)) {
+        throw const FormatException('invalid reversal time');
+      }
+      reversal = ListSplitSettlementReversal(
+        reversedByParticipantId:
+            _uuid(reversalJson['reversed_by_participant_id']),
+        reason: _boundedString(
+          reversalJson['reason'],
+          1,
+          splitSettlementReversalReasonMaxLength,
+        ),
+        createdAt: reversalCreatedAt,
+      );
+    }
+    final canReverse = _boolean(json['can_reverse']);
+    if (reversal != null && canReverse) {
+      throw const FormatException('reversed settlement cannot be reversible');
+    }
+    return ListSplitSettlement(
+      id: _uuid(json['id']),
+      payerParticipantId: payerId,
+      recipientParticipantId: recipientId,
+      recordedByParticipantId: _uuid(json['recorded_by_participant_id']),
+      amountMinor: _positiveInt(json['amount_minor']),
+      note: note,
+      createdAt: createdAt,
+      reversal: reversal,
+      canReverse: canReverse,
+    );
+  }
+
   static Map<String, dynamic> _object(Object? value) {
     if (value is! Map) throw const FormatException('expected object');
     return Map<String, dynamic>.from(value);
@@ -382,6 +689,15 @@ class SupabaseListSplitRepository implements ListSplitRepository {
   static String? _nullableString(Object? value) {
     if (value == null) return null;
     return _string(value);
+  }
+
+  static String? _nullableBoundedString(
+    Object? value, {
+    required int min,
+    required int max,
+  }) {
+    if (value == null) return null;
+    return _boundedString(value, min, max);
   }
 
   static String _boundedString(Object? value, int min, int max) {

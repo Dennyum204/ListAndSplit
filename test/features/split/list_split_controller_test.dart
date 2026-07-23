@@ -229,6 +229,435 @@ void main() {
     controller.dispose();
   });
 
+  test('records a partial payment, recalculates, and reverses once', () async {
+    final repository = FakeListSplitRepository(
+      initial: _overviewWithDebt(),
+    );
+    final controller = _controller(repository);
+    await controller.load();
+
+    expect(
+      await controller.recordSettlement(
+        payerParticipantId: splitMemberParticipantId,
+        recipientParticipantId: splitOwnerParticipantId,
+        amountMinor: 1000,
+        note: 'Cash',
+        requestId: '50000000-0000-4000-8000-000000000010',
+      ),
+      ListSplitMutationOutcome.succeeded,
+    );
+    final paid = controller.state.overview.asData!.value;
+    expect(
+      paid.participantById(splitOwnerParticipantId)?.balanceMinor,
+      2000,
+    );
+    expect(
+      paid.participantById(splitMemberParticipantId)?.balanceMinor,
+      -2000,
+    );
+    expect(paid.suggestions.single.amountMinor, 2000);
+    expect(
+      controller.state.settlementHistory.asData!.value.entries.single.note,
+      'Cash',
+    );
+
+    final settlement =
+        controller.state.settlementHistory.asData!.value.entries.single;
+    expect(
+      await controller.reverseSettlement(
+        settlement,
+        reason: 'Wrong cash amount',
+        requestId: '50000000-0000-4000-8000-000000000011',
+      ),
+      ListSplitMutationOutcome.succeeded,
+    );
+    final restored = controller.state.overview.asData!.value;
+    expect(
+      restored.participantById(splitOwnerParticipantId)?.balanceMinor,
+      3000,
+    );
+    expect(
+      restored.participantById(splitMemberParticipantId)?.balanceMinor,
+      -3000,
+    );
+    final reversed =
+        controller.state.settlementHistory.asData!.value.entries.single;
+    expect(reversed.reversal?.reason, 'Wrong cash amount');
+    expect(
+      await controller.reverseSettlement(
+        reversed,
+        reason: 'Again',
+        requestId: '50000000-0000-4000-8000-000000000012',
+      ),
+      ListSplitMutationOutcome.invalid,
+    );
+    expect(repository.reverseSettlementCalls, 1);
+    controller.dispose();
+  });
+
+  test('stale reversal authority refreshes without discarding list access',
+      () async {
+    final repository = FakeListSplitRepository(initial: _overviewWithDebt())
+      ..settlements.add(
+        _settlement(
+          index: 0,
+          createdAt: DateTime.utc(2026, 7, 23, 12),
+        ),
+      );
+    final controller = _controller(repository);
+    await controller.load();
+    final staleSettlement =
+        controller.state.settlementHistory.asData!.value.entries.single;
+    repository.settlements[0] = ListSplitSettlement(
+      id: staleSettlement.id,
+      payerParticipantId: staleSettlement.payerParticipantId,
+      recipientParticipantId: staleSettlement.recipientParticipantId,
+      recordedByParticipantId: staleSettlement.recordedByParticipantId,
+      amountMinor: staleSettlement.amountMinor,
+      note: staleSettlement.note,
+      createdAt: staleSettlement.createdAt,
+      reversal: null,
+      canReverse: false,
+    );
+    repository.nextMutationFailure =
+        const ListSplitFailure(ListSplitFailureCode.stale);
+
+    expect(
+      await controller.reverseSettlement(
+        staleSettlement,
+        reason: 'No longer authorized',
+        requestId: '50000000-0000-4000-8000-000000000013',
+      ),
+      ListSplitMutationOutcome.stale,
+    );
+    expect(controller.state.overview.hasValue, isTrue);
+    expect(
+      controller
+          .state.settlementHistory.asData!.value.entries.single.canReverse,
+      isFalse,
+    );
+    expect(controller.state.message, ListSplitMessage.staleRefreshed);
+    controller.dispose();
+  });
+
+  test('validates settlement direction, maximum, and overlapping saves',
+      () async {
+    final repository = FakeListSplitRepository(
+      initial: _overviewWithDebt(),
+    );
+    final controller = _controller(repository);
+    await controller.load();
+
+    for (final invalid in [
+      (
+        payer: splitOwnerParticipantId,
+        recipient: splitMemberParticipantId,
+        amount: 100,
+      ),
+      (
+        payer: splitMemberParticipantId,
+        recipient: splitMemberParticipantId,
+        amount: 100,
+      ),
+      (
+        payer: splitMemberParticipantId,
+        recipient: splitOwnerParticipantId,
+        amount: 3001,
+      ),
+    ]) {
+      expect(
+        await controller.recordSettlement(
+          payerParticipantId: invalid.payer,
+          recipientParticipantId: invalid.recipient,
+          amountMinor: invalid.amount,
+          note: null,
+          requestId: '50000000-0000-4000-8000-000000000020',
+        ),
+        ListSplitMutationOutcome.invalid,
+      );
+    }
+    expect(repository.recordSettlementCalls, 0);
+
+    repository.mutationCompleter = Completer<ListSplitOverview>();
+    final first = controller.recordSettlement(
+      payerParticipantId: splitMemberParticipantId,
+      recipientParticipantId: splitOwnerParticipantId,
+      amountMinor: 3000,
+      note: null,
+      requestId: '50000000-0000-4000-8000-000000000021',
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      await controller.recordSettlement(
+        payerParticipantId: splitMemberParticipantId,
+        recipientParticipantId: splitOwnerParticipantId,
+        amountMinor: 3000,
+        note: null,
+        requestId: '50000000-0000-4000-8000-000000000021',
+      ),
+      ListSplitMutationOutcome.failed,
+    );
+    repository.mutationCompleter!.complete(repository.overview);
+    expect(await first, ListSplitMutationOutcome.succeeded);
+    expect(repository.recordSettlementCalls, 1);
+    controller.dispose();
+  });
+
+  test('allows historical settlement endpoints and locks currency forever',
+      () async {
+    const formerDebtorId = '30000000-0000-4000-8000-000000000003';
+    const formerCreditorId = '30000000-0000-4000-8000-000000000004';
+    final repository = FakeListSplitRepository(
+      initial: enabledSplitOverview(
+        participants: const [
+          ...[
+            ListSplitParticipant(
+              id: splitOwnerParticipantId,
+              profileId: splitOwnerProfileId,
+              username: 'fernando',
+              displayName: 'Fernando',
+              isAnonymized: false,
+              isCurrent: true,
+              paidMinor: 0,
+              owedMinor: 0,
+              balanceMinor: 0,
+            ),
+          ],
+          ListSplitParticipant(
+            id: formerDebtorId,
+            profileId: null,
+            username: null,
+            displayName: null,
+            isAnonymized: true,
+            isCurrent: false,
+            paidMinor: 0,
+            owedMinor: 2000,
+            balanceMinor: -2000,
+          ),
+          ListSplitParticipant(
+            id: formerCreditorId,
+            profileId: null,
+            username: null,
+            displayName: null,
+            isAnonymized: true,
+            isCurrent: false,
+            paidMinor: 2000,
+            owedMinor: 0,
+            balanceMinor: 2000,
+          ),
+        ],
+      ).copyWithSuggestions(
+        const [
+          ListSettlementSuggestion(
+            payerParticipantId: formerDebtorId,
+            recipientParticipantId: formerCreditorId,
+            amountMinor: 2000,
+          ),
+        ],
+      ),
+    );
+    final controller = _controller(repository);
+    await controller.load();
+
+    expect(
+      await controller.recordSettlement(
+        payerParticipantId: formerDebtorId,
+        recipientParticipantId: formerCreditorId,
+        amountMinor: 500,
+        note: 'Historical balance',
+        requestId: '50000000-0000-4000-8000-000000000030',
+      ),
+      ListSplitMutationOutcome.succeeded,
+    );
+    final recorded =
+        controller.state.settlementHistory.asData!.value.entries.single;
+    expect(recorded.payerParticipantId, formerDebtorId);
+    expect(recorded.recipientParticipantId, formerCreditorId);
+
+    expect(
+      await controller.reverseSettlement(
+        recorded,
+        reason: 'Correct the record',
+        requestId: '50000000-0000-4000-8000-000000000031',
+      ),
+      ListSplitMutationOutcome.succeeded,
+    );
+    expect(
+      controller
+          .state.settlementHistory.asData!.value.entries.single.isReversed,
+      isTrue,
+    );
+    expect(
+      await controller.changeCurrency(SplitCurrency.eur),
+      ListSplitMutationOutcome.invalid,
+    );
+    expect(repository.changeCurrencyCalls, 0);
+    controller.dispose();
+  });
+
+  test('loads bounded settlement history with deterministic keyset pagination',
+      () async {
+    final repository = FakeListSplitRepository(initial: _overviewWithDebt());
+    for (var index = 0; index < 21; index += 1) {
+      repository.settlements.add(
+        _settlement(
+          index: index,
+          createdAt: DateTime.utc(2026, 7, 23, 10).add(
+            Duration(minutes: index),
+          ),
+        ),
+      );
+    }
+    final controller = _controller(repository);
+
+    await controller.load();
+    final firstPage = controller.state.settlementHistory.asData!.value;
+    expect(firstPage.entries, hasLength(splitSettlementHistoryPageSize));
+    expect(firstPage.nextCursor, isNotNull);
+    expect(firstPage.entries.first.id, repository.settlements.last.id);
+
+    await controller.loadMoreSettlements();
+    final completeHistory = controller.state.settlementHistory.asData!.value;
+    expect(completeHistory.entries, hasLength(21));
+    expect(completeHistory.nextCursor, isNull);
+    expect(
+      completeHistory.entries.map((entry) => entry.id).toSet(),
+      hasLength(21),
+    );
+    expect(repository.listSettlementCalls, 2);
+    controller.dispose();
+  });
+
+  test('late pagination cannot overwrite a Realtime history reconciliation',
+      () async {
+    final repository = FakeListSplitRepository(initial: _overviewWithDebt());
+    for (var index = 0; index < 21; index += 1) {
+      repository.settlements.add(
+        _settlement(
+          index: index,
+          createdAt: DateTime.utc(2026, 7, 23, 10).add(
+            Duration(minutes: index),
+          ),
+        ),
+      );
+    }
+    final controller = _controller(repository);
+    await controller.load();
+    final paginationResult = Completer<ListSplitSettlementPage>();
+    final reconciledEntry = _settlement(
+      index: 98,
+      createdAt: DateTime.utc(2026, 7, 23, 12),
+    );
+    repository.listSettlementsOverride = (listId, pageSize, cursor) {
+      if (cursor != null) return paginationResult.future;
+      return Future.value(
+        ListSplitSettlementPage(
+          listId: listId,
+          currency: SplitCurrency.chf,
+          entries: [reconciledEntry],
+          nextCursor: null,
+        ),
+      );
+    };
+
+    final pagination = controller.loadMoreSettlements();
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.state.isLoadingMoreSettlements, isTrue);
+
+    await controller.reconcile();
+    expect(
+      controller.state.settlementHistory.asData!.value.entries.single.id,
+      reconciledEntry.id,
+    );
+
+    paginationResult.complete(
+      ListSplitSettlementPage(
+        listId: splitListId,
+        currency: SplitCurrency.chf,
+        entries: [repository.settlements.first],
+        nextCursor: null,
+      ),
+    );
+    await pagination;
+
+    expect(
+      controller.state.settlementHistory.asData!.value.entries.single.id,
+      reconciledEntry.id,
+    );
+    expect(controller.state.isLoadingMoreSettlements, isFalse);
+    expect(controller.state.message, isNull);
+    controller.dispose();
+  });
+
+  test('history rejects foreign actors and propagates lost access', () async {
+    final repository = FakeListSplitRepository(initial: _overviewWithDebt());
+    repository.listSettlementsOverride =
+        (listId, pageSize, cursor) => Future.value(
+              ListSplitSettlementPage(
+                listId: listId,
+                currency: SplitCurrency.chf,
+                entries: [
+                  ListSplitSettlement(
+                    id: '50000000-0000-4000-8000-000000000099',
+                    payerParticipantId: '30000000-0000-4000-8000-000000000099',
+                    recipientParticipantId: splitOwnerParticipantId,
+                    recordedByParticipantId: splitOwnerParticipantId,
+                    amountMinor: 100,
+                    note: null,
+                    createdAt: DateTime.utc(2026, 7, 23, 12),
+                    reversal: null,
+                    canReverse: false,
+                  ),
+                ],
+                nextCursor: null,
+              ),
+            );
+    final controller = _controller(repository);
+
+    await controller.load();
+    expect(controller.state.overview.hasValue, isTrue);
+    expect(controller.state.settlementHistory.hasError, isTrue);
+
+    repository.listSettlementsOverride =
+        (listId, pageSize, cursor) => Future.error(
+              const ListSplitFailure(ListSplitFailureCode.unavailable),
+            );
+    await controller.reconcile();
+    expect(controller.state.overview.hasError, isTrue);
+    expect(controller.state.overview.valueOrNull, isNull);
+    expect(controller.state.message, ListSplitMessage.unavailable);
+    controller.dispose();
+  });
+
+  test('transport failure preserves only a still-valid cached history page',
+      () async {
+    final repository = FakeListSplitRepository(initial: _overviewWithDebt())
+      ..settlements.add(
+        _settlement(
+          index: 0,
+          createdAt: DateTime.utc(2026, 7, 23, 12),
+        ),
+      );
+    final controller = _controller(repository);
+    await controller.load();
+    final cached =
+        controller.state.settlementHistory.asData!.value.entries.single;
+
+    repository.listSettlementsOverride =
+        (listId, pageSize, cursor) => Future.error(
+              const ListSplitFailure(ListSplitFailureCode.transport),
+            );
+    await controller.reconcile();
+
+    expect(controller.state.overview.hasValue, isTrue);
+    expect(
+      controller.state.settlementHistory.asData!.value.entries.single.id,
+      cached.id,
+    );
+    expect(controller.state.message, isNull);
+    controller.dispose();
+  });
+
   test('manual refresh coalesces behind a mutation and remains available after',
       () async {
     final repository = FakeListSplitRepository();
@@ -362,3 +791,78 @@ ListSplitController _controller(FakeListSplitRepository repository) =>
       authenticatedProfileId: splitOwnerProfileId,
       requestIdGenerator: () => '50000000-0000-4000-8000-000000000001',
     );
+
+ListSplitOverview _overviewWithDebt() {
+  final expense = splitExpense();
+  return enabledSplitOverview(
+    expenses: [expense],
+    participants: const [
+      ListSplitParticipant(
+        id: splitOwnerParticipantId,
+        profileId: splitOwnerProfileId,
+        username: 'fernando',
+        displayName: 'Fernando',
+        isAnonymized: false,
+        isCurrent: true,
+        paidMinor: 6000,
+        owedMinor: 3000,
+        balanceMinor: 3000,
+      ),
+      ListSplitParticipant(
+        id: splitMemberParticipantId,
+        profileId: splitMemberProfileId,
+        username: 'susana',
+        displayName: 'Susana',
+        isAnonymized: false,
+        isCurrent: true,
+        paidMinor: 0,
+        owedMinor: 3000,
+        balanceMinor: -3000,
+      ),
+    ],
+  ).copyWithSuggestions(
+    const [
+      ListSettlementSuggestion(
+        payerParticipantId: splitMemberParticipantId,
+        recipientParticipantId: splitOwnerParticipantId,
+        amountMinor: 3000,
+      ),
+    ],
+  );
+}
+
+ListSplitSettlement _settlement({
+  required int index,
+  required DateTime createdAt,
+}) {
+  return ListSplitSettlement(
+    id: '50000000-0000-4000-8000-${(index + 1).toString().padLeft(12, '0')}',
+    payerParticipantId: splitMemberParticipantId,
+    recipientParticipantId: splitOwnerParticipantId,
+    recordedByParticipantId: splitOwnerParticipantId,
+    amountMinor: 1,
+    note: null,
+    createdAt: createdAt,
+    reversal: null,
+    canReverse: true,
+  );
+}
+
+extension on ListSplitOverview {
+  ListSplitOverview copyWithSuggestions(
+    List<ListSettlementSuggestion> suggestions,
+  ) =>
+      ListSplitOverview(
+        listId: listId,
+        listTitle: listTitle,
+        listStatus: listStatus,
+        listVersion: listVersion,
+        isOwner: isOwner,
+        enabled: enabled,
+        writable: writable,
+        settings: settings,
+        participants: participants,
+        expenses: expenses,
+        suggestions: suggestions,
+      );
+}

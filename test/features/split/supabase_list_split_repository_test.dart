@@ -65,6 +65,25 @@ void main() {
       expectedSplitVersion: 6,
       expectedExpenseVersion: 3,
     );
+    response = _historyProjection();
+    final history = await repository.listSettlements(_listId);
+    response = _projection();
+    await repository.recordSettlement(
+      _listId,
+      payerParticipantId: _memberParticipantId,
+      recipientParticipantId: _ownerParticipantId,
+      amountMinor: 250,
+      note: 'Partial',
+      requestId: _settlementRequestId,
+      expectedSplitVersion: 7,
+    );
+    await repository.reverseSettlement(
+      _listId,
+      history.entries.single.id,
+      reason: 'Entered twice',
+      requestId: _reversalRequestId,
+      expectedSplitVersion: 8,
+    );
 
     expect(calls, [
       const _RpcCall('get_active_list_split', {
@@ -108,6 +127,28 @@ void main() {
         'expected_split_version': 6,
         'expected_expense_version': 3,
       }),
+      const _RpcCall('list_active_list_settlements', {
+        'target_list_id': _listId,
+        'page_size': 20,
+        'cursor_created_at': null,
+        'cursor_id': null,
+      }),
+      const _RpcCall('record_active_list_settlement', {
+        'target_list_id': _listId,
+        'payer_participant_id': _memberParticipantId,
+        'recipient_participant_id': _ownerParticipantId,
+        'new_amount_minor': 250,
+        'new_note': 'Partial',
+        'creation_request_id': _settlementRequestId,
+        'expected_split_version': 7,
+      }),
+      const _RpcCall('reverse_active_list_settlement', {
+        'target_list_id': _listId,
+        'target_settlement_id': _settlementId,
+        'reversal_reason': 'Entered twice',
+        'reversal_request_id': _reversalRequestId,
+        'expected_split_version': 8,
+      }),
     ]);
   });
 
@@ -121,6 +162,11 @@ void main() {
     expect(overview.participants.first.balanceMinor, 500);
     expect(overview.participants.last.balanceMinor, -500);
     expect(overview.expenses.single.amountMinor, 1001);
+    expect(
+        overview.suggestions.single.payerParticipantId, _memberParticipantId);
+    expect(overview.suggestions.single.recipientParticipantId,
+        _ownerParticipantId);
+    expect(overview.suggestions.single.amountMinor, 500);
     expect(
       overview.expenses.single.shares.map((share) => share.amountMinor),
       [501, 500],
@@ -150,6 +196,8 @@ void main() {
       ..['owed_minor'] = 500 * 201
       ..['balance_minor'] = -500 * 201;
     legacy['participants'] = participants;
+    ((legacy['suggestions'] as List).single
+        as Map<String, dynamic>)['amount_minor'] = 500 * 201;
     response = legacy;
 
     final overview = await repository.getSplit(_listId);
@@ -186,6 +234,14 @@ void main() {
       ...originalParticipants.skip(1),
     ];
     final falseReadOnly = _projection()..['writable'] = false;
+    final badSuggestion = _projection();
+    ((badSuggestion['suggestions'] as List).single
+        as Map<String, dynamic>)['amount_minor'] = 499;
+    final unbalancedSettlements = _projection();
+    ((unbalancedSettlements['participants'] as List).first
+        as Map<String, dynamic>)
+      ..['settlement_paid_minor'] = 100
+      ..['balance_minor'] = 600;
 
     for (final malformed in [
       widened,
@@ -194,6 +250,8 @@ void main() {
       badAnonymization,
       currentAnonymized,
       falseReadOnly,
+      badSuggestion,
+      unbalancedSettlements,
     ]) {
       response = malformed;
       await expectLater(
@@ -207,6 +265,79 @@ void main() {
         ),
       );
     }
+  });
+
+  test('strictly maps bounded keyset settlement history and reversals',
+      () async {
+    response = _historyProjection();
+
+    final page = await repository.listSettlements(_listId);
+
+    expect(page.currency, SplitCurrency.chf);
+    expect(page.entries, hasLength(1));
+    expect(page.entries.single.amountMinor, 250);
+    expect(page.entries.single.note, 'Partial');
+    expect(page.entries.single.canReverse, isFalse);
+    expect(page.entries.single.reversal?.reason, 'Entered twice');
+    expect(page.nextCursor?.id, _settlementId);
+
+    final unordered = _historyProjection();
+    final entry =
+        Map<String, dynamic>.from((unordered['entries'] as List).single as Map);
+    unordered
+      ..['entries'] = [
+        entry,
+        {
+          ...entry,
+          'id': '60000000-0000-4000-8000-000000000002',
+          'created_at': '2026-07-23T10:01:00.000Z',
+        },
+      ]
+      ..['next_cursor'] = null;
+    final mismatchedCursor = _historyProjection();
+    (mismatchedCursor['next_cursor'] as Map<String, dynamic>)['id'] =
+        '60000000-0000-4000-8000-000000000099';
+
+    for (final malformed in [
+      _historyProjection()..['internal_request_id'] = _settlementRequestId,
+      _historyProjection()..['currency_code'] = 'USD',
+      _historyProjection()
+        ..['entries'] = [
+          {
+            ...((_historyProjection()['entries'] as List).single as Map),
+            'payer_participant_id': _ownerParticipantId,
+            'recipient_participant_id': _ownerParticipantId,
+          },
+        ],
+      unordered,
+      mismatchedCursor,
+    ]) {
+      response = malformed;
+      await expectLater(
+        repository.listSettlements(_listId),
+        throwsA(
+          isA<ListSplitFailure>().having(
+            (error) => error.code,
+            'code',
+            ListSplitFailureCode.generic,
+          ),
+        ),
+      );
+    }
+
+    expect(
+      repository.listSettlements(
+        _listId,
+        pageSize: splitSettlementHistoryMaxPageSize + 1,
+      ),
+      throwsA(
+        isA<ListSplitFailure>().having(
+          (error) => error.code,
+          'code',
+          ListSplitFailureCode.invalid,
+        ),
+      ),
+    );
   });
 
   test('maps reviewed SQLSTATEs without exposing server messages', () async {
@@ -257,6 +388,9 @@ const _ownerParticipantId = '30000000-0000-4000-8000-000000000001';
 const _memberParticipantId = '30000000-0000-4000-8000-000000000002';
 const _expenseId = '40000000-0000-4000-8000-000000000001';
 const _requestId = '50000000-0000-4000-8000-000000000001';
+const _settlementId = '60000000-0000-4000-8000-000000000001';
+const _settlementRequestId = '70000000-0000-4000-8000-000000000001';
+const _reversalRequestId = '70000000-0000-4000-8000-000000000002';
 
 Map<String, dynamic> _projection() => {
       'list_id': _listId,
@@ -282,6 +416,8 @@ Map<String, dynamic> _projection() => {
           'is_current': true,
           'paid_minor': 1001,
           'owed_minor': 501,
+          'settlement_paid_minor': 0,
+          'settlement_received_minor': 0,
           'balance_minor': 500,
         },
         {
@@ -293,6 +429,8 @@ Map<String, dynamic> _projection() => {
           'is_current': true,
           'paid_minor': 0,
           'owed_minor': 500,
+          'settlement_paid_minor': 0,
+          'settlement_received_minor': 0,
           'balance_minor': -500,
         },
       ],
@@ -323,6 +461,39 @@ Map<String, dynamic> _projection() => {
           ],
         },
       ],
+      'suggestions': [
+        {
+          'payer_participant_id': _memberParticipantId,
+          'recipient_participant_id': _ownerParticipantId,
+          'amount_minor': 500,
+        },
+      ],
+    };
+
+Map<String, dynamic> _historyProjection() => {
+      'list_id': _listId,
+      'currency_code': 'CHF',
+      'entries': [
+        {
+          'id': _settlementId,
+          'payer_participant_id': _memberParticipantId,
+          'recipient_participant_id': _ownerParticipantId,
+          'recorded_by_participant_id': _memberParticipantId,
+          'amount_minor': 250,
+          'note': 'Partial',
+          'created_at': '2026-07-23T10:00:00.000Z',
+          'reversal': {
+            'reversed_by_participant_id': _ownerParticipantId,
+            'reason': 'Entered twice',
+            'created_at': '2026-07-23T10:05:00.000Z',
+          },
+          'can_reverse': false,
+        },
+      ],
+      'next_cursor': {
+        'created_at': '2026-07-23T10:00:00.000Z',
+        'id': _settlementId,
+      },
     };
 
 class _RpcCall {

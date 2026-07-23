@@ -171,22 +171,29 @@ provenance presentation, and sent-template expiry remain open.
 Goal: provide an optional, correct expense ledger inside active lists without
 processing payments.
 
-Current first slice:
+Current slices:
 
-- Owner-enabled list-scoped Split with one `CHF`/`EUR` currency, immutable after
-  the first expense until the list is empty again.
+- Owner-enabled list-scoped Split with one `CHF`/`EUR` currency. It may change only
+  while no expense exists and no settlement history has ever existed; the first
+  settlement locks it permanently.
 - Versioned active-list expense create/edit/delete for current owners and accepted
   members, with persistent historical financial identities.
 - Transactional equal splits in integer minor units with deterministic UUID-order
-  remainder allocation and on-demand paid-minus-owed balances.
-- Archived read-only history, private Realtime invalidation/reconciliation,
-  caller-owned-list Split export, and hard-deletion-safe anonymization.
+  remainder allocation and on-demand settlement-adjusted balances.
+- Deterministic largest-balance-first suggested payments with stable participant-ID
+  tie-breaks. They are deliberately not described as mathematically minimum.
+- Full and partial external-bookkeeping settlement records, server-derived recorder
+  attribution, immutable history, one-time append-only reversals, historical
+  participant endpoints, and bounded newest-first keyset pages.
+- Archived read-only history, payload-bound retry idempotency, stale/concurrent
+  protection, private Realtime invalidation/reconciliation, caller-owned-list Split
+  export schema version `6`, and hard-deletion-safe anonymization.
 - Comprehensive server constraint/RLS/RPC and Flutter repository/controller/widget
   coverage.
 
-Later slices require separate accepted decisions for custom shares, settlements and
-reversals, recommendations, and simplified debt output. Payment-provider or
-money-transfer integration remains out of scope.
+Later slices require separate accepted decisions for custom shares. Recipient
+approval/disputes, backdating, attachments, a mathematically minimum solver,
+payment-provider or money-transfer integration remain out of scope.
 
 ## Phase 5 — Offline tolerance and push delivery (planned later)
 

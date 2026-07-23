@@ -27,7 +27,11 @@ class AccountDataExportDocument {
         !supportedSchemaVersions.contains(schemaVersion) ||
         authIdentity.id != profile.id ||
         activeLists.any(
-          (activeList) => activeList.includesSplitField != (schemaVersion >= 5),
+          (activeList) =>
+              activeList.includesSplitField != (schemaVersion >= 5) ||
+              (activeList.split != null &&
+                  activeList.split!.includesSettlementsField !=
+                      (schemaVersion >= 6)),
         )) {
       throw const AccountDataExportFailure();
     }
@@ -47,6 +51,7 @@ class AccountDataExportDocument {
         3 => _schemaThreeRootKeys,
         4 => _schemaFourRootKeys,
         5 => _schemaFiveRootKeys,
+        6 => _schemaSixRootKeys,
         _ => const <String>{},
       },
     );
@@ -76,7 +81,7 @@ class AccountDataExportDocument {
               .map(
                 (activeList) => AccountActiveListExport.fromJson(
                   activeList,
-                  includeSplit: schemaVersion >= 5,
+                  splitSchemaVersion: schemaVersion,
                 ),
               )
               .toList(growable: false),
@@ -99,8 +104,15 @@ class AccountDataExportDocument {
   }
 
   static const supportedProduct = 'list_and_split';
-  static const supportedSchemaVersion = 5;
-  static const supportedSchemaVersions = {1, 2, 3, 4, supportedSchemaVersion};
+  static const supportedSchemaVersion = 6;
+  static const supportedSchemaVersions = {
+    1,
+    2,
+    3,
+    4,
+    5,
+    supportedSchemaVersion,
+  };
   static const _schemaOneRootKeys = {
     'product',
     'schema_version',
@@ -125,6 +137,7 @@ class AccountDataExportDocument {
     'templates',
   };
   static const _schemaFiveRootKeys = _schemaFourRootKeys;
+  static const _schemaSixRootKeys = _schemaFiveRootKeys;
 
   final String product;
   final int schemaVersion;
@@ -740,8 +753,9 @@ class AccountActiveListExport {
 
   factory AccountActiveListExport.fromJson(
     Map<String, dynamic> json, {
-    bool includeSplit = false,
+    int splitSchemaVersion = 0,
   }) {
+    final includeSplit = splitSchemaVersion >= 5;
     _expectExactKeys(json, includeSplit ? _schemaFiveKeys : _legacyKeys);
     final title = _requiredString(json, 'title');
     if (title != title.trim() || title.length > 80) {
@@ -764,7 +778,10 @@ class AccountActiveListExport {
           .map(AccountActiveListItemExport.fromJson)
           .toList(growable: false),
       split: includeSplit && json['split'] != null
-          ? AccountListSplitExport.fromJson(_requiredObject(json, 'split'))
+          ? AccountListSplitExport.fromJson(
+              _requiredObject(json, 'split'),
+              includeSettlements: splitSchemaVersion >= 6,
+            )
           : null,
       includesSplitField: includeSplit,
     );
@@ -811,17 +828,32 @@ class AccountListSplitExport {
     required this.settings,
     required List<AccountListSplitParticipantExport> participants,
     required List<AccountListSplitExpenseExport> expenses,
+    List<AccountListSplitSettlementExport> settlements = const [],
+    this.includesSettlementsField = false,
   })  : participants = List.unmodifiable(participants),
-        expenses = List.unmodifiable(expenses) {
+        expenses = List.unmodifiable(expenses),
+        settlements = List.unmodifiable(settlements) {
     final participantIds = participants.map((entry) => entry.id).toSet();
+    final settlementIds = settlements.map((entry) => entry.id).toSet();
     if (participantIds.length != participants.length ||
-        expenses.any((expense) => !expense.referencesOnly(participantIds))) {
+        expenses.any((expense) => !expense.referencesOnly(participantIds)) ||
+        (!includesSettlementsField && settlements.isNotEmpty) ||
+        settlementIds.length != settlements.length ||
+        settlements.any(
+          (settlement) => !settlement.referencesOnly(participantIds),
+        )) {
       throw const AccountDataExportFailure();
     }
   }
 
-  factory AccountListSplitExport.fromJson(Map<String, dynamic> json) {
-    _expectExactKeys(json, _keys);
+  factory AccountListSplitExport.fromJson(
+    Map<String, dynamic> json, {
+    bool includeSettlements = false,
+  }) {
+    _expectExactKeys(
+      json,
+      includeSettlements ? _schemaSixKeys : _schemaFiveKeys,
+    );
     return AccountListSplitExport(
       settings: AccountListSplitSettingsExport.fromJson(
         _requiredObject(json, 'settings'),
@@ -832,14 +864,23 @@ class AccountListSplitExport {
       expenses: _requiredObjects(json, 'expenses')
           .map(AccountListSplitExpenseExport.fromJson)
           .toList(growable: false),
+      settlements: includeSettlements
+          ? _requiredObjects(json, 'settlements')
+              .map(AccountListSplitSettlementExport.fromJson)
+              .toList(growable: false)
+          : const [],
+      includesSettlementsField: includeSettlements,
     );
   }
 
-  static const _keys = {'settings', 'participants', 'expenses'};
+  static const _schemaFiveKeys = {'settings', 'participants', 'expenses'};
+  static const _schemaSixKeys = {..._schemaFiveKeys, 'settlements'};
 
   final AccountListSplitSettingsExport settings;
   final List<AccountListSplitParticipantExport> participants;
   final List<AccountListSplitExpenseExport> expenses;
+  final List<AccountListSplitSettlementExport> settlements;
+  final bool includesSettlementsField;
 
   Map<String, dynamic> toJson() => {
         'settings': settings.toJson(),
@@ -848,6 +889,10 @@ class AccountListSplitExport {
             .toList(growable: false),
         'expenses':
             expenses.map((expense) => expense.toJson()).toList(growable: false),
+        if (includesSettlementsField)
+          'settlements': settlements
+              .map((settlement) => settlement.toJson())
+              .toList(growable: false),
       };
 }
 
@@ -1093,6 +1138,132 @@ class AccountListSplitShareExport {
   Map<String, dynamic> toJson() => {
         'participant_id': participantId,
         'amount_minor': amountMinor,
+      };
+}
+
+class AccountListSplitSettlementExport {
+  AccountListSplitSettlementExport({
+    required this.id,
+    required this.payerParticipantId,
+    required this.recipientParticipantId,
+    required this.recordedByParticipantId,
+    required this.amountMinor,
+    required this.note,
+    required this.createdAt,
+    required this.reversal,
+  }) {
+    if (payerParticipantId == recipientParticipantId ||
+        (note != null && (note != note!.trim() || note!.length > 120)) ||
+        (reversal != null && reversal!.createdAt.isBefore(createdAt))) {
+      throw const AccountDataExportFailure();
+    }
+  }
+
+  factory AccountListSplitSettlementExport.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    _expectExactKeys(json, _keys);
+    return AccountListSplitSettlementExport(
+      id: _requiredUuid(json, 'id'),
+      payerParticipantId: _requiredUuid(json, 'payer_participant_id'),
+      recipientParticipantId: _requiredUuid(
+        json,
+        'recipient_participant_id',
+      ),
+      recordedByParticipantId: _requiredUuid(
+        json,
+        'recorded_by_participant_id',
+      ),
+      amountMinor: _requiredPositiveInt(json, 'amount_minor'),
+      note: _nullableString(json, 'note'),
+      createdAt: _requiredUtcDateTime(json, 'created_at'),
+      reversal: json['reversal'] == null
+          ? null
+          : AccountListSplitSettlementReversalExport.fromJson(
+              _requiredObject(json, 'reversal'),
+            ),
+    );
+  }
+
+  static const _keys = {
+    'id',
+    'payer_participant_id',
+    'recipient_participant_id',
+    'recorded_by_participant_id',
+    'amount_minor',
+    'note',
+    'created_at',
+    'reversal',
+  };
+
+  final String id;
+  final String payerParticipantId;
+  final String recipientParticipantId;
+  final String recordedByParticipantId;
+  final int amountMinor;
+  final String? note;
+  final DateTime createdAt;
+  final AccountListSplitSettlementReversalExport? reversal;
+
+  bool referencesOnly(Set<String> participantIds) =>
+      participantIds.containsAll({
+        payerParticipantId,
+        recipientParticipantId,
+        recordedByParticipantId,
+        if (reversal != null) reversal!.reversedByParticipantId,
+      });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'payer_participant_id': payerParticipantId,
+        'recipient_participant_id': recipientParticipantId,
+        'recorded_by_participant_id': recordedByParticipantId,
+        'amount_minor': amountMinor,
+        'note': note,
+        'created_at': _encodeDateTime(createdAt),
+        'reversal': reversal?.toJson(),
+      };
+}
+
+class AccountListSplitSettlementReversalExport {
+  AccountListSplitSettlementReversalExport({
+    required this.reversedByParticipantId,
+    required this.reason,
+    required this.createdAt,
+  }) {
+    if (reason != reason.trim() || reason.length > 120) {
+      throw const AccountDataExportFailure();
+    }
+  }
+
+  factory AccountListSplitSettlementReversalExport.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    _expectExactKeys(json, _keys);
+    return AccountListSplitSettlementReversalExport(
+      reversedByParticipantId: _requiredUuid(
+        json,
+        'reversed_by_participant_id',
+      ),
+      reason: _requiredString(json, 'reason'),
+      createdAt: _requiredUtcDateTime(json, 'created_at'),
+    );
+  }
+
+  static const _keys = {
+    'reversed_by_participant_id',
+    'reason',
+    'created_at',
+  };
+
+  final String reversedByParticipantId;
+  final String reason;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toJson() => {
+        'reversed_by_participant_id': reversedByParticipantId,
+        'reason': reason,
+        'created_at': _encodeDateTime(createdAt),
       };
 }
 

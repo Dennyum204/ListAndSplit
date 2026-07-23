@@ -41,7 +41,7 @@ select is(
     'public.export_own_account_data()'::regprocedure,
     'pg_proc'
   ),
-  'Returns schema-version-5 own data with Split nested only in fully exported caller-owned lists.',
+  'Returns schema-version-6 own data with Split settlement history only in fully exported caller-owned lists.',
   'the export boundary has a precise durable comment'
 );
 
@@ -383,20 +383,20 @@ select is(
     'templates',
     'visible_notifications'
   ]::text[],
-  'the export has exactly the twelve schema-version-four root keys'
+  'the export has exactly the twelve schema-version-six root keys'
 );
 
 select ok(
   (
     select document ->> 'product' = 'list_and_split'
-      and document -> 'schema_version' = '5'::jsonb
+      and document -> 'schema_version' = '6'::jsonb
       and (document ->> 'exported_at')::timestamptz
         between pg_catalog.transaction_timestamp()
         and pg_catalog.clock_timestamp()
     from account_export_documents
     where fixture = 'complete'
   ),
-  'the root contains the product, schema version five, and server export time'
+  'the root contains the product, schema version six, and server export time'
 );
 
 select is(

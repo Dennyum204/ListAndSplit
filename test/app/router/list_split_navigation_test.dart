@@ -19,6 +19,7 @@ import 'package:list_and_split/features/lists/presentation/active_list_providers
 import 'package:list_and_split/features/lists/presentation/active_lists_screen.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+import 'package:list_and_split/features/split/domain/list_split.dart';
 import 'package:list_and_split/features/split/domain/list_split_repository.dart';
 import 'package:list_and_split/features/split/presentation/list_split_providers.dart';
 import 'package:list_and_split/features/split/presentation/list_split_screen.dart';
@@ -35,7 +36,7 @@ void main() {
     final lists = FakeActiveListRepository()
       ..activeLists = [_summary()]
       ..itemsByList[splitListId] = [];
-    final split = FakeListSplitRepository();
+    final split = FakeListSplitRepository(initial: _debtOverview());
     final container = await _pumpApp(tester, lists: lists, split: split);
     final router = container.read(appRouterProvider);
 
@@ -56,6 +57,26 @@ void main() {
     );
     expect(split.getCalls, 1);
 
+    final record = find.byKey(
+      const ValueKey(
+        'recordSuggestedPayment-$splitMemberParticipantId-'
+        '$splitOwnerParticipantId',
+      ),
+    );
+    await _scrollSplitUntilVisible(tester, record);
+    await tester.tap(record);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettlementFormDialog), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(SettlementFormDialog), findsNothing);
+    expect(find.byType(ListSplitScreen), findsOneWidget);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      0,
+    );
+
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.byType(ActiveListDetailScreen), findsOneWidget);
@@ -65,6 +86,59 @@ void main() {
           .listId,
       splitListId,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'access removal closes a settlement editor and exits with one message',
+      (tester) async {
+    final lists = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..itemsByList[splitListId] = [];
+    final split = FakeListSplitRepository(initial: _debtOverview());
+    final container = await _pumpApp(tester, lists: lists, split: split);
+    final router = container.read(appRouterProvider);
+
+    router.go(AppRoutes.listSplit(splitListId));
+    await tester.pumpAndSettle();
+    final record = find.byKey(
+      const ValueKey(
+        'recordSuggestedPayment-$splitMemberParticipantId-'
+        '$splitOwnerParticipantId',
+      ),
+    );
+    await _scrollSplitUntilVisible(tester, record);
+    await tester.tap(record);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettlementFormDialog), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('settlementNoteField')),
+      'Unsaved local note',
+    );
+
+    lists.failure = const ActiveListFailure(ActiveListFailureCode.unavailable);
+    split.failure = const ListSplitFailure(ListSplitFailureCode.unavailable);
+    final detailController = container.read(
+      activeListDetailControllerProvider(splitListId).notifier,
+    );
+    final splitController = container.read(
+      listSplitControllerProvider(splitListId).notifier,
+    );
+    await Future.wait([
+      detailController.reconcile(),
+      splitController.reconcile(),
+      splitController.reconcile(),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettlementFormDialog), findsNothing);
+    expect(find.byType(ActiveListsScreen), findsOneWidget);
+    final listsContext = tester.element(find.byType(ActiveListsScreen));
+    final message = AppLocalizations.of(listsContext).listAccessRevokedMessage;
+    expect(find.text(message), findsOneWidget);
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.lists);
+    expect(split.recordSettlementCalls, 0);
     expect(tester.takeException(), isNull);
   });
 
@@ -83,6 +157,10 @@ void main() {
 
     router.go(AppRoutes.listSplit(splitListId));
     await tester.pumpAndSettle();
+    await _scrollSplitUntilVisible(
+      tester,
+      find.byKey(ValueKey('splitExpense-${expense.id}')),
+    );
     await tester.tap(find.byKey(ValueKey('splitExpense-${expense.id}')));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -188,5 +266,72 @@ ActiveListSummary _summary() {
     createdAt: now,
     updatedAt: now,
     archivedAt: null,
+  );
+}
+
+Future<void> _scrollSplitUntilVisible(
+  WidgetTester tester,
+  Finder target,
+) async {
+  await tester.scrollUntilVisible(
+    target,
+    300,
+    scrollable: find.descendant(
+      of: find.byKey(const Key('splitOverview')),
+      matching: find.byType(Scrollable),
+    ),
+    maxScrolls: 20,
+  );
+  await tester.pumpAndSettle();
+}
+
+ListSplitOverview _debtOverview() {
+  final now = DateTime.utc(2026, 7, 23, 10);
+  return ListSplitOverview(
+    listId: splitListId,
+    listTitle: 'Weekend shop',
+    listStatus: SplitListStatus.active,
+    listVersion: 3,
+    isOwner: true,
+    enabled: true,
+    writable: true,
+    settings: ListSplitSettings(
+      currency: SplitCurrency.chf,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    ),
+    participants: const [
+      ListSplitParticipant(
+        id: splitOwnerParticipantId,
+        profileId: splitOwnerProfileId,
+        username: 'fernando',
+        displayName: 'Fernando',
+        isAnonymized: false,
+        isCurrent: true,
+        paidMinor: 1000,
+        owedMinor: 500,
+        balanceMinor: 500,
+      ),
+      ListSplitParticipant(
+        id: splitMemberParticipantId,
+        profileId: splitMemberProfileId,
+        username: 'susana',
+        displayName: 'Susana',
+        isAnonymized: false,
+        isCurrent: true,
+        paidMinor: 0,
+        owedMinor: 500,
+        balanceMinor: -500,
+      ),
+    ],
+    expenses: [splitExpense(amountMinor: 1000)],
+    suggestions: const [
+      ListSettlementSuggestion(
+        payerParticipantId: splitMemberParticipantId,
+        recipientParticipantId: splitOwnerParticipantId,
+        amountMinor: 500,
+      ),
+    ],
   );
 }

@@ -35,7 +35,7 @@ Active List --< retained participant access >-- Profile
 
 Future: List Item --< Item Assignment >-- List Member
 Active List --< Split Participant --payer/beneficiary--> Expense / allocated share
-Future: Active List --< Settlement --from/to--> Split Participant
+Active List --< immutable Settlement / one-time Reversal --payer/recipient/recorder--> Split Participant
 
 Profile --owns--> Template --< Template Item
 Profile --owns--> Personal Category --< category placement >-- Template
@@ -117,13 +117,20 @@ and editor participant IDs, and ordered allocated shares. Balances are omitted
 because they are reproducible from those integer records. Shared-list access stays
 metadata-only and never includes another owner's Split contents.
 
+Schema version `6` adds deterministic settlement and reversal arrays inside that
+same caller-owned-list `split` object. It allowlists immutable settlement
+identities, payer/recipient/recorder participant IDs, integer amounts, optional
+notes, server timestamps, and the one-time reversal's recorder, reason, and link to
+its settlement. Request IDs, derived balances, and suggested payments are omitted.
+Versions `1` through `5` remain strictly readable.
+
 Every nested object is built from an explicit field allowlist. The social arrays
 apply the same directional-block, caller-relative active-relationship, recipient,
 suppression, expiry, and either-direction block filters as their existing RPC
 projections. Arrays are never null. Raw table rows, Auth metadata, credentials,
 tokens, sessions, incoming blocks, dormant relationship internals, hidden actors,
 and future aggregate data are outside the contract. Later schema versions must add
-future public/shared-template or settlement sections deliberately and compatibly.
+future public/shared-template sections deliberately and compatibly.
 
 ### Permanent deletion and username reservation
 
@@ -136,7 +143,8 @@ the list aggregate to that same cascade. Private category/template ownership
 foreign keys add the complete personal template aggregate. Owned-list deletion
 cascades that list's Split aggregate. For a deleted non-owner in another person's
 list, a profile-deletion trigger clears the Split participant's snapshots and live
-profile link while preserving list-owned expense/share arithmetic. This removes or
+profile link while preserving list-owned expense/share/settlement/reversal
+arithmetic. This removes or
 anonymizes every currently implemented record involving the deleted account in the
 same root transaction, while unrelated rows, including lists created or filled
 from template snapshots, remain unchanged.
@@ -459,18 +467,23 @@ aggregates and create no schema in this slice.
 
 Split exists only for a main list where the owner has enabled it. It is a ledger,
 not a payment rail. The physical aggregate comprises list settings, persistent
-list-scoped financial participants, expenses, and explicit allocated shares.
+list-scoped financial participants, expenses, explicit allocated shares, immutable
+settlements, and append-only one-time reversal records.
 
 ### Currency and integer representation
 
 - A list has one currency for its ledger. The first explicit catalog is exactly
   `CHF` and `EUR`; both use two minor-unit decimal digits.
-- Expense totals, shares, and balances use signed or unsigned `bigint` minor units
-  as appropriate. Accepted expense totals are `1` through `999999999`.
+- Expense totals, shares, settlement amounts, and balances use signed or unsigned
+  `bigint` minor units as appropriate. Accepted expense totals are `1` through
+  `999999999`; a settlement has no separate expense-size cap and is bounded by the
+  authoritative balances it adjusts.
 - Flutter parses/formats decimal text directly to/from integers. Neither Flutter,
   JSON, SQL, nor tests use binary floating point as monetary authority.
 - Only the owner sets currency. It may change only while the authoritative expense
-  count is zero, so existing integers are never reinterpreted.
+  count is zero and no settlement history has ever existed. The first settlement
+  locks it permanently even after reversal, so historical integers are never
+  reinterpreted.
 
 Use a sufficiently wide integer type and explicit range validation. Never infer an
 amount by multiplying a floating-point value.
@@ -506,20 +519,48 @@ receive one additional unit. Stored shares are non-negative and their sum equals
 the positive expense total. Create/update/delete RPCs replace the entire share set
 atomically and enforce list/settings/expense versions.
 
-### Settlement
+### Settlement and reversal
 
-A future settlement records an integer amount transferred conceptually between two
-Split participants. It records a debt adjustment, not proof that List & Split
-processed money. Sender/recipient terminology, direction, reversal, attachments,
-and validation against current debt are open decisions.
+A settlement records external bookkeeping, not proof that List & Split processed
+money. It belongs to one enabled list and has one same-list payer, recipient, and
+server-derived recorder participant; a positive integer minor-unit amount; an
+optional trimmed note of at most 120 characters; a server timestamp; and a
+payload-bound request UUID that is never returned or exported. Payer and recipient
+must differ. Current unblocked owners/members may record, but cannot choose the
+recorder identity.
+
+At creation, the payer must have an authoritative negative balance, the recipient
+an authoritative positive balance, and the amount must not exceed
+`min(abs(payer_balance), recipient_balance)`. Either endpoint may be a removed or
+anonymized historical participant. This permits full and partial settlement
+without inventing a current membership identity.
+
+Settlement rows are immutable. An incorrect entry is corrected by exactly one
+append-only reversal record rather than edit or deletion. The original recorder or
+current owner may reverse; a reversal records its server-derived actor, required
+trimmed 1-120-character reason and server timestamp, and derives the full opposite
+direction and original amount. A reversal remains valid after later ledger changes
+because it corrects history rather than asserting a new current payment.
+
+Creation and reversal request UUIDs are payload-bound and list-scoped. Exact retries
+are idempotent, conflicting reuse is invalid, and expected Split versions serialize
+concurrent work. There is no lifetime settlement count limit. Newest-first history
+uses bounded deterministic `(created_at, id)` keyset pages.
 
 ### Balances and debts
 
-Current balances are derived server-side on demand from authoritative expenses and
-shares as `total_paid - total_owed`. Positive means receivable, negative means owed,
+Current balances are derived server-side on demand as
+`expense_paid - expense_owed + non_reversed_settlements_paid -
+non_reversed_settlements_received`. Positive means receivable, negative means owed,
 zero means settled, and all participant nets sum exactly to zero. A mutable balance
-aggregate is prohibited. Pairwise/simplified debts and settlement effects remain
-future scope.
+aggregate is prohibited.
+
+Suggested payments are also derived rather than stored. Debtors sort by largest
+absolute debt then participant UUID; creditors sort by largest receivable then
+participant UUID. Each match uses the smaller remaining side and advances every
+zeroed participant. The deterministic output conserves all integer minor units and
+has at most `debtors + creditors - 1` rows, but is not guaranteed to minimize the
+number of transactions.
 
 ## Notifications and actions
 
@@ -636,7 +677,7 @@ anonymous denial unless public read is explicitly intended.
 | Private templates/categories | RPC-only owner access; copies into accessible lists recheck destination membership and state |
 | Public templates | Readable according to approved public-profile policy; mutation remains owner-only |
 | Template sends | Sender and recipient; acceptance only by recipient |
-| Split settings, participants, expenses, shares, balances | RPC-only current unblocked owner/member reads; owner-only setup; active owner/member expense mutations |
+| Split settings, participants, expenses, shares, settlements, reversals, balances, suggestions | RPC-only current unblocked owner/member reads; owner-only setup; active owner/member expense and settlement mutations; original recorder/current owner reversal |
 | Notifications | Recipient only; related actors do not gain notification-row access |
 | Storage objects | Same ownership/membership rules as the parent application record |
 | Future reports | Strictly limited to the reporter and authorized moderation paths |
@@ -655,8 +696,7 @@ explicit grants, protected search paths, and adversarial policy/function tests.
 - Mention representation and parser ownership.
 - Public-template visibility/copy placement, sent-template version/provenance,
   attribution, and offer idempotency.
-- Exact custom-share, settlement/reversal, recommendation, and debt-simplification
-  algorithms.
+- Exact custom-share representation and validation.
 - Future notification-type payload/localization, archive/preferences, physical
   cleanup, account-lifecycle retention, and push-token tables.
 - Offline mutation identifiers, tombstones, cache reconciliation, and conflict

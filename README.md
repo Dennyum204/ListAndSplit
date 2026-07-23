@@ -19,10 +19,11 @@ and persistent list-access notifications are implemented. Private account-scoped
 Supabase Broadcast now reconciles connected devices through the existing RPC
 repositories without carrying application data. Private templates support independent
 list snapshots and atomic selected-item list creation/import. List-scoped Split
-supports owner-selected CHF/EUR, exact integer equal-share expenses, derived balances,
-historical participants, and the same private reconciliation path. Public/shared
-templates, offline behavior, push delivery, settlements, and custom shares remain
-planned work.
+supports owner-selected CHF/EUR, exact integer equal-share expenses, derived
+balances, deterministic settle-up suggestions, immutable full/partial settlement
+records, one-time reversals, historical participants, and the same private
+reconciliation path. Public/shared templates, offline mutation queues, push
+delivery, custom shares, and payment-provider integration remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
@@ -175,7 +176,8 @@ Git.
 Split tables are likewise RPC-only: direct client operations are explicitly denied
 and every read/mutation rechecks current unblocked list access. Hardened transactional
 functions enforce currency, integer money, equal-share, participant, version, archive,
-and capacity invariants; opaque Realtime invalidations carry no financial content.
+capacity, settlement, one-time-reversal, idempotency, and stale-write invariants;
+opaque Realtime invalidations carry no financial content.
 
 Community discovery and block management use only the reviewed
 `find_profile_by_username`, `block_profile`, `unblock_profile`, and
@@ -218,9 +220,12 @@ The account lifecycle separates versioned account-data export from permanent
 deletion. Export uses a parameterless, allowlist-only RPC for any authenticated
 email-verified user, including before onboarding, followed by a validated UTF-8
 JSON file in app-scoped temporary cache and the native share sheet. The server
-retains no export file. Export schema version `3` preserves full owned-list export
-and adds only caller-relative metadata for lists owned by someone else; shared items,
-owner identity, other participants, and internal authority details remain excluded.
+retains no export file. Export schema version `6` preserves versions `1` through
+`5`, includes allowlisted Split settlement/reversal history only inside fully
+exported caller-owned lists, and keeps lists owned by someone else to
+caller-relative metadata. Shared items, owner identity, other participants, Split
+contents, request IDs, derived balances/suggestions, and internal authority details
+remain excluded.
 
 Deletion is immediate and irreversible. Completed profiles confirm with their
 exact stored canonical username; incomplete profiles confirm with their exact
@@ -230,7 +235,9 @@ with only the exact confirmation. A database validation RPC proves that the
 matching `auth.sessions` row was created no more than ten minutes earlier before a
 server-only admin client hard-deletes the caller's Auth user. That Auth deletion
 atomically cascades through the current profile, blocks, relationships,
-notifications, owned lists, and list items. A completed username is retained alone
+notifications, owned lists, list items, and each owned list's Split ledger. On a
+surviving list, a deleted non-owner's financial identity and settlement history are
+retained anonymously. A completed username is retained alone
 in a private 30-day
 reservation and expired reservations are physically removed daily at 03:17 UTC.
 No email, Auth/profile identifier, or copied former-user data enters the
@@ -272,8 +279,8 @@ SQL into the Dashboard.
 
 The current slices do not implement unrestricted profile/directory search,
 avatars, public/shared/sent templates, notification archive/preferences or
-physical cleanup, reporting, settlements, custom expense shares, simplified debts,
-SQLite caching/offline
+physical cleanup, reporting, custom expense shares, a mathematically minimum
+settlement solver, SQLite caching/offline
 synchronization, push delivery,
 Firebase setup, administrator-initiated deletion, or a production backend.
 Private Realtime Broadcast is implemented as best-effort account invalidation:

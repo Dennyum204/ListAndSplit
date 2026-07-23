@@ -16,8 +16,8 @@ are the evidence of implementation status.
 - Reusable content is copied by value. A user's active list or saved template must
   not change because its source changes later.
 - **Split** is the current product and UI name for the optional expense ledger
-  previously described as Payment Control. It records expenses and, in a later
-  slice, settlements; it never moves real money.
+  previously described as Payment Control. It records expenses and settlements;
+  it never moves real money.
 - Monetary values use integer minor units throughout. Floating-point money is
   prohibited.
 - The mobile information architecture has four primary destinations. Notifications
@@ -75,8 +75,10 @@ are the evidence of implementation status.
   sections; version `2` adds the explicit `active_lists` root array; version `3`
   adds privacy-minimal caller-relative shared-list access metadata; version `4`
   adds private template categories, templates, and ordered template items; version
-  `5` adds Split data nested only under the caller's fully exported owned lists.
-  Collections are deterministic arrays and are empty rather than null.
+  `5` adds Split expense data nested only under the caller's fully exported owned
+  lists; version `6` adds that owned-list Split ledger's immutable settlement and
+  one-time reversal history. Collections are deterministic arrays and are empty
+  rather than null.
 - The export includes nullable onboarding fields faithfully. It includes only the
   existing caller-visible block, relationship, and notification projections, so
   either-direction block suppression, dormant relationship privacy, notification
@@ -84,8 +86,11 @@ are the evidence of implementation status.
 - The list export contains both active and archived owned lists and only approved
   list/item identifiers, title/name, status, exact integer quantity thousandths,
   stable unit code, integer position, completion attribution/time, versions, and
-  timestamps. It excludes creation request IDs and internal locking or
-  authorization details.
+  timestamps. Split export includes the persistent participant identities needed
+  to understand expenses and settlements, settlement endpoints, recorder
+  attribution, amounts, notes, reversal links/reasons, and server timestamps. It
+  excludes creation/reversal request IDs, derived balances and suggestions, and
+  internal locking or authorization details.
 - After ownership transfer, the new owner receives the list only in the full owned
   projection and the former owner receives its caller-relative shared-access
   metadata. The internal retained owner-access state is never exported as shared
@@ -131,8 +136,8 @@ are the evidence of implementation status.
   template, template item, and category. No
   application cleanup transaction is committed separately before the Auth
   deletion. On another owner's list, the deleted account's Split identity is
-  anonymized in that same root transaction while its integer expense arithmetic
-  remains valid.
+  anonymized in that same root transaction while its integer expense, settlement,
+  and reversal arithmetic remains valid.
 - Deleting a completed profile reserves only its canonical username for exactly
   30 days from deletion. The private reservation contains no email, Auth user ID,
   profile ID, display name, or copied user data. Active reservations block
@@ -148,8 +153,8 @@ are the evidence of implementation status.
   preserve its session.
 - Re-registration after deletion creates a new Auth UUID and restores no profile,
   blocks, relationships, notifications, or other data. Every future Storage,
-  settlement, moderation/legal-retention, or administrator-deletion aggregate
-  must extend this contract before shipping. This product lifecycle is
+  moderation/legal-retention, or administrator-deletion aggregate must extend this
+  contract before shipping. This product lifecycle is
   not a claim of complete legal or regulatory compliance. Hosted deletion QA uses
   separately authorized disposable accounts and must never delete or modify
   Fernando or Susana.
@@ -385,7 +390,9 @@ copies succeed; duplicate-name rows each consume one place.
 - Split is an optional expense ledger inside a main list, not payment processing.
   Only the current owner can enable it. An enabled list has exactly one validated
   currency: this slice supports `CHF` and `EUR`, both with two decimal minor-unit
-  digits. The owner may change currency only before the first expense exists.
+  digits. The owner may change currency only while no expense exists and no
+  settlement history has ever existed. The first recorded settlement permanently
+  locks the list's currency, even after reversal.
 - Expenses store and calculate positive amounts as integer minor units only.
   Descriptions are trimmed to 1-120 characters, amounts are `1` through
   `999999999` minor units, and a list may contain at most 200 current expenses.
@@ -403,10 +410,11 @@ copies succeed; duplicate-name rows each consume one place.
   list-scoped participant-ID order receive one additional minor unit. Explicit
   stored shares therefore sum exactly to the expense total and are stable across
   devices.
-- A participant's authoritative balance is total paid minus total owed. Positive
-  means they are owed money, negative means they owe money, and zero means settled
-  up. Balances are derived rather than stored, never display negative zero, and
-  always sum exactly to zero for the list.
+- A participant's authoritative balance is expense total paid minus expense total
+  owed, plus non-reversed settlements paid and minus non-reversed settlements
+  received. Positive means they are owed money, negative means they owe money, and
+  zero means settled up. Balances are derived rather than stored, never display
+  negative zero, and always sum exactly to zero for the list.
 - Split retains a list-scoped participant identity and display snapshot separately
   from live membership. Removing a member preserves their understandable identity,
   expenses, shares, and paid/owed totals. A removed person cannot enter a new
@@ -422,9 +430,53 @@ copies succeed; duplicate-name rows each consume one place.
   membership, archive, deletion, and concurrent changes to authoritative state.
   Private account Realtime invalidations refresh mounted Split projections and
   forms; manual refresh and resume reconciliation remain available.
-- Settlements/payouts, settlement recommendations, custom shares, conversion,
-  guests, receipts, categories, charts, recurring expenses, and debt
-  simplification are deferred.
+- A settlement records external bookkeeping only; List & Split never initiates,
+  proves, or processes a payment. A current unblocked owner or accepted member may
+  record a full or partial settlement between any same-list debtor and creditor,
+  including a removed or anonymized historical participant. The server derives
+  and exposes the recorder identity. The payer must currently have a negative
+  balance, the recipient a positive balance, and the positive integer amount may
+  not exceed the smaller authoritative outstanding side. It has no separate
+  expense-size cap. An optional trimmed note is at most 120 characters.
+- Settlements are immutable and cannot be edited or deleted. The original recorder
+  or current owner may append exactly one full reversal; a reversal derives the
+  opposite direction and original amount and requires a trimmed 1-120-character
+  reason. A current member cannot reverse another recorder's settlement. A
+  reversal remains allowed after later ledger changes so incorrect history can be
+  corrected without rewriting it.
+- Suggested payments are derived server-side from current integer balances.
+  Debtors are ordered by largest absolute debt then participant UUID, creditors by
+  largest receivable then participant UUID, and each step transfers the smaller
+  remaining side before advancing a zeroed participant. The output is stable and
+  conserves every minor unit, but is not guaranteed or described as a
+  mathematically minimum transaction set.
+- Existing expense create/edit/delete permissions remain unchanged after
+  settlements exist. Every accepted expense, settlement, or reversal mutation
+  immediately recomputes authoritative balances and suggestions without rewriting
+  settlement history.
+- Settlement history has no lifetime row cap and is fetched newest-first in
+  bounded deterministic keyset pages. Archived lists keep balances, suggestions,
+  and history readable but reject settlement/reversal writes. List deletion
+  cascades the ledger; account deletion anonymizes surviving participant and
+  recorder references without changing arithmetic.
+- Settlement and reversal creates use payload-bound request UUIDs, exact expected
+  Split versions, server-side serialization, and atomic validation. Stale,
+  duplicate-conflict, concurrent, archived, deleted, or unauthorized requests add
+  no partial row, advance no version, and emit no invalidation. Identical
+  lost-response retries are idempotent. There is no offline mutation queue;
+  transport failure preserves safe retry and authoritative refresh behavior.
+- Successful settlement/reversal writes recalculate balances and suggestions
+  immediately and send the existing content-free private account invalidation to
+  current accepted accounts. They create no persistent notification or unread
+  badge. Duplicate invalidations are harmless and must not duplicate navigation,
+  messages, or submission state.
+- The Split UI localizes participant, direction, currency, history, reversal, and
+  error text. Payment direction and reversed state are not conveyed by color alone;
+  controls have semantic labels, remain scrollable with large system text, and use
+  the existing Material 3 light/dark themes.
+- Custom shares, conversion, guests, receipts, categories, charts, recurring
+  expenses, payment-provider integration, recipient approval/disputes, attachments,
+  backdating, and a mathematically minimum solver remain deferred.
 
 ### Notifications and actionable requests
 
@@ -545,8 +597,7 @@ choose them:
 - Public-template copied visibility/category defaults, attribution and provenance
   display, and community-feed ranking/retention.
 - Invitation and sent-template expiry, revocation, and idempotent re-acceptance.
-- Exact custom-share validation, settlement direction/reversal, settlement
-  recommendations, and debt-simplification/display rules.
+- Exact custom-share validation.
 - Notification archive/delete/preferences, future types, push-safe payloads,
   physical cleanup, and account-lifecycle retention beyond the accepted
   friend-request behavior.
