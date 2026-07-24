@@ -98,9 +98,11 @@ are the evidence of implementation status.
 - The export never includes passwords or hashes, tokens, sessions, raw Auth
   metadata, another person's email or Auth data, incoming blocks, raw dormant
   relationship state, reopening/requester internals, suppressed/expired/
-  block-hidden notifications, server logs, security records, other participants
-  or shared-list contents, public/shared-template data, or Split data from a list
-  the caller does not own. Shared-list export remains privacy-minimal metadata.
+  block-hidden notifications, server logs, security records, participant data
+  beyond the persistent financial identities required inside the caller's owned
+  Split ledgers, shared-list contents, public/shared-template data, or Split data
+  from a list the caller does not own. Shared-list export remains privacy-minimal
+  metadata.
 - Export is generated synchronously on demand and returned to the caller. The
   server retains no export file or export record. The mobile app validates and
   pretty-prints the versioned document, writes it to OS-managed temporary/cache
