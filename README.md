@@ -15,10 +15,11 @@ completed Profile or incomplete Onboarding. The authenticated four-tab shell now
 provides functional owned/shared Lists, private Templates with personal categories,
 existing Community, and existing Profile; notifications remain available from the bell.
 Friend-only list invitations, accepted-member item collaboration, member management,
-and persistent list-access notifications are implemented. Private account-scoped
-Supabase Broadcast now reconciles connected devices through the existing RPC
-repositories without carrying application data. Private templates support independent
-list snapshots and atomic selected-item list creation/import. List-scoped Split
+multi-member item assignments, and persistent list-access/assignment notifications
+are implemented. Private account-scoped Supabase Broadcast now reconciles connected
+devices through the existing RPC repositories without carrying application data.
+Private templates support independent list snapshots and atomic selected-item list
+creation/import. List-scoped Split
 supports owner-selected CHF/EUR, exact integer equal and custom expense shares,
 derived balances, deterministic settle-up suggestions, immutable full/partial
 settlement records, one-time reversals, historical participants, and the same
@@ -26,9 +27,9 @@ private reconciliation path. Public/shared templates, offline mutation queues,
 push delivery, and payment-provider integration remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
-`MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
-localization wiring. Supabase is initialized only from public compile-time
-configuration.
+`MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English/
+Portuguese localization wiring. Supabase is initialized only from public
+compile-time configuration.
 
 ## Project identity
 
@@ -116,7 +117,7 @@ flutter build apk --debug
 lib/main.dart       Process entry point and startup
 lib/app/            App composition, router, and app-wide providers
 lib/core/           Cross-feature configuration, themes, and primitives
-lib/l10n/           English ARB source; generated localization code is ignored
+lib/l10n/           English/Portuguese ARB sources; generated localization code is ignored
 lib/features/       Feature-first presentation, domain, and data modules
 test/               Unit and widget tests
 supabase/           Local configuration, reviewed migrations, and database tests
@@ -161,6 +162,31 @@ enforce it separately with the local-only values reported by `supabase status`:
 ```text
 flutter test test/local/private_broadcast_transport_smoke_test.dart --dart-define=RUN_LOCAL_REALTIME_SMOKE=true --dart-define=LOCAL_SUPABASE_URL=<local-api-url> --dart-define=LOCAL_SUPABASE_PUBLISHABLE_KEY=<local-publishable-key> --dart-define=LOCAL_SUPABASE_SECRET_KEY=<local-secret-key>
 ```
+
+### Item-assignment manual QA
+
+After the reviewed migration reaches an authorized QA environment, use two current
+accepted participants on the same active list and upgraded clients on two physical
+devices:
+
+1. On device A, create and edit items with zero, one, two, and several assignees,
+   including self-assignment; verify device B updates without manual refresh.
+2. Keep the same item editor open on device B while device A changes its fields or
+   assignments; verify the stale editor closes once, discards its draft, and shows
+   one localized reconciliation message.
+3. Verify a newly assigned other user receives one informational notification with
+   current list/item names. Self-assignment and unassignment must create none;
+   removal followed by re-assignment may create one new notification.
+4. Complete an item, correct its assignments, and verify archive makes the editor
+   read-only. Save the list as a template and verify assignments are not copied.
+5. Remove/leave/block a selected participant while the editor is open. Verify
+   assignment cleanup, one safe editor close/navigation, automatic two-device
+   reconciliation, and permanent notification suppression without privacy details.
+6. Repeat the compact row/editor checks in English and Portuguese, light and dark
+   themes, large system text, and with a screen reader.
+
+Manual refresh must remain a working fallback. Use disposable QA list/item data;
+do not use account deletion merely to exercise assignment cleanup.
 
 For a local client build, use the local API URL and public publishable/anonymous
 key reported by `supabase status` as the two `dart-define` values. Never copy the
@@ -209,36 +235,45 @@ summary or target profile fields; only private outgoing-block management exposes
 blocker's own blocked-user projection. Block creation atomically cancels a pending
 request or ends a friendship, while unblocking restores no relationship.
 
-Friend-request notifications use only the reviewed `list_notifications`,
-`get_unread_notification_count`, and `mark_notifications_read` RPC contracts;
-Flutter never reads or writes `user_notifications` directly. A real transition
-into a pending relationship version creates one notification atomically, while
-duplicate and crossed sends create none. Listing and badge results exclude
-expired, suppressed, or block-hidden rows, and block creation permanently
-suppresses existing pair notifications in the same transaction.
+Legacy notification clients retain the reviewed `list_notifications` and
+`get_unread_notification_count` contracts and never receive assignment types.
+Current Flutter uses `list_notifications_v2`,
+`get_unread_notification_count_v2`, and the compatible
+`mark_notifications_read` boundary; it never reads or writes
+`user_notifications` directly. A real transition into a pending relationship
+version creates one notification atomically, while duplicate and crossed sends
+create none. Listing and badge results exclude expired, suppressed, or
+block-hidden rows, and block creation permanently suppresses existing pair
+notifications in the same transaction.
 
-Active lists, items, and retained participant access rows use only reviewed
-authenticated RPCs. The tables
+Active lists, items, current item assignments, and retained participant access rows
+use only reviewed authenticated RPCs. The tables
 have forced RLS, explicit direct-access rejection policies, and no client table
 grants. Titles and item names are trimmed/check-constrained while duplicates are
 allowed. Quantities are exact positive integer thousandths with stable nullable
 unit codes, positions are deterministic integers, archived lists are server-side
 read-only, and positive versions plus creation request UUIDs protect stale writes
 and retries. Owners manage access; accepted members can read lists and mutate items
-while active. Capacity is 20 including the owner and pending invitations. Account-root
-deletion cascades owned lists, items, participant rows, and related notifications.
+and their complete zero-to-20 assignment sets while active, including assigning
+or unassigning themselves. Assignment writes validate only the current unblocked
+owner/accepted-member set, update list/item versions once, create notifications
+only for newly assigned other users, and preserve legacy item APIs. Capacity is 20
+including the owner and pending invitations. Account-root deletion cascades owned
+lists, items, current assignments, participant rows, and related notifications.
 
 The account lifecycle separates versioned account-data export from permanent
-deletion. Export uses a parameterless, allowlist-only RPC for any authenticated
+deletion. Export uses parameterless, allowlist-only RPCs for any authenticated
 email-verified user, including before onboarding, followed by a validated UTF-8
 JSON file in app-scoped temporary cache and the native share sheet. The server
-retains no export file. Export schema version `6` preserves versions `1` through
-`5`, includes allowlisted Split settlement/reversal history only inside fully
-exported caller-owned lists, represents equal and custom allocations through their
-explicit exact share rows, and keeps lists owned by someone else to caller-relative
-metadata. Versions `1` through `6` remain compatible. Shared items, owner identity,
-other participants, Split contents, request IDs, derived balances/suggestions, and
-internal authority details remain excluded.
+retains no export file. The existing `export_own_account_data()` remains schema
+version `6` and unchanged for legacy clients. Assignment-aware clients use
+`export_own_account_data_v7()`: version `7` preserves versions `1` through `6` and
+adds deterministic current assignment records only inside fully exported
+caller-owned list items. Shared lists remain caller-relative metadata-only and
+export no items, item names, or assignments. Split allocation and settlement
+contracts remain unchanged. Shared owner/participant identity, Split contents,
+request IDs, derived balances/suggestions, and internal authority details remain
+excluded.
 
 Deletion is immediate and irreversible. Completed profiles confirm with their
 exact stored canonical username; incomplete profiles confirm with their exact
@@ -291,8 +326,9 @@ SQL into the Dashboard.
 ## Intentional deferrals
 
 The current slices do not implement unrestricted profile/directory search,
-avatars, public/shared/sent templates, notification archive/preferences or
-physical cleanup, reporting, percentage/weight/ratio expense allocation,
+avatars, public/shared/sent templates, general notes or `@mentions`, notification
+archive/preferences, assignment deep links, or physical cleanup, reporting,
+percentage/weight/ratio expense allocation,
 automatic custom-share remainder correction, a mathematically minimum settlement
 solver, SQLite caching/offline
 synchronization, push delivery,

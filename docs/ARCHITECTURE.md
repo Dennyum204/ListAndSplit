@@ -18,7 +18,7 @@ the roadmap.
 | Android application ID and namespace | `com.ferbatech.listandsplit` |
 | iOS bundle identifier | `com.ferbatech.listandsplit` (derived test identifiers are allowed) |
 | Design system | Material 3, with light and dark themes |
-| Initial language | English, with localization-ready structure |
+| Supported languages | English and Portuguese, with localization-ready structure |
 | State and dependency injection | Riverpod |
 | Navigation | `go_router` |
 | Backend | Supabase Auth, PostgreSQL, RLS, Realtime, Storage, database functions, and Edge Functions |
@@ -167,6 +167,15 @@ duplicate-submit, and stale-conflict state; the repository alone translates
 domain operations to exact Supabase RPC calls. Backend maps/DTOs do not escape the
 data layer.
 
+Assignment presentation remains inside that feature boundary. Item domain models
+contain an immutable current-assignee projection; item create/edit controllers own
+the complete selection, submission guard, stale refresh, and authoritative
+replacement result. The existing editor exposes an accessible multi-select of the
+current owner and accepted members. Compact rows summarize zero, one, two, or many
+assignees without relying on initials or color alone. All labels, errors, selection
+semantics, and notification text are supplied in English and Portuguese and remain
+usable with large system text and light/dark themes.
+
 List providers are keyed by the current verified user identity and are invalidated
 on sign-out, account deletion, invalid-session recovery, or identity change. No
 global list/member/invitation payload survives a session boundary. There is no
@@ -224,13 +233,22 @@ required rights.
 
 ### Active-list database boundary
 
-`public.active_lists`, `public.active_list_items`, and
-`public.active_list_participants` are an RPC-only aggregate. All tables enable and
-force RLS, explicitly reject every direct `anon` and
-`authenticated` operation, and revoke all table privileges from `PUBLIC`, `anon`,
-`authenticated`, and `service_role`. Owner/list cascade foreign keys integrate the
-aggregate with Auth-root deletion. A nullable completion-actor foreign key uses
-`ON DELETE SET NULL`, so future actor deletion cannot remove an item.
+`public.active_lists`, `public.active_list_items`,
+`public.active_list_item_assignments`, and `public.active_list_participants` are an
+RPC-only aggregate. All tables enable and force RLS, explicitly reject every direct
+`anon` and `authenticated` operation, and revoke all table privileges from
+`PUBLIC`, `anon`, `authenticated`, and `service_role`. Owner/list cascade foreign
+keys integrate the aggregate with Auth-root deletion. A nullable completion-actor
+foreign key uses `ON DELETE SET NULL`, so future actor deletion cannot remove an
+item.
+
+`active_list_item_assignments` is current state, not history. Its composite primary
+key is `(list_id, item_id, assignee_profile_id)`; a same-list composite item foreign
+key and assignee-profile foreign key cascade item/list/account deletion, and the
+reverse assignee index supports cleanup. `assigned_at` is database owned. There is
+no assigned-by column, assignment-local version, soft deletion, event table, or
+template source link. Direct client CRUD remains rejected by the explicit
+`active_list_item_assignments_reject_direct_client_access` policy.
 
 Participant rows retain one profile's versioned `pending`, `member`, `declined`,
 `cancelled`, `removed`, or `left` state. After ownership transfer, the promoted
@@ -253,13 +271,51 @@ Mutations lock the list row before item rows; when multiple items are locked the
 use UUID order. Expected positive `bigint` versions reject stale writes with
 SQLSTATE `40001`. List metadata changes increment only list version. Item
 create/delete/reorder increment list version; item edit/complete/reopen increment
-both list and item versions. Real changes update their server timestamps once;
-completed retries/no-ops update neither. Creation request UUIDs are payload-bound
+both list and item versions. A real assignment-set change also increments both
+versions exactly once; a combined item-field/assignment update does not double
+increment. Real changes update their server timestamps once; completed
+retries/no-ops update neither. Creation request UUIDs are payload-bound
 idempotency tokens rather than authority. Reorder validates that the submitted
 array is non-null and unique and exactly equals the current item set before writing
 contiguous positive integer positions in one short transaction. Owner-or-member
 item access is rechecked inside each transaction; owner-only metadata and access
 operations never trust caller-supplied role or identity.
+
+Mutation paths that can write a profile foreign key first take deterministic
+`FOR KEY SHARE` locks on the referenced profile identities before acquiring list
+locks. Paths whose current participant set can change between preflight and the
+list lock recheck the exact sorted snapshot and return `40001` rather than writing.
+This narrow identity preflight prevents account deletion from deadlocking against
+list mutation; after it, aggregate locking remains list, item, then participant
+rows in deterministic UUID order. Stable read RPCs remain lock-free.
+
+New clients read through `list_active_list_items_v2(uuid)` and mutate through
+`create_active_list_item_v2(..., uuid[], ...)` and
+`update_active_list_item_v2(..., uuid[], ...)`. The v2 write boundary treats the
+assignee UUID array as the complete desired set and atomically validates item
+fields plus assignments. It accepts zero through 20 assignees, bounded by the
+current participant capacity, rejects null/duplicate/foreign/ineligible identities,
+and derives the actor only from `auth.uid()`. Every current unblocked owner or
+accepted member may assign or unassign any current eligible participant, including
+themselves, on an active completed or uncompleted item.
+
+The v2 item projection appends deterministic `assignees` objects containing only
+`profile_id`, `username`, `display_name`, `is_owner`, and `assigned_at`, ordered
+owner first and then by canonical username/profile ID. Legacy
+`list_active_list_items`, item-create, and item-update signatures remain unchanged:
+legacy creation makes no assignments and legacy update preserves the current set.
+Item deletion continues to cascade assignments.
+
+Access-loss cleanup is part of the authoritative participant transition. A shared
+hardened trigger/helper removes the departing profile's assignments, permanently
+suppresses their assignment notifications for that list, increments every affected
+item once and the list once, and emits no unassignment notification. The same
+contract covers removal, leave, block-driven separation, and deletion of a
+non-owner profile from surviving lists; parent item/list deletion uses cascades.
+Ownership transfer retains assignments because both profiles remain current.
+The assignment boundary adds no note/mention parser, assignment history,
+template-copy behavior, deep link, push delivery, notification preference,
+offline mutation, dependency, or platform configuration.
 
 Every list addition path enforces at most 200 current item rows under that same
 list lock. Completed rows count and physical deletion frees capacity. Capacity is
@@ -295,6 +351,11 @@ profile changes. Fanout targets affected account topics and sends no row, resour
 actor, transition, timestamp, or authorization data. A failed or rolled-back
 mutation commits no message; duplicate transport signals are harmless.
 
+Assignment mutations and cleanup reuse this exact fanout. Parent list/item version
+updates invalidate all current list accounts; the assignment-notification insert
+also invalidates its recipient. No assignment-specific topic, event, payload,
+publication, channel, or client send exists.
+
 Only the injected Supabase adapter uses the channel API. Supabase initialization
 injects a testable WebSocket transport with a named conservative handshake
 deadline. A stalled ready future therefore fails within a bound instead of
@@ -321,6 +382,12 @@ a remote active-to-archived detail transition also returns to Lists once without
 presenting it as revocation. Notification projection reconciliation marks only
 unread rows, preventing its own read writes from producing a Broadcast feedback
 loop. Manual refresh remains a required fallback.
+
+Mounted list detail reloads item fields and assignees together, and an open editor
+reconciles its authoritative selection without overwriting a local submission.
+Mounted notification pages and badges use the assignment-aware v2 read contracts.
+Duplicate list/notification invalidations still produce at most one coalesced
+follow-up and no duplicate message or navigation.
 
 Broadcast is best-effort and has no replay or durable-history promise. Presence,
 Broadcast Replay, Postgres Changes client subscriptions, client sends, REST/Edge
@@ -498,14 +565,16 @@ the existing Material 3 light/dark themes. No offline mutation queue is introduc
 
 ### Account export boundary
 
-Account data export is a parameterless authenticated PostgreSQL RPC that derives
-identity only from `auth.uid()`. It requires a confirmed `auth.users` identity and
-exactly one corresponding profile but deliberately does not require completed
+Account data export uses parameterless authenticated PostgreSQL RPCs that derive
+identity only from `auth.uid()`. They require a confirmed `auth.users` identity and
+exactly one corresponding profile but deliberately do not require completed
 onboarding. This keeps export available from both verified incomplete Onboarding
 and completed Profile without exposing it to anonymous or unverified sessions.
 
-The RPC returns one `jsonb` schema-version-6 document built exclusively from
-explicit key allowlists. Version `2` preserves all version-1 account/social roots
+The existing `export_own_account_data()` continues to return its unchanged
+schema-version-6 `jsonb` document for legacy clients. The separate
+`export_own_account_data_v7()` reuses that allowlisted base and returns schema
+version `7`. Version `2` preserves all version-1 account/social roots
 and adds the deterministic `active_lists` array with active/archived owned lists and
 ordered items. Version `3` adds only caller-relative metadata for lists owned by
 others and excludes their items, owner identity, other participants, and internal
@@ -518,25 +587,32 @@ allocation-mode field. Shared-list access stays metadata-only. Version `6` adds
 allowlisted immutable settlement and reversal history for those same owned-list
 Split ledgers, including endpoint and
 recorder participant IDs, integer amount, note/reason, reversal link, and server
-times. Request IDs, derived balances, and suggested payments are excluded because
-they are respectively private or reproducible. It is a hardened `SECURITY DEFINER`
-boundary because it must read the caller's approved Auth columns and RPC-only
-social tables: ownership
+times. Version `7` adds to each fully exported caller-owned item one non-null,
+deterministically ordered `assignees` array containing only `profile_id`,
+`username`, `display_name`, `is_owner`, and `assigned_at`; owner sorts first, then
+canonical username/profile ID. `shared_list_access` stays byte-for-byte
+metadata-only: it contains no assignment array, item ID, item name, or assignment
+timestamp. Request IDs, derived balances, and suggested payments are excluded
+because they are respectively private or reproducible. Both public export
+functions are hardened `SECURITY DEFINER` boundaries because they must read the
+caller's approved Auth columns and RPC-only social tables: ownership
 is `postgres`, `search_path` is empty, every object is qualified, default
 execution is revoked, and only the exact parameterless signature is granted to
 `authenticated`. No Auth schema, table privilege, or direct social-table access is
 exposed to Flutter.
 
-The export reuses the existing caller-relative privacy contracts. It selects only
+Both exports reuse the existing caller-relative privacy contracts. They select only
 outgoing blocks; only active, non-blocked relationship projections; and only
 caller-owned notifications that are unsuppressed, unexpired, and not hidden by a
-block in either direction. List/item objects likewise use explicit public fields,
-exact integer `quantity_thousandths`, and deterministic list/item order while
-excluding creation request IDs and internal authorization details. Objects are
-constructed field by field rather than by serializing physical rows. The function
-is stable and read-only: it does not mark
+block in either direction. List/item/assignment objects use explicit public fields,
+exact integer `quantity_thousandths`, and deterministic list/item/assignment order
+while excluding creation request IDs and internal authorization details. Objects
+are constructed field by field rather than by serializing physical rows. Both
+functions are stable and read-only: they do not mark
 notifications read, mutate relationships, update Auth, or persist an export job,
-file, audit row, Storage object, signed URL, or background task.
+file, audit row, Storage object, signed URL, or background task. The version-6
+operation excludes assignment fields and assignment notifications so an old strict
+parser never receives an unknown schema or notification type.
 
 An internal transferred-owner access row is excluded from `shared_list_access`, so
 the current owner receives the list only in the full owned-list projection while
@@ -552,9 +628,10 @@ state, prevents concurrent requests, and clears transient state when identity
 changes. The file service writes pretty UTF-8 JSON to application-scoped
 temporary/cache storage and invokes the Android/iOS native share sheet with a
 privacy-safe UTC filename and JSON MIME type. It never falls back to public shared
-storage or promises guaranteed cache deletion. Production responses must be
-version `6`; the parser deliberately retains strict compatibility for versions
-`1` through `6`, including non-equal explicit shares in version `5`/`6` documents.
+storage or promises guaranteed cache deletion. The legacy operation still requires
+version `6`; the assignment-aware operation requires version `7`. The parser
+retains strict compatibility for versions `1` through `7`, including non-equal
+explicit shares in version `5`/`6`/`7` documents.
 
 ### Permanent account-deletion boundary
 
@@ -589,12 +666,13 @@ profile's Auth email exactly, returns only `true`, and never deletes or mutates.
 Auth Admin deletion of `auth.users` is the single atomic database root. Cascading
 foreign keys remove the profile, either direction of blocks, either relationship
 participant, notification recipient/actor rows, and notifications whose
-relationship disappears, every list owned by the profile and the list's items,
-and every private category, template, and template item. Before a non-owner profile
-disappears, its Split participant rows atomically clear profile snapshots and
-become anonymous; existing expenses, shares, settlements, and reversals remain
-list-owned and mathematically valid. Owned-list deletion still cascades all of that
-list's Split rows.
+relationship or item disappears, every list owned by the profile and the list's
+items/assignments, and every private category, template, and template item. Before
+a non-owner profile disappears, its current assignments on surviving lists are
+removed with the versioned cleanup described above, while its Split participant
+rows atomically clear profile snapshots and become anonymous; existing expenses,
+shares, settlements, and reversals remain list-owned and mathematically valid.
+Owned-list deletion still cascades all of that list's assignment and Split rows.
 Snapshot-created or
 imported list rows have no source dependency and remain governed only by their list
 owner. A `BEFORE DELETE` profile trigger reserves only a
@@ -713,24 +791,27 @@ email/Auth metadata, block direction, raw
 declined/ended state to the non-controller, the reopening-controller column,
 unrelated relationships, or unnecessary internal timestamps.
 
-### Friend-request notification boundary
+### Persistent notification boundary
 
-Friend-request notifications extend the repository boundary without becoming a
-second relationship state machine. A notification repository calls only three
-reviewed authenticated RPCs: bounded keyset listing, unread count, and bounded
-caller-owned mark-read. Flutter receives a domain model with minimal actor profile
-data and caller-relative `actionable`, `friends`, or `unavailable` presentation;
-it never reads or mutates notification rows directly.
+Notifications extend the repository boundary without becoming a second
+relationship, access, or assignment state machine. Legacy clients retain the
+bounded `list_notifications`, unread-count, and caller-owned mark-read contracts.
+Assignment-aware clients use `list_notifications_v2` and
+`get_unread_notification_count_v2`; both generations reuse the same bounded
+caller-owned mark-read operation. Flutter receives a domain model with minimal
+actor/resource projection and caller-relative presentation; it never reads or
+mutates notification rows directly.
 
 The physical `public.user_notifications` table supports the reviewed
-friend-request, list-access, and ownership-transfer types. It records a generated
+friend-request, list-access, ownership-transfer, and `list_item_assigned` types. It
+records a generated
 UUID, recipient and actor profile IDs,
 normalized relationship participants, the positive relationship version that
 created the notification, database-owned creation and exact 180-day expiry,
-nullable read time, and nullable permanent suppression time. Profile and
-relationship foreign keys cascade only from the reviewed account-deletion root,
-including notifications removed through a deleted relationship. A
-unique recipient/type/pair/version boundary makes notification creation
+nullable read time, and nullable permanent suppression time. Profile,
+relationship, list-access, and assignment-item foreign keys cascade only from the
+reviewed account/item/list-deletion roots. A type-specific
+recipient/resource/version boundary makes notification creation
 idempotent without storing copied profile text, email, Auth metadata, or arbitrary
 messages.
 
@@ -743,13 +824,29 @@ and grant only exact signatures to `authenticated`.
 
 Listing orders by `(created_at, id)` newest first with an exclusive cursor and a
 safe server maximum. It excludes expired, suppressed, and either-direction-blocked
-rows and resolves only actor ID, username, and display name. A row is actionable
+rows and resolves only currently authorized actor/resource fields. A row is actionable
 only while the current relationship remains the exact pending version with that
 actor as requester and the caller as recipient; friendship is projected as
 `friends`, and every other visible state is generically `unavailable`. Count uses
 the same visibility boundary. Mark-read accepts only a bounded ID array, updates
 only caller-owned visible rows, and never accepts a caller identity or client
 timestamp.
+
+A real absent-to-present assignment inserts one `list_item_assigned` row for each
+newly assigned recipient other than the authenticated actor, keyed by the resulting
+positive item version. Self-assignment, unassignment, duplicate/no-op retry,
+ordinary item edits, cleanup, and rejected work insert none. Names are resolved
+live from current profile/list/item rows and are returned only while the recipient
+retains list access. Normal logical expiry is 180 days. Either-direction blocking
+or recipient access loss permanently suppresses the row in the same transaction;
+unblocking/reinvitation never restores it.
+
+Legacy notification listing/count functions explicitly exclude
+`list_item_assigned`, so strict older clients never receive an unknown type or badge
+they cannot open. V2 functions include the old types plus the allowlisted assignment
+item/list projection. Assignment notifications are informational only: they add no
+action version, deep link, push payload, archive/preference control, or
+unassignment event.
 
 `send_friend_request(uuid,bigint)` creates the notification in the same locked
 transaction only for a real transition into pending. `block_profile(uuid)`
@@ -853,6 +950,11 @@ writes are implemented.
   view-model transitions with repository fakes rather than a live backend.
 - Test RLS policies, database constraints, triggers, and functions with allowed
   and denied identities for every business migration.
+- Assignment tests cover zero/one/many/self sets, initial create and combined edit,
+  direct/cross-list/ineligible denial, idempotency, stale/concurrent writes, cleanup
+  and version increments, notification deduplication/suppression, legacy v1 item/
+  notification/export compatibility, owned-only export v7, and no partial row,
+  notification, version, or Realtime output after rejection.
 - Realtime client tests deterministically cover bounded stalled handshakes,
   joined-channel recovery, duplicate recovery signals, diagnostic redaction, and
   the production gateway-to-coordinator-to-registry path through a mounted feature
@@ -870,7 +972,7 @@ writes are implemented.
 ## Security constraints
 
 - Treat all client input as untrusted, including claimed ownership, list
-  membership, payer identity, and notification recipient.
+  membership, assignee, payer identity, and notification recipient.
 - RLS is required on every application table from the table's first migration.
 - Use least-privilege grants and policies, and restrict realtime and storage with
   the same relationship model as database access.
@@ -894,7 +996,7 @@ writes are implemented.
 - Avatar and other Storage use cases, upload validation, object policies, and
   retention.
 - Logging, analytics, crash reporting, performance budgets, and privacy controls.
-- Notification archive/delete/preferences, future-type payload/localization,
+- Notification archive/delete/preferences, later-type payload/localization,
   physical cleanup, and account-lifecycle retention.
 - FCM/APNs registration, token lifecycle, push-safe content, and notification deep
   links.

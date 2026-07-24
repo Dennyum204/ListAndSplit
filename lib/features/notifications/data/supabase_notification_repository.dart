@@ -26,7 +26,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
     try {
       final rows = _rows(
         await _rpc(
-          'list_notifications',
+          'list_notifications_v2',
           params: {
             'page_size': limit,
             'before_created_at': before?.createdAt.toIso8601String(),
@@ -45,7 +45,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
   @override
   Future<int> getUnreadCount() async {
     try {
-      final response = await _rpc('get_unread_notification_count');
+      final response = await _rpc('get_unread_notification_count_v2');
       if (response is! int || response < 0) {
         throw const NotificationFailure();
       }
@@ -87,10 +87,14 @@ class SupabaseNotificationRepository implements NotificationRepository {
           status == NotificationActionStatus.actionable;
       final isListAction = type == InAppNotificationType.listInvitation &&
           status == NotificationActionStatus.actionable;
+      final isAssignment = type == InAppNotificationType.listItemAssigned;
       final isListType = type != InAppNotificationType.friendRequest;
       final activeListId = json['active_list_id'] as String?;
       final activeListTitle = json['active_list_title'] as String?;
       final activeListStatus = json['active_list_status'] as String?;
+      final activeListItemId = json['active_list_item_id'] as String?;
+      final activeListItemName = json['active_list_item_name'] as String?;
+      final assignmentItemVersion = json['assignment_item_version'] as int?;
       if ((isFriendAction != (expectedVersion != null)) ||
           (expectedVersion != null && expectedVersion <= 0) ||
           (isListAction != (expectedAccessVersion != null)) ||
@@ -110,6 +114,18 @@ class SupabaseNotificationRepository implements NotificationRepository {
           (activeListStatus != null &&
               activeListStatus != 'active' &&
               activeListStatus != 'archived') ||
+          (isAssignment !=
+              (activeListItemId != null &&
+                  activeListItemName != null &&
+                  assignmentItemVersion != null)) ||
+          (activeListItemId == null && activeListItemName != null) ||
+          (activeListItemId != null && activeListItemName == null) ||
+          ((activeListItemId == null) != (assignmentItemVersion == null)) ||
+          (assignmentItemVersion != null && assignmentItemVersion <= 0) ||
+          (activeListItemName != null &&
+              (activeListItemName.isEmpty ||
+                  activeListItemName.trim() != activeListItemName ||
+                  activeListItemName.length > 120)) ||
           (type == InAppNotificationType.friendRequest &&
               status == NotificationActionStatus.accepted) ||
           (type == InAppNotificationType.listInvitation &&
@@ -135,6 +151,9 @@ class SupabaseNotificationRepository implements NotificationRepository {
         activeListTitle: activeListTitle,
         activeListStatus: activeListStatus,
         expectedAccessVersion: expectedAccessVersion,
+        activeListItemId: activeListItemId,
+        activeListItemName: activeListItemName,
+        assignmentItemVersion: assignmentItemVersion,
       );
     } catch (_) {
       throw const NotificationFailure();
@@ -152,6 +171,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
         'list_member_removed' => InAppNotificationType.listMemberRemoved,
         'list_ownership_transferred' =>
           InAppNotificationType.listOwnershipTransferred,
+        'list_item_assigned' => InAppNotificationType.listItemAssigned,
         _ => throw const NotificationFailure(),
       };
 

@@ -36,6 +36,8 @@ select is(
     ,'active_list_id:uuid'
     ,'access_participant_id:uuid'
     ,'access_version:bigint'
+    ,'active_list_item_id:uuid'
+    ,'assignment_item_version:bigint'
   ],
   'notification columns contain only the accepted reference and lifecycle data'
 );
@@ -50,7 +52,8 @@ select is(
   ),
   array[
     'relationship_low_id','relationship_high_id','relationship_version',
-    'read_at','suppressed_at','active_list_id','access_participant_id','access_version'
+    'read_at','suppressed_at','active_list_id','access_participant_id','access_version',
+    'active_list_item_id','assignment_item_version'
   ]::information_schema.sql_identifier[],
   'type-specific references plus read and suppression timestamps are nullable'
 );
@@ -114,8 +117,8 @@ select is(
       and contype = 'f'
       and confdeltype = 'c'
   ),
-  5::bigint,
-  'all profile, relationship, list, and participant foreign keys cascade'
+  6::bigint,
+  'all profile, relationship, list, participant, and item foreign keys cascade'
 );
 
 select is(
@@ -153,12 +156,13 @@ select is(
   array[
     'user_notifications_access_version_key',
     'user_notifications_active_list_idx',
+    'user_notifications_item_assignment_version_key',
     'user_notifications_pair_version_key',
     'user_notifications_pkey',
     'user_notifications_recipient_unread_expiry_idx',
     'user_notifications_recipient_visible_created_idx'
   ]::name[],
-  'only required friend/list identity, uniqueness, listing, and badge indexes exist'
+  'only required friend/list/item identity, uniqueness, listing, and badge indexes exist'
 );
 
 select ok(
