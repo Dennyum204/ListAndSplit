@@ -1,6 +1,10 @@
 const splitExpenseDescriptionMaxLength = 120;
 const splitExpenseAmountMaxMinor = 999999999;
 const splitExpenseCapacity = 200;
+const splitSettlementNoteMaxLength = 120;
+const splitSettlementReversalReasonMaxLength = 120;
+const splitSettlementHistoryPageSize = 20;
+const splitSettlementHistoryMaxPageSize = 50;
 
 enum SplitCurrency {
   chf('CHF', 2),
@@ -45,7 +49,9 @@ class MoneyAmount {
   static MoneyAmount? tryParse(
     String input, {
     required SplitCurrency currency,
+    int maxMinor = splitExpenseAmountMaxMinor,
   }) {
+    if (maxMinor < 1) return null;
     final normalized = input.trim();
     final match = RegExp(r'^(\d+)(?:\.(\d{1,2}))?$').firstMatch(normalized);
     if (match == null) return null;
@@ -56,9 +62,9 @@ class MoneyAmount {
         ? 0
         : int.parse(fractionText.padRight(currency.minorUnitDigits, '0'));
     final scale = _powerOfTen(currency.minorUnitDigits);
-    if (whole > splitExpenseAmountMaxMinor ~/ scale) return null;
+    if (whole > maxMinor ~/ scale) return null;
     final minorUnits = whole * scale + fraction;
-    if (minorUnits < 1 || minorUnits > splitExpenseAmountMaxMinor) return null;
+    if (minorUnits < 1 || minorUnits > maxMinor) return null;
     return MoneyAmount._(minorUnits, currency);
   }
 
@@ -110,6 +116,8 @@ class ListSplitParticipant {
     required this.paidMinor,
     required this.owedMinor,
     required this.balanceMinor,
+    this.settlementPaidMinor = 0,
+    this.settlementReceivedMinor = 0,
   });
 
   final String id;
@@ -120,6 +128,8 @@ class ListSplitParticipant {
   final bool isCurrent;
   final int paidMinor;
   final int owedMinor;
+  final int settlementPaidMinor;
+  final int settlementReceivedMinor;
   final int balanceMinor;
 }
 
@@ -163,6 +173,86 @@ class ListSplitExpense {
   final List<ListExpenseShare> shares;
 }
 
+class ListSettlementSuggestion {
+  const ListSettlementSuggestion({
+    required this.payerParticipantId,
+    required this.recipientParticipantId,
+    required this.amountMinor,
+  });
+
+  final String payerParticipantId;
+  final String recipientParticipantId;
+  final int amountMinor;
+}
+
+class ListSplitSettlementReversal {
+  const ListSplitSettlementReversal({
+    required this.reversedByParticipantId,
+    required this.reason,
+    required this.createdAt,
+  });
+
+  final String reversedByParticipantId;
+  final String reason;
+  final DateTime createdAt;
+}
+
+class ListSplitSettlement {
+  const ListSplitSettlement({
+    required this.id,
+    required this.payerParticipantId,
+    required this.recipientParticipantId,
+    required this.recordedByParticipantId,
+    required this.amountMinor,
+    required this.note,
+    required this.createdAt,
+    required this.reversal,
+    required this.canReverse,
+  });
+
+  final String id;
+  final String payerParticipantId;
+  final String recipientParticipantId;
+  final String recordedByParticipantId;
+  final int amountMinor;
+  final String? note;
+  final DateTime createdAt;
+  final ListSplitSettlementReversal? reversal;
+  final bool canReverse;
+
+  bool get isReversed => reversal != null;
+}
+
+class ListSplitSettlementCursor {
+  const ListSplitSettlementCursor({
+    required this.createdAt,
+    required this.id,
+  });
+
+  final DateTime createdAt;
+  final String id;
+}
+
+class ListSplitSettlementPage {
+  const ListSplitSettlementPage({
+    required this.listId,
+    required this.currency,
+    required this.entries,
+    required this.nextCursor,
+  });
+
+  const ListSplitSettlementPage.empty()
+      : listId = '',
+        currency = null,
+        entries = const [],
+        nextCursor = null;
+
+  final String listId;
+  final SplitCurrency? currency;
+  final List<ListSplitSettlement> entries;
+  final ListSplitSettlementCursor? nextCursor;
+}
+
 class ListSplitOverview {
   ListSplitOverview({
     required this.listId,
@@ -175,8 +265,10 @@ class ListSplitOverview {
     required this.settings,
     required List<ListSplitParticipant> participants,
     required List<ListSplitExpense> expenses,
+    List<ListSettlementSuggestion> suggestions = const [],
   })  : participants = List.unmodifiable(participants),
-        expenses = List.unmodifiable(expenses);
+        expenses = List.unmodifiable(expenses),
+        suggestions = List.unmodifiable(suggestions);
 
   final String listId;
   final String listTitle;
@@ -188,6 +280,7 @@ class ListSplitOverview {
   final ListSplitSettings? settings;
   final List<ListSplitParticipant> participants;
   final List<ListSplitExpense> expenses;
+  final List<ListSettlementSuggestion> suggestions;
 
   SplitCurrency? get currency => settings?.currency;
 

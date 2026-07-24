@@ -60,5 +60,26 @@ void main() {
         'CHF 92233720368547758.07',
       );
     });
+
+    test('parses a settlement up to the authoritative current balance', () {
+      const currentBalanceMinor = 1200000000;
+
+      expect(
+        MoneyAmount.tryParse(
+          '12000000.00',
+          currency: SplitCurrency.eur,
+          maxMinor: currentBalanceMinor,
+        )?.minorUnits,
+        currentBalanceMinor,
+      );
+      expect(
+        MoneyAmount.tryParse(
+          '12000000.01',
+          currency: SplitCurrency.eur,
+          maxMinor: currentBalanceMinor,
+        ),
+        isNull,
+      );
+    });
   });
 }

@@ -135,6 +135,40 @@ Map<String, dynamic> validAccountDataExportJson({
                         ],
                       },
                     ],
+                    if (schemaVersion >= 6)
+                      'settlements': [
+                        {
+                          'id': '12121212-1212-4121-8121-121212121212',
+                          'payer_participant_id':
+                              'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                          'recipient_participant_id':
+                              'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                          'recorded_by_participant_id':
+                              'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                          'amount_minor': 250,
+                          'note': 'Partial repayment',
+                          'created_at': '2026-07-19T07:15:00.000Z',
+                          'reversal': null,
+                        },
+                        {
+                          'id': '13131313-1313-4131-8131-131313131313',
+                          'payer_participant_id':
+                              'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                          'recipient_participant_id':
+                              'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                          'recorded_by_participant_id':
+                              'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                          'amount_minor': 100,
+                          'note': null,
+                          'created_at': '2026-07-19T07:20:00.000Z',
+                          'reversal': {
+                            'reversed_by_participant_id':
+                                'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                            'reason': 'Recorded twice',
+                            'created_at': '2026-07-19T07:30:00.000Z',
+                          },
+                        },
+                      ],
                   },
                 'items': [
                   {

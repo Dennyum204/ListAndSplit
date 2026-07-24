@@ -71,6 +71,10 @@ void main() {
     repository.getCompleter = null;
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('splitOverview')), findsOneWidget);
+    await _scrollSplitUntilVisible(
+      tester,
+      find.textContaining('No expenses yet'),
+    );
     expect(find.textContaining('No expenses yet'), findsOneWidget);
   });
 
@@ -105,6 +109,7 @@ void main() {
     expect(created.payerParticipantId, splitOwnerParticipantId);
     expect(created.beneficiaryParticipantIds, [splitMemberParticipantId]);
     expect(created.shares.single.amountMinor, 1001);
+    await _scrollSplitUntilVisible(tester, find.text('Train ticket'));
     expect(find.text('Train ticket'), findsOneWidget);
     expect(notifications.markCalls, isEmpty);
     expect(notifications.notifications, isEmpty);
@@ -226,6 +231,7 @@ void main() {
     );
     await registry.reconcile();
     await tester.pumpAndSettle();
+    await _scrollSplitUntilVisible(tester, find.text('Remote coffee'));
     expect(find.text('Remote coffee'), findsOneWidget);
 
     repository.overview = enabledSplitOverview(
@@ -233,6 +239,7 @@ void main() {
     );
     await registry.reconcile();
     await tester.pumpAndSettle();
+    await _scrollSplitUntilVisible(tester, find.text('Remote edited coffee'));
     expect(find.text('Remote coffee'), findsNothing);
     expect(find.text('Remote edited coffee'), findsOneWidget);
   });
@@ -244,6 +251,10 @@ void main() {
       initial: enabledSplitOverview(expenses: [expense]),
     );
     await _pump(tester, repository);
+    await _scrollSplitUntilVisible(
+      tester,
+      find.byKey(ValueKey('splitExpense-${expense.id}')),
+    );
     await tester.tap(find.byKey(ValueKey('splitExpense-${expense.id}')));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -371,6 +382,10 @@ void main() {
       repository,
       authenticatedProfileId: splitMemberProfileId,
     );
+    await _scrollSplitUntilVisible(
+      tester,
+      find.byKey(ValueKey('splitExpense-${expense.id}')),
+    );
     await tester.tap(find.byKey(ValueKey('splitExpense-${expense.id}')));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -450,6 +465,10 @@ void main() {
       initial: enabledSplitOverview(expenses: [expense]),
     );
     final container = await _pump(tester, repository);
+    await _scrollSplitUntilVisible(
+      tester,
+      find.byKey(ValueKey('splitExpense-${expense.id}')),
+    );
     await tester.tap(find.byKey(ValueKey('splitExpense-${expense.id}')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('splitExpensePayerField')));
@@ -474,6 +493,10 @@ void main() {
       initial: enabledSplitOverview(expenses: [expense]),
     );
     final container = await _pump(tester, repository);
+    await _scrollSplitUntilVisible(
+      tester,
+      find.byKey(ValueKey('splitExpense-${expense.id}')),
+    );
     await tester.tap(find.byKey(ValueKey('splitExpense-${expense.id}')));
     await tester.pumpAndSettle();
     repository.mutationCompleter = Completer<ListSplitOverview>();
@@ -510,6 +533,7 @@ void main() {
     await _pump(tester, repository);
     final deleteButton =
         find.byKey(ValueKey('deleteSplitExpense-${expense.id}'));
+    await _scrollSplitUntilVisible(tester, deleteButton);
 
     await tester.tap(deleteButton);
     await tester.tap(deleteButton, warnIfMissed: false);
@@ -591,4 +615,20 @@ Future<void> _openCompletedCreateEditor(WidgetTester tester) async {
     find.byKey(const Key('splitExpenseAmountField')),
     '5.00',
   );
+}
+
+Future<void> _scrollSplitUntilVisible(
+  WidgetTester tester,
+  Finder target,
+) async {
+  await tester.scrollUntilVisible(
+    target,
+    300,
+    scrollable: find.descendant(
+      of: find.byKey(const Key('splitOverview')),
+      matching: find.byType(Scrollable),
+    ),
+    maxScrolls: 20,
+  );
+  await tester.pumpAndSettle();
 }

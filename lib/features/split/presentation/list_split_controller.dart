@@ -11,6 +11,8 @@ enum ListSplitMessage {
   expenseCreated,
   expenseUpdated,
   expenseDeleted,
+  settlementRecorded,
+  settlementReversed,
   staleRefreshed,
   archivedReadOnly,
   unavailable,
@@ -47,28 +49,39 @@ extension ListSplitMutationOutcomePresentation on ListSplitMutationOutcome {
 class ListSplitState {
   const ListSplitState({
     required this.overview,
+    this.settlementHistory = const AsyncData(ListSplitSettlementPage.empty()),
     this.isMutating = false,
+    this.isLoadingMoreSettlements = false,
     this.message,
   });
 
   const ListSplitState.loading()
       : overview = const AsyncLoading(),
+        settlementHistory = const AsyncData(ListSplitSettlementPage.empty()),
         isMutating = false,
+        isLoadingMoreSettlements = false,
         message = null;
 
   final AsyncValue<ListSplitOverview> overview;
+  final AsyncValue<ListSplitSettlementPage> settlementHistory;
   final bool isMutating;
+  final bool isLoadingMoreSettlements;
   final ListSplitMessage? message;
 
   ListSplitState copyWith({
     AsyncValue<ListSplitOverview>? overview,
+    AsyncValue<ListSplitSettlementPage>? settlementHistory,
     bool? isMutating,
+    bool? isLoadingMoreSettlements,
     ListSplitMessage? message,
     bool clearMessage = false,
   }) {
     return ListSplitState(
       overview: overview ?? this.overview,
+      settlementHistory: settlementHistory ?? this.settlementHistory,
       isMutating: isMutating ?? this.isMutating,
+      isLoadingMoreSettlements:
+          isLoadingMoreSettlements ?? this.isLoadingMoreSettlements,
       message: clearMessage ? null : message ?? this.message,
     );
   }
@@ -96,6 +109,8 @@ class ListSplitController extends StateNotifier<ListSplitState> {
   Completer<void>? _pendingLoadCompleter;
 
   String newExpenseRequestId() => _requestIdGenerator();
+
+  String newSettlementRequestId() => _requestIdGenerator();
 
   Future<void> load() => _requestLoad(reportFailure: true);
 
@@ -147,7 +162,8 @@ class ListSplitController extends StateNotifier<ListSplitState> {
         settings == null ||
         !overview.isOwner ||
         overview.listStatus != SplitListStatus.active ||
-        overview.expenses.isNotEmpty) {
+        overview.expenses.isNotEmpty ||
+        state.settlementHistory.valueOrNull?.entries.isNotEmpty == true) {
       return Future.value(_invalidOutcome());
     }
     if (settings.currency == currency) {
@@ -275,10 +291,181 @@ class ListSplitController extends StateNotifier<ListSplitState> {
     );
   }
 
+  Future<ListSplitMutationOutcome> recordSettlement({
+    required String payerParticipantId,
+    required String recipientParticipantId,
+    required int amountMinor,
+    required String? note,
+    required String requestId,
+  }) {
+    final overview = state.overview.valueOrNull;
+    final settings = overview?.settings;
+    final payer = overview?.participantById(payerParticipantId);
+    final recipient = overview?.participantById(recipientParticipantId);
+    final canonicalNote = note?.trim();
+    final maximum = payer == null || recipient == null
+        ? 0
+        : (-payer.balanceMinor < recipient.balanceMinor
+            ? -payer.balanceMinor
+            : recipient.balanceMinor);
+    if (overview == null ||
+        settings == null ||
+        !overview.writable ||
+        payerParticipantId == recipientParticipantId ||
+        payer?.balanceMinor == null ||
+        payer!.balanceMinor >= 0 ||
+        recipient?.balanceMinor == null ||
+        recipient!.balanceMinor <= 0 ||
+        amountMinor < 1 ||
+        amountMinor > maximum ||
+        requestId.isEmpty ||
+        (canonicalNote != null &&
+            canonicalNote.isNotEmpty &&
+            canonicalNote.length > splitSettlementNoteMaxLength)) {
+      return Future.value(_invalidOutcome());
+    }
+    return _mutate(
+      () => _repository.recordSettlement(
+        listId,
+        payerParticipantId: payerParticipantId,
+        recipientParticipantId: recipientParticipantId,
+        amountMinor: amountMinor,
+        note: canonicalNote == null || canonicalNote.isEmpty
+            ? null
+            : canonicalNote,
+        requestId: requestId,
+        expectedSplitVersion: settings.version,
+      ),
+      ListSplitMessage.settlementRecorded,
+      refreshSettlementHistory: true,
+    );
+  }
+
+  Future<ListSplitMutationOutcome> reverseSettlement(
+    ListSplitSettlement settlement, {
+    required String reason,
+    required String requestId,
+  }) {
+    final overview = state.overview.valueOrNull;
+    final settings = overview?.settings;
+    final current = _settlementById(settlement.id);
+    final canonicalReason = reason.trim();
+    if (overview == null ||
+        settings == null ||
+        !overview.writable ||
+        current == null ||
+        current.isReversed ||
+        !current.canReverse ||
+        canonicalReason.isEmpty ||
+        canonicalReason.length > splitSettlementReversalReasonMaxLength ||
+        requestId.isEmpty) {
+      return Future.value(_invalidOutcome());
+    }
+    return _mutate(
+      () => _repository.reverseSettlement(
+        listId,
+        settlement.id,
+        reason: canonicalReason,
+        requestId: requestId,
+        expectedSplitVersion: settings.version,
+      ),
+      ListSplitMessage.settlementReversed,
+      refreshSettlementHistory: true,
+    );
+  }
+
+  Future<void> loadMoreSettlements() async {
+    final overview = state.overview.valueOrNull;
+    final currentPage = state.settlementHistory.valueOrNull;
+    final cursor = currentPage?.nextCursor;
+    if (overview?.enabled != true ||
+        cursor == null ||
+        state.isMutating ||
+        state.isLoadingMoreSettlements) {
+      return;
+    }
+    final generation = _loadGeneration;
+    final expectedSplitVersion = overview!.settings!.version;
+    state = state.copyWith(isLoadingMoreSettlements: true, clearMessage: true);
+    try {
+      final nextPage = await _repository.listSettlements(
+        listId,
+        cursor: cursor,
+      );
+      if (!mounted) return;
+      if (!_paginationIsCurrent(
+        generation: generation,
+        expectedSplitVersion: expectedSplitVersion,
+        cursor: cursor,
+      )) {
+        state = state.copyWith(isLoadingMoreSettlements: false);
+        return;
+      }
+      _validateSettlementPage(nextPage, overview);
+      final existingIds = currentPage!.entries.map((entry) => entry.id).toSet();
+      if (nextPage.entries.any((entry) => existingIds.contains(entry.id))) {
+        throw const ListSplitFailure(ListSplitFailureCode.generic);
+      }
+      state = state.copyWith(
+        settlementHistory: AsyncData(
+          ListSplitSettlementPage(
+            listId: currentPage.listId,
+            currency: currentPage.currency,
+            entries: List.unmodifiable([
+              ...currentPage.entries,
+              ...nextPage.entries,
+            ]),
+            nextCursor: nextPage.nextCursor,
+          ),
+        ),
+        isLoadingMoreSettlements: false,
+      );
+    } on ListSplitFailure catch (failure) {
+      if (!mounted) return;
+      if (generation != _loadGeneration) {
+        state = state.copyWith(isLoadingMoreSettlements: false);
+        return;
+      }
+      state = state.copyWith(
+        isLoadingMoreSettlements: false,
+        message: failure.code == ListSplitFailureCode.unavailable
+            ? ListSplitMessage.unavailable
+            : ListSplitMessage.refreshFailed,
+      );
+      if (failure.code == ListSplitFailureCode.unavailable) {
+        await _load(preserveMessage: true, reportFailure: true);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      if (generation != _loadGeneration) {
+        state = state.copyWith(isLoadingMoreSettlements: false);
+        return;
+      }
+      state = state.copyWith(
+        isLoadingMoreSettlements: false,
+        message: ListSplitMessage.refreshFailed,
+      );
+    }
+  }
+
+  bool _paginationIsCurrent({
+    required int generation,
+    required int expectedSplitVersion,
+    required ListSplitSettlementCursor cursor,
+  }) {
+    final currentOverview = state.overview.valueOrNull;
+    final currentCursor = state.settlementHistory.valueOrNull?.nextCursor;
+    return generation == _loadGeneration &&
+        currentOverview?.settings?.version == expectedSplitVersion &&
+        currentCursor?.createdAt == cursor.createdAt &&
+        currentCursor?.id == cursor.id;
+  }
+
   Future<ListSplitMutationOutcome> _mutate(
     Future<ListSplitOverview> Function() operation,
     ListSplitMessage successMessage, {
     bool invalidateLists = false,
+    bool refreshSettlementHistory = false,
   }) async {
     if (state.isMutating) return ListSplitMutationOutcome.failed;
     ++_loadGeneration;
@@ -286,8 +473,14 @@ class ListSplitController extends StateNotifier<ListSplitState> {
     try {
       final overview = await operation();
       if (!mounted) return ListSplitMutationOutcome.failed;
+      var history = state.settlementHistory;
+      if (refreshSettlementHistory) {
+        history = await _loadSettlementHistory(overview);
+        if (!mounted) return ListSplitMutationOutcome.failed;
+      }
       state = ListSplitState(
         overview: AsyncData(overview),
+        settlementHistory: history,
         message: successMessage,
       );
       if (invalidateLists) _invalidateLists();
@@ -326,6 +519,7 @@ class ListSplitController extends StateNotifier<ListSplitState> {
       case ListSplitFailureCode.unavailable:
         state = ListSplitState(
           overview: AsyncError(failure, StackTrace.current),
+          settlementHistory: state.settlementHistory,
           message: ListSplitMessage.unavailable,
         );
         return ListSplitMutationOutcome.unavailable;
@@ -371,8 +565,11 @@ class ListSplitController extends StateNotifier<ListSplitState> {
     try {
       final overview = await _repository.getSplit(listId);
       if (!mounted || generation != _loadGeneration) return false;
+      final settlementHistory = await _loadSettlementHistory(overview);
+      if (!mounted || generation != _loadGeneration) return false;
       state = ListSplitState(
         overview: AsyncData(overview),
+        settlementHistory: settlementHistory,
         message: preserveMessage ? state.message : null,
       );
       return true;
@@ -381,6 +578,7 @@ class ListSplitController extends StateNotifier<ListSplitState> {
       if (failure.code == ListSplitFailureCode.unavailable) {
         state = ListSplitState(
           overview: AsyncError(failure, stackTrace),
+          settlementHistory: state.settlementHistory,
           message: ListSplitMessage.unavailable,
         );
       } else {
@@ -390,6 +588,7 @@ class ListSplitController extends StateNotifier<ListSplitState> {
               : AsyncData(cached),
           message:
               reportFailure ? ListSplitMessage.refreshFailed : state.message,
+          settlementHistory: state.settlementHistory,
         );
       }
       return false;
@@ -399,6 +598,7 @@ class ListSplitController extends StateNotifier<ListSplitState> {
         overview:
             cached == null ? AsyncError(error, stackTrace) : AsyncData(cached),
         message: reportFailure ? ListSplitMessage.refreshFailed : state.message,
+        settlementHistory: state.settlementHistory,
       );
       return false;
     }
@@ -426,6 +626,74 @@ class ListSplitController extends StateNotifier<ListSplitState> {
       if (expense.id == expenseId) return expense;
     }
     return null;
+  }
+
+  ListSplitSettlement? _settlementById(String settlementId) {
+    final page = state.settlementHistory.valueOrNull;
+    if (page == null) return null;
+    for (final settlement in page.entries) {
+      if (settlement.id == settlementId) return settlement;
+    }
+    return null;
+  }
+
+  Future<AsyncValue<ListSplitSettlementPage>> _loadSettlementHistory(
+    ListSplitOverview overview,
+  ) async {
+    if (!overview.enabled) {
+      return AsyncData(
+        ListSplitSettlementPage(
+          listId: overview.listId,
+          currency: null,
+          entries: const [],
+          nextCursor: null,
+        ),
+      );
+    }
+    try {
+      final page = await _repository.listSettlements(listId);
+      _validateSettlementPage(page, overview);
+      return AsyncData(page);
+    } on ListSplitFailure catch (failure, stackTrace) {
+      if (failure.code == ListSplitFailureCode.unavailable) rethrow;
+      final cached = state.settlementHistory.valueOrNull;
+      if (failure.code == ListSplitFailureCode.transport &&
+          cached != null &&
+          cached.listId == overview.listId) {
+        try {
+          _validateSettlementPage(cached, overview);
+          return AsyncData(cached);
+        } on ListSplitFailure {
+          // A projection for an older participant set is not safe to retain.
+        }
+      }
+      return AsyncError(failure, stackTrace);
+    } catch (error, stackTrace) {
+      return AsyncError(error, stackTrace);
+    }
+  }
+
+  void _validateSettlementPage(
+    ListSplitSettlementPage page,
+    ListSplitOverview overview,
+  ) {
+    final participantIds =
+        overview.participants.map((participant) => participant.id).toSet();
+    final hasForeignReference = page.entries.any(
+      (settlement) =>
+          !participantIds.contains(settlement.payerParticipantId) ||
+          !participantIds.contains(settlement.recipientParticipantId) ||
+          !participantIds.contains(settlement.recordedByParticipantId) ||
+          (settlement.reversal != null &&
+              !participantIds.contains(
+                settlement.reversal!.reversedByParticipantId,
+              )),
+    );
+    if (page.listId != overview.listId ||
+        page.currency != overview.currency ||
+        hasForeignReference) {
+      throw const ListSplitFailure(ListSplitFailureCode.generic);
+    }
   }
 
   ListSplitMutationOutcome _invalidOutcome() => _finishWith(

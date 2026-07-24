@@ -769,7 +769,7 @@ select ok(
   'account deletion keeps actor-only arithmetic identity while clearing every identity snapshot'
 );
 select ok(
-  public.export_own_account_data()->>'schema_version'='5'
+  public.export_own_account_data()->>'schema_version'='6'
   and exists (
     select 1
     from pg_catalog.jsonb_array_elements(
@@ -778,7 +778,7 @@ select ok(
     where exported_list.document->>'id'='72000000-0000-4000-8000-000000000001'
       and exported_list.document #> '{split,settings}' is not null
   ),
-  'schema-version-five owner export nests Split in fully exported owned lists'
+  'schema-version-six owner export nests Split in fully exported owned lists'
 );
 select ok(
   exists (
@@ -790,7 +790,7 @@ select ok(
       and (
         select pg_catalog.array_agg(key order by key)
         from pg_catalog.jsonb_object_keys(exported_list.document->'split') as key
-      ) = array['expenses','participants','settings']
+      ) = array['expenses','participants','settings','settlements']
       and not exists (
         select 1
         from pg_catalog.jsonb_array_elements(
@@ -801,6 +801,7 @@ select ok(
           from pg_catalog.jsonb_object_keys(participant.document) as key
         ) <> array['display_name','id','is_anonymized','is_current','profile_id','username']
       )
+      and exported_list.document #> '{split,settlements}' = '[]'::jsonb
       and not exists (
         select 1
         from pg_catalog.jsonb_array_elements(

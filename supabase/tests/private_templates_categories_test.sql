@@ -765,13 +765,13 @@ select lives_ok(
 
 select ok(
   (
-    select schema_version=5
+    select schema_version=6
       and pg_catalog.jsonb_array_length(template_categories) >= 1
       and pg_catalog.jsonb_array_length(templates) >= 1
     from pg_catalog.jsonb_to_record(public.export_own_account_data())
       as exported(schema_version integer,template_categories jsonb,templates jsonb)
   ),
-  'account export schema version four includes private categories and templates'
+  'account export schema version six includes private categories and templates'
 );
 
 set local "request.jwt.claim.sub" = '61000000-0000-4000-8000-000000000003';

@@ -372,11 +372,12 @@ contract is introduced.
 ### Split database and client boundary
 
 `public.active_list_split_settings`, `public.active_list_split_participants`,
-`public.active_list_expenses`, and `public.active_list_expense_shares` form one
-list-scoped RPC-only aggregate. Every table enables and forces RLS, has an explicit
-restrictive direct-client rejection policy, and revokes table privileges from
-`PUBLIC`, `anon`, `authenticated`, and `service_role`. List deletion cascades the
-entire aggregate.
+`public.active_list_expenses`, `public.active_list_expense_shares`,
+`public.active_list_settlements`, and
+`public.active_list_settlement_reversals` form one list-scoped RPC-only aggregate.
+Every table enables and forces RLS, has an explicit restrictive direct-client
+rejection policy, and revokes table privileges from `PUBLIC`, `anon`,
+`authenticated`, and `service_role`. List deletion cascades the entire aggregate.
 
 The independently generated persistent Split participant UUID is the financial
 identity; it is never copied from or derived from an Auth/profile ID. Its nullable live
@@ -385,10 +386,11 @@ snapshots keep membership-removal history understandable. A profile-deletion
 trigger clears both snapshots and the live link in the same Auth-root transaction;
 the participant and integer financial history remain valid without retaining
 deleted profile data or a deletion timestamp. A partial unique key reuses the same
-identity for a live profile that leaves and rejoins the list. Acceptance after Split
-enablement materializes or reuses exactly one identity, and ownership transfer uses
-those same identities. Expenses and shares use same-list
-composite foreign keys, so cross-list identities cannot be attached accidentally.
+identity for a live profile that leaves and rejoins the list. Acceptance after
+Split enablement materializes or reuses exactly one identity, and ownership
+transfer uses those same identities. Expenses, shares, settlement endpoints and
+recorders, and reversals use same-list composite foreign keys, so cross-list
+identities cannot be attached accidentally.
 
 Exact `postgres`-owned `SECURITY DEFINER` RPCs derive only `auth.uid()`, require a
 verified completed profile, pin an empty `search_path`, fully qualify objects,
@@ -397,8 +399,9 @@ Reads require current unblocked owner/member access and return explicit
 projections. The owner-only setup RPC validates `CHF`/`EUR`. Mutation RPCs lock the
 list and settings rows, recheck active access, validate positive expected versions,
 eligibility and the 200-expense capacity, then create or replace an expense and
-all explicit shares in one short transaction. Rejected or stale work changes no
-row, version, notification, or Realtime output.
+all explicit shares in one short transaction. Settlement RPCs use the same list
+then settings lock order and lock the target settlement for reversal. Rejected or
+stale work changes no row, version, notification, or Realtime output.
 
 Expense creation includes a caller-generated request UUID unique within the list.
 It is payload-bound, grants no authority, makes an identical lost-response retry
@@ -409,16 +412,47 @@ retain an ineligible historical payer or beneficiary only if that exact identity
 is already attached to that expense; omitting it removes that exception until the
 account becomes eligible again. Shares are integer minor units and the server
 allocates the remainder in ascending participant UUID order. Read RPCs derive paid,
-owed, and net balances from expense/share rows and never persist a balance cache.
+owed, settlement-paid, settlement-received, and net balances from ledger rows and
+never persist a balance cache.
+
+Settlement and reversal records are separate immutable tables rather than expense
+variants. A settlement stores one same-list payer, recipient, server-derived
+recorder, positive integer minor-unit amount, optional trimmed note, server time,
+and payload-bound request UUID. It is valid only from a participant whose current
+balance is negative to one whose current balance is positive and is bounded by the
+smaller outstanding side; the endpoint identities may be historical. A one-time
+reversal derives the opposite direction and full original amount, retains its own
+server-derived recorder and required reason, and never updates or deletes the
+original. The original recorder or current owner may reverse; current accepted
+users may record settlements but cannot claim another recorder identity.
+
+The aggregate settings version protects expense and settlement projections.
+Settlement and reversal writes recheck the exact expected version inside the
+transaction and use payload-bound request UUIDs for idempotent lost-response
+retries. No lifetime ledger-row cap exists. History reads are bounded,
+newest-first deterministic keyset pages; request UUIDs remain private.
+
+The server derives suggested payments from exact net balances. Debtors sort by
+largest absolute debt then participant UUID, creditors by largest receivable then
+participant UUID, and each match consumes the smaller remaining side. This is a
+stable, compact greedy output with at most `debtors + creditors - 1` rows, not a
+guaranteed mathematically minimum solution. Each ordered allowlisted row contains
+only `payer_participant_id`, `recipient_participant_id`, and `amount_minor`.
 
 Flutter keeps Split under the Lists feature behind a dedicated repository,
 session-scoped Riverpod controller, and list-ID route. Widgets own only display and
 intent. Currency parsing uses decimal text and integer minor units without
 `double`. Mounted overview/form controllers register with the existing
-reconciliation registry. Settings/expense changes reuse private account Broadcast
-fanout to every current accepted list account; membership/list changes already
-invalidate those accounts. Authoritative refresh handles reconnect, resume,
-archive, removal, deletion, and concurrent expense changes.
+reconciliation registry. Settings, expense, settlement, and reversal changes reuse
+private account Broadcast fanout to every current accepted list account;
+membership/list changes already invalidate those accounts. Authoritative refresh
+handles reconnect, resume, archive, removal, deletion, and concurrent ledger
+changes. An open settlement editor owns one stable request UUID and closes once on
+authoritative remote version/access/archive/delete invalidation; transport failure
+preserves the form for safe retry. Repeated taps cannot overlap. Localized widgets
+use semantic direction/status labels, non-color-only states, scalable scrolling,
+and the existing Material 3 light/dark themes. No offline mutation queue is
+introduced.
 
 ### Account export boundary
 
@@ -428,7 +462,7 @@ exactly one corresponding profile but deliberately does not require completed
 onboarding. This keeps export available from both verified incomplete Onboarding
 and completed Profile without exposing it to anonymous or unverified sessions.
 
-The RPC returns one `jsonb` schema-version-5 document built exclusively from
+The RPC returns one `jsonb` schema-version-6 document built exclusively from
 explicit key allowlists. Version `2` preserves all version-1 account/social roots
 and adds the deterministic `active_lists` array with active/archived owned lists and
 ordered items. Version `3` adds only caller-relative metadata for lists owned by
@@ -437,7 +471,11 @@ authorization data. Version `4` adds only the caller's private categories,
 templates, and ordered template items. Version `5` nests Split settings,
 participant live-or-anonymous state, expenses, payer/editor identities, and
 allocated shares only inside the caller's fully exported owned lists. Shared-list
-access stays metadata-only. It is a hardened `SECURITY DEFINER`
+access stays metadata-only. Version `6` adds allowlisted immutable settlement and
+reversal history for those same owned-list Split ledgers, including endpoint and
+recorder participant IDs, integer amount, note/reason, reversal link, and server
+times. Request IDs, derived balances, and suggested payments are excluded because
+they are respectively private or reproducible. It is a hardened `SECURITY DEFINER`
 boundary because it must read the caller's approved Auth columns and RPC-only
 social tables: ownership
 is `postgres`, `search_path` is empty, every object is qualified, default
@@ -471,7 +509,7 @@ changes. The file service writes pretty UTF-8 JSON to application-scoped
 temporary/cache storage and invokes the Android/iOS native share sheet with a
 privacy-safe UTC filename and JSON MIME type. It never falls back to public shared
 storage or promises guaranteed cache deletion. Production responses must be
-version `5`; the parser deliberately retains strict versions 1-4 support for
+version `6`; the parser deliberately retains strict versions 1-5 support for
 historical fixtures and previously downloaded documents.
 
 ### Permanent account-deletion boundary
@@ -510,8 +548,9 @@ participant, notification recipient/actor rows, and notifications whose
 relationship disappears, every list owned by the profile and the list's items,
 and every private category, template, and template item. Before a non-owner profile
 disappears, its Split participant rows atomically clear profile snapshots and
-become anonymous; existing expenses/shares remain list-owned and mathematically
-valid. Owned-list deletion still cascades all of that list's Split rows.
+become anonymous; existing expenses, shares, settlements, and reversals remain
+list-owned and mathematically valid. Owned-list deletion still cascades all of that
+list's Split rows.
 Snapshot-created or
 imported list rows have no source dependency and remain governed only by their list
 owner. A `BEFORE DELETE` profile trigger reserves only a
@@ -707,7 +746,8 @@ Operations that span records or enforce important invariants should be atomic an
 idempotent where retries are possible. The active/shared-list and private-template
 aggregates use exact PostgreSQL RPCs because their validation, locking, version
 checks, capacity enforcement, and writes belong in one short database transaction.
-Future public/sent-template, settlement, and custom-share operations still require
+Split settlement and reversal operations follow the same exact PostgreSQL RPC
+boundary. Future public/sent-template and custom-share operations still require
 separate placement decisions.
 
 ## Money boundary
@@ -718,12 +758,20 @@ separate placement decisions.
   binary floating point.
 - A Split-enabled active list has one validated currency (`CHF` or `EUR` in the
   first slice); expenses inherit that context and no conversion occurs.
+- Currency may change only when no expense exists and no settlement history has
+  ever existed. The first settlement permanently locks the currency even if it is
+  reversed.
 - The server validates current eligibility, historical-participant preservation,
   amount/count limits, and exact equal-share totals. Equal-split remainders follow
   ascending immutable list-participant ID order.
-- Balances are computed on demand as paid minus owed from expenses and shares. No
-  mutable balance aggregate is stored. Settlements and simplified debts are not
-  part of the first Split slice.
+- Balances are computed on demand as expense paid minus expense owed, plus
+  non-reversed settlements paid and minus non-reversed settlements received. No
+  mutable balance aggregate or suggested-payment row is stored.
+- Settlement amounts are positive integers bounded by the authoritative debtor and
+  creditor balances. There is no independent lifetime settlement count or
+  expense-size cap; bounded keyset pages control history reads.
+- Suggested payments use the accepted deterministic greedy debtor/creditor
+  matching contract. They must never be called mathematically minimum.
 
 ## Implemented realtime and planned offline model
 
@@ -757,9 +805,10 @@ writes are implemented.
 - Test RLS policies, database constraints, triggers, and functions with allowed
   and denied identities for every business migration.
 - Split server tests cover integer arithmetic, equal-share remainders, eligibility,
-  historical identity, exact share conservation, balances, versions, deletion, and
-  authorization. Later custom-share, settlement, and debt slices must add their own
-  calculation coverage before shipping.
+  historical identity, exact share conservation, settlement/reversal history,
+  deterministic suggestions, balances, pagination, versions, concurrency,
+  idempotency, deletion, and authorization. Later custom-share work must add its
+  own calculation coverage before shipping.
 - Logging must redact tokens, secrets, personal content, and notification payloads.
   A concrete telemetry/crash-reporting service has not been selected.
 

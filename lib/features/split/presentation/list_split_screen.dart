@@ -137,6 +137,18 @@ class _SplitBody extends ConsumerWidget {
               ),
             ),
           const SizedBox(height: 20),
+          _SettlementSuggestionsSection(
+            listId: listId,
+            overview: overview,
+            state: state,
+          ),
+          const SizedBox(height: 20),
+          _SettlementHistorySection(
+            listId: listId,
+            overview: overview,
+            state: state,
+          ),
+          const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
@@ -297,7 +309,9 @@ class _SplitSummaryCard extends ConsumerWidget {
                 ),
                 if (overview.isOwner &&
                     overview.writable &&
-                    overview.expenses.isEmpty)
+                    overview.expenses.isEmpty &&
+                    state.settlementHistory.valueOrNull?.entries.isEmpty ==
+                        true)
                   TextButton(
                     key: const Key('changeSplitCurrencyButton'),
                     onPressed: state.isMutating
@@ -404,6 +418,805 @@ class _BalanceTile extends StatelessWidget {
   }
 }
 
+class _SettlementSuggestionsSection extends StatelessWidget {
+  const _SettlementSuggestionsSection({
+    required this.listId,
+    required this.overview,
+    required this.state,
+  });
+
+  final String listId;
+  final ListSplitOverview overview;
+  final ListSplitState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    return Column(
+      key: const Key('settlementSuggestionsSection'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          localizations.splitSuggestedPaymentsTitle,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        if (overview.suggestions.isEmpty)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.check_circle_outline),
+              title: Text(localizations.splitNoSuggestedPaymentsMessage),
+            ),
+          )
+        else
+          for (final suggestion in overview.suggestions)
+            _SettlementSuggestionCard(
+              listId: listId,
+              overview: overview,
+              suggestion: suggestion,
+              isBusy: state.isMutating,
+            ),
+      ],
+    );
+  }
+}
+
+class _SettlementSuggestionCard extends StatelessWidget {
+  const _SettlementSuggestionCard({
+    required this.listId,
+    required this.overview,
+    required this.suggestion,
+    required this.isBusy,
+  });
+
+  final String listId;
+  final ListSplitOverview overview;
+  final ListSettlementSuggestion suggestion;
+  final bool isBusy;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final payer = overview.participantById(suggestion.payerParticipantId);
+    final recipient =
+        overview.participantById(suggestion.recipientParticipantId);
+    final payerName = payer == null
+        ? localizations.splitFormerParticipant
+        : _participantName(localizations, payer);
+    final recipientName = recipient == null
+        ? localizations.splitFormerParticipant
+        : _participantName(localizations, recipient);
+    final description = localizations.splitSuggestedPayment(
+      payerName,
+      recipientName,
+      _formatMinor(suggestion.amountMinor, overview.currency!),
+    );
+    return Card(
+      key: ValueKey(
+        'splitSuggestion-${suggestion.payerParticipantId}-'
+        '${suggestion.recipientParticipantId}',
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.payments_outlined),
+                const SizedBox(width: 12),
+                Expanded(child: Text(description)),
+              ],
+            ),
+            if (overview.writable) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: FilledButton.tonal(
+                  key: ValueKey(
+                    'recordSuggestedPayment-'
+                    '${suggestion.payerParticipantId}-'
+                    '${suggestion.recipientParticipantId}',
+                  ),
+                  onPressed: isBusy
+                      ? null
+                      : () => showDialog<void>(
+                            context: context,
+                            barrierDismissible: !isBusy,
+                            builder: (_) => SettlementFormDialog(
+                              listId: listId,
+                              initialOverview: overview,
+                              initialSuggestion: suggestion,
+                            ),
+                          ),
+                  child: Text(localizations.splitRecordPaymentButton),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SettlementHistorySection extends ConsumerWidget {
+  const _SettlementHistorySection({
+    required this.listId,
+    required this.overview,
+    required this.state,
+  });
+
+  final String listId;
+  final ListSplitOverview overview;
+  final ListSplitState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final localizations = AppLocalizations.of(context);
+    return Column(
+      key: const Key('settlementHistorySection'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          localizations.splitSettlementHistoryTitle,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        state.settlementHistory.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, __) => Card(
+            child: ListTile(
+              leading: const Icon(Icons.error_outline),
+              title: Text(localizations.splitSettlementHistoryLoadFailed),
+            ),
+          ),
+          data: (page) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (page.entries.isEmpty)
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.history_outlined),
+                    title: Text(localizations.splitNoSettlementHistoryMessage),
+                  ),
+                )
+              else
+                for (final settlement in page.entries)
+                  _SettlementHistoryCard(
+                    listId: listId,
+                    overview: overview,
+                    settlement: settlement,
+                    isBusy: state.isMutating,
+                  ),
+              if (page.nextCursor != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: OutlinedButton(
+                    key: const Key('loadMoreSettlementsButton'),
+                    onPressed:
+                        state.isLoadingMoreSettlements || state.isMutating
+                            ? null
+                            : () => ref
+                                .read(
+                                  listSplitControllerProvider(listId).notifier,
+                                )
+                                .loadMoreSettlements(),
+                    child: state.isLoadingMoreSettlements
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            localizations.splitLoadMoreSettlementsButton,
+                          ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettlementHistoryCard extends ConsumerWidget {
+  const _SettlementHistoryCard({
+    required this.listId,
+    required this.overview,
+    required this.settlement,
+    required this.isBusy,
+  });
+
+  final String listId;
+  final ListSplitOverview overview;
+  final ListSplitSettlement settlement;
+  final bool isBusy;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final localizations = AppLocalizations.of(context);
+    final payer = overview.participantById(settlement.payerParticipantId);
+    final recipient =
+        overview.participantById(settlement.recipientParticipantId);
+    final recorder =
+        overview.participantById(settlement.recordedByParticipantId);
+    final reverser = settlement.reversal == null
+        ? null
+        : overview.participantById(
+            settlement.reversal!.reversedByParticipantId,
+          );
+    final payerName = payer == null
+        ? localizations.splitFormerParticipant
+        : _participantName(localizations, payer);
+    final recipientName = recipient == null
+        ? localizations.splitFormerParticipant
+        : _participantName(localizations, recipient);
+    final recorderName = recorder == null
+        ? localizations.splitFormerParticipant
+        : _participantName(localizations, recorder);
+    final title = localizations.splitSettlementHistoryEntry(
+      payerName,
+      recipientName,
+      _formatMinor(settlement.amountMinor, overview.currency!),
+    );
+    final date = MaterialLocalizations.of(context)
+        .formatMediumDate(settlement.createdAt.toLocal());
+    final reversal = settlement.reversal;
+    return Card(
+      child: Semantics(
+        container: true,
+        label: reversal == null
+            ? title
+            : localizations.splitReversedSettlementSemantics(title),
+        child: ListTile(
+          key: ValueKey('splitSettlement-${settlement.id}'),
+          leading: Icon(
+            reversal == null ? Icons.payments_outlined : Icons.undo_outlined,
+          ),
+          title: Text(title),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                localizations.splitSettlementRecordedBy(recorderName, date),
+              ),
+              if (settlement.note != null) Text(settlement.note!),
+              if (reversal != null)
+                Text(
+                  localizations.splitSettlementReversed(
+                    reverser == null
+                        ? localizations.splitFormerParticipant
+                        : _participantName(localizations, reverser),
+                    reversal.reason,
+                  ),
+                ),
+            ],
+          ),
+          trailing:
+              settlement.canReverse && reversal == null && overview.writable
+                  ? IconButton(
+                      key: ValueKey('reverseSettlement-${settlement.id}'),
+                      tooltip: localizations.splitReverseSettlementButton,
+                      onPressed: isBusy
+                          ? null
+                          : () => showDialog<void>(
+                                context: context,
+                                barrierDismissible: !isBusy,
+                                builder: (_) => SettlementReversalDialog(
+                                  listId: listId,
+                                  initialOverview: overview,
+                                  settlement: settlement,
+                                ),
+                              ),
+                      icon: const Icon(Icons.undo_outlined),
+                    )
+                  : null,
+        ),
+      ),
+    );
+  }
+}
+
+class SettlementFormDialog extends ConsumerStatefulWidget {
+  const SettlementFormDialog({
+    required this.listId,
+    required this.initialOverview,
+    required this.initialSuggestion,
+    super.key,
+  });
+
+  final String listId;
+  final ListSplitOverview initialOverview;
+  final ListSettlementSuggestion initialSuggestion;
+
+  @override
+  ConsumerState<SettlementFormDialog> createState() =>
+      _SettlementFormDialogState();
+}
+
+class _SettlementFormDialogState extends ConsumerState<SettlementFormDialog> {
+  late final TextEditingController _amount;
+  late final TextEditingController _note;
+  late final String _requestId;
+  late final int _initialSplitVersion;
+  late String _payerId;
+  late String _recipientId;
+  bool _showValidation = false;
+  bool _submitted = false;
+  bool _retryLocked = false;
+  bool _dialogClosing = false;
+  ModalRoute<void>? _dialogRoute;
+
+  @override
+  void initState() {
+    super.initState();
+    _payerId = widget.initialSuggestion.payerParticipantId;
+    _recipientId = widget.initialSuggestion.recipientParticipantId;
+    _initialSplitVersion = widget.initialOverview.settings!.version;
+    _requestId = ref
+        .read(listSplitControllerProvider(widget.listId).notifier)
+        .newSettlementRequestId();
+    _amount = TextEditingController(
+      text: MoneyAmount.fromMinorUnits(
+        widget.initialSuggestion.amountMinor,
+        widget.initialOverview.currency!,
+      ).format(includeCode: false),
+    );
+    _note = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _dialogRoute ??= ModalRoute.of(context);
+    final provider = listSplitControllerProvider(widget.listId);
+    final state = ref.watch(provider);
+    final overview = state.overview.valueOrNull ?? widget.initialOverview;
+    final unavailable = state.message == ListSplitMessage.unavailable;
+    final versionChanged =
+        overview.settings?.version != _initialSplitVersion && !_submitted;
+    if (unavailable || !overview.writable || versionChanged) {
+      _scheduleClose();
+    }
+    final payerChoices = overview.participants
+        .where((participant) => participant.balanceMinor < 0)
+        .toList(growable: false);
+    final recipientChoices = overview.participants
+        .where((participant) => participant.balanceMinor > 0)
+        .toList(growable: false);
+    final payer = overview.participantById(_payerId);
+    final recipient = overview.participantById(_recipientId);
+    final maximum = payer == null || recipient == null
+        ? 0
+        : (-payer.balanceMinor < recipient.balanceMinor
+            ? -payer.balanceMinor
+            : recipient.balanceMinor);
+    final parsed = MoneyAmount.tryParse(
+      _amount.text,
+      currency: overview.currency!,
+      maxMinor: maximum,
+    );
+    final noteValid = _note.text.trim().length <= splitSettlementNoteMaxLength;
+    final endpointsValid = payer != null &&
+        recipient != null &&
+        payer.balanceMinor < 0 &&
+        recipient.balanceMinor > 0 &&
+        payer.id != recipient.id;
+    final operationEnabled = !unavailable &&
+        overview.writable &&
+        !versionChanged &&
+        !state.isMutating &&
+        !_submitted &&
+        !_dialogClosing;
+    final fieldsEnabled = operationEnabled && !_retryLocked;
+    final localizations = AppLocalizations.of(context);
+    return PopScope(
+      canPop: !state.isMutating && !_submitted,
+      child: AlertDialog(
+        title: Text(localizations.splitRecordPaymentTitle),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(localizations.splitRecordPaymentBookkeepingNotice),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                key: const Key('settlementPayerField'),
+                // Keep the initializer supported by the Flutter 3.19 floor.
+                // ignore: deprecated_member_use
+                value: payerChoices.any((entry) => entry.id == _payerId)
+                    ? _payerId
+                    : null,
+                decoration: InputDecoration(
+                  labelText: localizations.splitSettlementPayerLabel,
+                  errorText: _showValidation && !endpointsValid
+                      ? localizations.splitSettlementEndpointsInvalid
+                      : null,
+                ),
+                items: [
+                  for (final participant in payerChoices)
+                    DropdownMenuItem(
+                      value: participant.id,
+                      child: Text(_participantName(localizations, participant)),
+                    ),
+                ],
+                onChanged: fieldsEnabled
+                    ? (value) {
+                        if (value != null) setState(() => _payerId = value);
+                      }
+                    : null,
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                key: const Key('settlementRecipientField'),
+                // Keep the initializer supported by the Flutter 3.19 floor.
+                // ignore: deprecated_member_use
+                value: recipientChoices.any((entry) => entry.id == _recipientId)
+                    ? _recipientId
+                    : null,
+                decoration: InputDecoration(
+                  labelText: localizations.splitSettlementRecipientLabel,
+                ),
+                items: [
+                  for (final participant in recipientChoices)
+                    DropdownMenuItem(
+                      value: participant.id,
+                      child: Text(_participantName(localizations, participant)),
+                    ),
+                ],
+                onChanged: fieldsEnabled
+                    ? (value) {
+                        if (value != null) setState(() => _recipientId = value);
+                      }
+                    : null,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                key: const Key('settlementAmountField'),
+                controller: _amount,
+                autofocus: true,
+                enabled: fieldsEnabled,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  labelText: localizations
+                      .splitExpenseAmountLabel(overview.currency!.code),
+                  helperText: maximum > 0
+                      ? localizations.splitSettlementMaximum(
+                          _formatMinor(maximum, overview.currency!),
+                        )
+                      : null,
+                  errorText: _showValidation && parsed == null
+                      ? localizations.splitSettlementAmountInvalid
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                key: const Key('settlementNoteField'),
+                controller: _note,
+                enabled: fieldsEnabled,
+                maxLength: splitSettlementNoteMaxLength,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  labelText: localizations.splitSettlementNoteLabel,
+                  errorText: _showValidation && !noteValid
+                      ? localizations.splitSettlementNoteInvalid
+                      : null,
+                ),
+              ),
+              if (_retryLocked) ...[
+                const SizedBox(height: 8),
+                Text(
+                  localizations.splitSettlementUncertainRetryMessage,
+                  key: const Key('settlementRetryMessage'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: state.isMutating || _dialogClosing
+                ? null
+                : () {
+                    _dialogClosing = true;
+                    Navigator.pop(context);
+                  },
+            child: Text(localizations.cancelButton),
+          ),
+          FilledButton(
+            key: const Key('saveSettlementButton'),
+            onPressed: operationEnabled &&
+                    endpointsValid &&
+                    parsed != null &&
+                    noteValid
+                ? _submit
+                : null,
+            child: state.isMutating
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(localizations.splitRecordPaymentButton),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    if (_submitted) return;
+    final provider = listSplitControllerProvider(widget.listId);
+    final overview = ref.read(provider).overview.valueOrNull;
+    final payer = overview?.participantById(_payerId);
+    final recipient = overview?.participantById(_recipientId);
+    final maximum = payer == null || recipient == null
+        ? 0
+        : (-payer.balanceMinor < recipient.balanceMinor
+            ? -payer.balanceMinor
+            : recipient.balanceMinor);
+    final amount = overview == null
+        ? null
+        : MoneyAmount.tryParse(
+            _amount.text,
+            currency: overview.currency!,
+            maxMinor: maximum,
+          );
+    if (overview?.writable != true ||
+        payer?.balanceMinor == null ||
+        payer!.balanceMinor >= 0 ||
+        recipient?.balanceMinor == null ||
+        recipient!.balanceMinor <= 0 ||
+        payer.id == recipient.id ||
+        amount == null ||
+        _note.text.trim().length > splitSettlementNoteMaxLength) {
+      setState(() => _showValidation = true);
+      return;
+    }
+    _submitted = true;
+    setState(() {});
+    final outcome = await ref.read(provider.notifier).recordSettlement(
+          payerParticipantId: payer.id,
+          recipientParticipantId: recipient.id,
+          amountMinor: amount.minorUnits,
+          note: _note.text,
+          requestId: _requestId,
+        );
+    if (!mounted) return;
+    if (outcome.dismissesEditor) {
+      _closeNow();
+    } else {
+      setState(() {
+        _submitted = false;
+        _retryLocked = outcome == ListSplitMutationOutcome.failed;
+        _showValidation = !_retryLocked;
+      });
+    }
+  }
+
+  void _scheduleClose() {
+    if (_dialogClosing) return;
+    _dialogClosing = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _popOwnedRoute());
+  }
+
+  void _closeNow() {
+    if (_dialogClosing) return;
+    _dialogClosing = true;
+    _popOwnedRoute();
+  }
+
+  void _popOwnedRoute() {
+    final route = _dialogRoute;
+    if (!mounted || route == null || !route.isActive) return;
+    final navigator = Navigator.of(context);
+    navigator.popUntil((candidate) => identical(candidate, route));
+    if (route.isCurrent) navigator.pop();
+  }
+}
+
+class SettlementReversalDialog extends ConsumerStatefulWidget {
+  const SettlementReversalDialog({
+    required this.listId,
+    required this.initialOverview,
+    required this.settlement,
+    super.key,
+  });
+
+  final String listId;
+  final ListSplitOverview initialOverview;
+  final ListSplitSettlement settlement;
+
+  @override
+  ConsumerState<SettlementReversalDialog> createState() =>
+      _SettlementReversalDialogState();
+}
+
+class _SettlementReversalDialogState
+    extends ConsumerState<SettlementReversalDialog> {
+  late final TextEditingController _reason;
+  late final String _requestId;
+  late final int _initialSplitVersion;
+  bool _submitted = false;
+  bool _retryLocked = false;
+  bool _dialogClosing = false;
+  bool _showValidation = false;
+  ModalRoute<void>? _dialogRoute;
+
+  @override
+  void initState() {
+    super.initState();
+    _reason = TextEditingController();
+    _initialSplitVersion = widget.initialOverview.settings!.version;
+    _requestId = ref
+        .read(listSplitControllerProvider(widget.listId).notifier)
+        .newSettlementRequestId();
+  }
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _dialogRoute ??= ModalRoute.of(context);
+    final provider = listSplitControllerProvider(widget.listId);
+    final state = ref.watch(provider);
+    final overview = state.overview.valueOrNull ?? widget.initialOverview;
+    ListSplitSettlement? liveSettlement;
+    for (final entry
+        in state.settlementHistory.valueOrNull?.entries ?? const []) {
+      if (entry.id == widget.settlement.id) {
+        liveSettlement = entry;
+        break;
+      }
+    }
+    final versionChanged =
+        overview.settings?.version != _initialSplitVersion && !_submitted;
+    if (state.message == ListSplitMessage.unavailable ||
+        !overview.writable ||
+        liveSettlement == null ||
+        liveSettlement.isReversed ||
+        versionChanged) {
+      _scheduleClose();
+    }
+    final reason = _reason.text.trim();
+    final valid = reason.isNotEmpty &&
+        reason.length <= splitSettlementReversalReasonMaxLength;
+    final operationEnabled = overview.writable &&
+        !state.isMutating &&
+        !_submitted &&
+        !_dialogClosing &&
+        !versionChanged;
+    final fieldEnabled = operationEnabled && !_retryLocked;
+    final localizations = AppLocalizations.of(context);
+    return PopScope(
+      canPop: !state.isMutating && !_submitted,
+      child: AlertDialog(
+        title: Text(localizations.splitReverseSettlementTitle),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(localizations.splitReverseSettlementDescription),
+              const SizedBox(height: 12),
+              TextField(
+                key: const Key('settlementReversalReasonField'),
+                controller: _reason,
+                autofocus: true,
+                enabled: fieldEnabled,
+                maxLength: splitSettlementReversalReasonMaxLength,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  labelText: localizations.splitReversalReasonLabel,
+                  errorText: _showValidation && !valid
+                      ? localizations.splitReversalReasonInvalid
+                      : null,
+                ),
+              ),
+              if (_retryLocked) ...[
+                const SizedBox(height: 8),
+                Text(
+                  localizations.splitSettlementUncertainRetryMessage,
+                  key: const Key('settlementReversalRetryMessage'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: state.isMutating || _dialogClosing
+                ? null
+                : () {
+                    _dialogClosing = true;
+                    Navigator.pop(context);
+                  },
+            child: Text(localizations.cancelButton),
+          ),
+          FilledButton(
+            key: const Key('confirmReverseSettlementButton'),
+            onPressed: operationEnabled && valid ? _submit : null,
+            child: state.isMutating
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(localizations.splitReverseSettlementButton),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    if (_submitted) return;
+    final reason = _reason.text.trim();
+    if (reason.isEmpty ||
+        reason.length > splitSettlementReversalReasonMaxLength) {
+      setState(() => _showValidation = true);
+      return;
+    }
+    _submitted = true;
+    setState(() {});
+    final outcome = await ref
+        .read(listSplitControllerProvider(widget.listId).notifier)
+        .reverseSettlement(
+          widget.settlement,
+          reason: reason,
+          requestId: _requestId,
+        );
+    if (!mounted) return;
+    if (outcome.dismissesEditor) {
+      _closeNow();
+    } else {
+      setState(() {
+        _submitted = false;
+        _retryLocked = outcome == ListSplitMutationOutcome.failed;
+        _showValidation = !_retryLocked;
+      });
+    }
+  }
+
+  void _scheduleClose() {
+    if (_dialogClosing) return;
+    _dialogClosing = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _popOwnedRoute());
+  }
+
+  void _closeNow() {
+    if (_dialogClosing) return;
+    _dialogClosing = true;
+    _popOwnedRoute();
+  }
+
+  void _popOwnedRoute() {
+    final route = _dialogRoute;
+    if (!mounted || route == null || !route.isActive) return;
+    final navigator = Navigator.of(context);
+    navigator.popUntil((candidate) => identical(candidate, route));
+    if (route.isCurrent) navigator.pop();
+  }
+}
+
 class _ExpenseCard extends ConsumerStatefulWidget {
   const _ExpenseCard({
     required this.listId,
@@ -445,32 +1258,34 @@ class _ExpenseCardState extends ConsumerState<_ExpenseCard> {
                   ),
                 ),
         title: Text(widget.expense.description),
-        subtitle: Text(
-          localizations.splitExpensePaidBy(
-            payer == null
-                ? localizations.splitFormerParticipant
-                : _participantName(localizations, payer),
-            widget.expense.beneficiaryParticipantIds.length,
-          ),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              localizations.splitExpensePaidBy(
+                payer == null
+                    ? localizations.splitFormerParticipant
+                    : _participantName(localizations, payer),
+                widget.expense.beneficiaryParticipantIds.length,
+              ),
+            ),
+            const SizedBox(height: 4),
             Text(
               _formatMinor(widget.expense.amountMinor, currency),
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            if (widget.overview.writable)
-              IconButton(
+          ],
+        ),
+        trailing: widget.overview.writable
+            ? IconButton(
                 key: ValueKey('deleteSplitExpense-${widget.expense.id}'),
                 onPressed: widget.isBusy || _deleteFlowOpen
                     ? null
                     : () => _confirmDelete(context, ref),
                 tooltip: localizations.splitDeleteExpenseButton,
                 icon: const Icon(Icons.delete_outline),
-              ),
-          ],
-        ),
+              )
+            : null,
       ),
     );
   }
@@ -987,6 +1802,10 @@ String? _messageText(
     ListSplitMessage.expenseCreated => localizations.splitExpenseCreatedMessage,
     ListSplitMessage.expenseUpdated => localizations.splitExpenseUpdatedMessage,
     ListSplitMessage.expenseDeleted => localizations.splitExpenseDeletedMessage,
+    ListSplitMessage.settlementRecorded =>
+      localizations.splitSettlementRecordedMessage,
+    ListSplitMessage.settlementReversed =>
+      localizations.splitSettlementReversedMessage,
     ListSplitMessage.staleRefreshed => localizations.splitStaleMessage,
     ListSplitMessage.archivedReadOnly => localizations.splitArchivedMessage,
     ListSplitMessage.unavailable => null,

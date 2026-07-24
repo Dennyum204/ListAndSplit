@@ -58,4 +58,28 @@ abstract interface class ListSplitRepository {
     required int expectedSplitVersion,
     required int expectedExpenseVersion,
   });
+
+  Future<ListSplitSettlementPage> listSettlements(
+    String listId, {
+    int pageSize = splitSettlementHistoryPageSize,
+    ListSplitSettlementCursor? cursor,
+  });
+
+  Future<ListSplitOverview> recordSettlement(
+    String listId, {
+    required String payerParticipantId,
+    required String recipientParticipantId,
+    required int amountMinor,
+    required String? note,
+    required String requestId,
+    required int expectedSplitVersion,
+  });
+
+  Future<ListSplitOverview> reverseSettlement(
+    String listId,
+    String settlementId, {
+    required String reason,
+    required String requestId,
+    required int expectedSplitVersion,
+  });
 }
