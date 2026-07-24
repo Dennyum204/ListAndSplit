@@ -154,6 +154,14 @@ supabase migration list --local
 supabase test db
 ```
 
+The real two-client private-Broadcast smoke is intentionally environment-gated
+and therefore skipped by the ordinary Flutter suite. After a clean local reset,
+enforce it separately with the local-only values reported by `supabase status`:
+
+```text
+flutter test test/local/private_broadcast_transport_smoke_test.dart --dart-define=RUN_LOCAL_REALTIME_SMOKE=true --dart-define=LOCAL_SUPABASE_URL=<local-api-url> --dart-define=LOCAL_SUPABASE_PUBLISHABLE_KEY=<local-publishable-key> --dart-define=LOCAL_SUPABASE_SECRET_KEY=<local-secret-key>
+```
+
 For a local client build, use the local API URL and public publishable/anonymous
 key reported by `supabase status` as the two `dart-define` values. Never copy the
 reported `service_role` key into Flutter or source control. Local verification

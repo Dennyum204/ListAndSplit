@@ -43,6 +43,60 @@ final _uuidPattern = RegExp(
 
 enum AccountRealtimeStatus { subscribed, channelError, timedOut, closed }
 
+final class AccountRealtimeStatusUpdate {
+  const AccountRealtimeStatusUpdate({
+    required this.status,
+    required this.errorReported,
+  });
+
+  factory AccountRealtimeStatusUpdate.fromTransport(
+    AccountRealtimeStatus status, {
+    Object? error,
+  }) =>
+      AccountRealtimeStatusUpdate(
+        status: status,
+        errorReported: error != null,
+      );
+
+  final AccountRealtimeStatus status;
+  final bool errorReported;
+
+  @override
+  String toString() => 'AccountRealtimeStatusUpdate('
+      'status: ${status.name}, '
+      'errorReported: $errorReported'
+      ')';
+}
+
+enum AccountRealtimeRecoveryAction {
+  reconciliationRequested,
+  recoveryScheduled,
+  recoveryCoalesced,
+  recoveryCancelled,
+}
+
+final class AccountRealtimeDiagnostic {
+  const AccountRealtimeDiagnostic({
+    required this.update,
+    required this.action,
+  });
+
+  final AccountRealtimeStatusUpdate update;
+  final AccountRealtimeRecoveryAction action;
+
+  String get message => '[account-realtime] '
+      'status=${update.status.name} '
+      'error=${update.errorReported ? 'reported' : 'none'} '
+      'action=${action.name}';
+
+  @override
+  String toString() => message;
+}
+
+typedef AccountRealtimeDiagnosticSink = void Function(
+  AccountRealtimeDiagnostic diagnostic,
+);
+
 abstract interface class AccountRealtimeSubscription {
   Future<void> close();
 }
@@ -51,6 +105,6 @@ abstract interface class AccountRealtimeGateway {
   AccountRealtimeSubscription subscribe({
     required String authenticatedProfileId,
     required void Function() onInvalidation,
-    required void Function(AccountRealtimeStatus status) onStatus,
+    required void Function(AccountRealtimeStatusUpdate update) onStatus,
   });
 }
