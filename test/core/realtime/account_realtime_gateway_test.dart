@@ -62,6 +62,56 @@ void main() {
     );
   });
 
+  test('transport errors become privacy-safe status context', () {
+    const secretToken = 'secret-user-jwt';
+    const accountId = '00000000-0000-4000-8000-000000000099';
+    const topic = 'account:$accountId';
+    const payload = '{"amount_minor":9900}';
+    final update = AccountRealtimeStatusUpdate.fromTransport(
+      AccountRealtimeStatus.channelError,
+      error: Exception('$secretToken $topic $payload'),
+    );
+    final diagnostic = AccountRealtimeDiagnostic(
+      update: update,
+      action: AccountRealtimeRecoveryAction.recoveryScheduled,
+    );
+
+    expect(update.status, AccountRealtimeStatus.channelError);
+    expect(update.errorReported, isTrue);
+    expect(
+      update.toString(),
+      'AccountRealtimeStatusUpdate('
+      'status: channelError, errorReported: true)',
+    );
+    expect(
+      diagnostic.message,
+      '[account-realtime] '
+      'status=channelError '
+      'error=reported '
+      'action=recoveryScheduled',
+    );
+    for (final privateValue in [
+      secretToken,
+      accountId,
+      topic,
+      payload,
+      '9900'
+    ]) {
+      expect(update.toString(), isNot(contains(privateValue)));
+      expect(diagnostic.message, isNot(contains(privateValue)));
+    }
+  });
+
+  test('missing transport error remains explicit without invented details', () {
+    final update = AccountRealtimeStatusUpdate.fromTransport(
+      AccountRealtimeStatus.timedOut,
+    );
+
+    expect(update.status, AccountRealtimeStatus.timedOut);
+    expect(update.errorReported, isFalse);
+    expect(update.toString(), contains('errorReported: false'));
+  });
+
   test('only the Supabase adapter may access Realtime channel APIs', () {
     const adapter = 'lib/core/realtime/supabase_account_realtime_gateway.dart';
     final dartFiles = Directory('lib')
@@ -93,6 +143,10 @@ void main() {
     final adapterSource = File(adapter).readAsStringSync();
     expect(adapterSource, contains('RealtimeChannelConfig(private: true)'));
     expect(adapterSource, contains('event: accountInvalidationEvent'));
+    expect(
+      adapterSource,
+      contains('AccountRealtimeStatusUpdate.fromTransport'),
+    );
     expect(adapterSource, isNot(contains('.send(')));
     expect(adapterSource, isNot(contains('onPresence')));
     expect(adapterSource, isNot(contains('onPostgresChanges')));

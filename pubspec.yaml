@@ -21,6 +21,7 @@ dependencies:
   share_plus_platform_interface: 5.0.2
   shared_preferences: 2.2.3
   supabase_flutter: 2.14.2
+  web_socket_channel: 2.4.5
 
 dev_dependencies:
   flutter_test:

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/core/realtime/account_realtime_gateway.dart';
+import 'package:list_and_split/core/realtime/bounded_realtime_websocket_transport.dart';
 import 'package:list_and_split/features/lists/domain/creation_request_id.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -19,10 +20,30 @@ void main() {
       expect(_localPublishableKey, isNotEmpty);
       expect(_localSecretKey, isNotEmpty);
 
-      final admin = SupabaseClient(_localUrl, _localSecretKey);
-      final userA = SupabaseClient(_localUrl, _localPublishableKey);
-      final userB = SupabaseClient(_localUrl, _localPublishableKey);
-      final anonymous = SupabaseClient(_localUrl, _localPublishableKey);
+      const transport = BoundedRealtimeWebSocketTransport();
+      final realtimeOptions = RealtimeClientOptions(
+        transport: transport.connect,
+      );
+      final admin = SupabaseClient(
+        _localUrl,
+        _localSecretKey,
+        realtimeClientOptions: realtimeOptions,
+      );
+      final userA = SupabaseClient(
+        _localUrl,
+        _localPublishableKey,
+        realtimeClientOptions: realtimeOptions,
+      );
+      final userB = SupabaseClient(
+        _localUrl,
+        _localPublishableKey,
+        realtimeClientOptions: realtimeOptions,
+      );
+      final anonymous = SupabaseClient(
+        _localUrl,
+        _localPublishableKey,
+        realtimeClientOptions: realtimeOptions,
+      );
       final suffix = DateTime.now().microsecondsSinceEpoch;
       final emailA = 'realtime-a-$suffix@local.test';
       final emailB = 'realtime-b-$suffix@local.test';

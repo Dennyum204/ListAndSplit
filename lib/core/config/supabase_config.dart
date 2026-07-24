@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../realtime/bounded_realtime_websocket_transport.dart';
+
 abstract final class SupabaseConfig {
   static const url = String.fromEnvironment('SUPABASE_URL');
   static const publishableKey = String.fromEnvironment(
@@ -43,5 +45,8 @@ Future<void> initializeSupabaseIfConfigured() async {
   await Supabase.initialize(
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.publishableKey,
+    realtimeClientOptions: RealtimeClientOptions(
+      transport: const BoundedRealtimeWebSocketTransport().connect,
+    ),
   );
 }

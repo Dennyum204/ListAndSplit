@@ -70,6 +70,7 @@ void main() {
     coordinator.resume();
     await _flush();
     expect(reconciliations, 2);
+    expect(gateway.subscriptions, hasLength(1));
     await coordinator.dispose();
   });
 
@@ -147,7 +148,128 @@ void main() {
     await coordinator.dispose();
   });
 
-  test('errors rely on SDK retry and unexpected close is replaced once',
+  test('repeated errors and timeout coalesce into one serialized replacement',
+      () async {
+    final gateway = _FakeGateway();
+    final diagnostics = <AccountRealtimeDiagnostic>[];
+    final coordinator = AccountReconciliationCoordinator(
+      gateway,
+      ReconciliationRegistry(),
+      closedChannelRetryDelay: Duration.zero,
+      diagnosticSink: diagnostics.add,
+    );
+    coordinator.setAccount('account-a');
+    await _flush();
+    final subscription = gateway.subscriptions.single;
+    subscription.closeCompleter = Completer<void>();
+
+    subscription.emitStatus(
+      AccountRealtimeStatus.channelError,
+      error: Exception('private error details must not escape'),
+    );
+    subscription.emitStatus(AccountRealtimeStatus.channelError);
+    subscription.emitStatus(AccountRealtimeStatus.timedOut);
+    await _flush();
+    expect(gateway.subscriptions, hasLength(1));
+    expect(subscription.closeCalls, 1);
+
+    subscription.emitStatus(AccountRealtimeStatus.closed);
+    await _flush();
+    expect(gateway.subscriptions, hasLength(1));
+
+    subscription.closeCompleter!.complete();
+    await _flush();
+    expect(gateway.subscriptions, hasLength(2));
+    expect(gateway.accountIds, ['account-a', 'account-a']);
+    expect(gateway.maximumOpenSubscriptions, 1);
+    expect(
+      diagnostics.map((diagnostic) => diagnostic.action),
+      containsAllInOrder([
+        AccountRealtimeRecoveryAction.recoveryScheduled,
+        AccountRealtimeRecoveryAction.recoveryCoalesced,
+        AccountRealtimeRecoveryAction.recoveryCoalesced,
+      ]),
+    );
+    expect(
+      diagnostics.first.update.errorReported,
+      isTrue,
+    );
+    await coordinator.dispose();
+  });
+
+  test('resume recovers a joined non-null unhealthy subscription only once',
+      () async {
+    final gateway = _FakeGateway();
+    final registry = ReconciliationRegistry();
+    var reconciliations = 0;
+    registry.register(() async => reconciliations += 1);
+    final coordinator = AccountReconciliationCoordinator(
+      gateway,
+      registry,
+      closedChannelRetryDelay: const Duration(days: 1),
+    );
+    coordinator.setAccount('account-a');
+    await _flush();
+    final unhealthy = gateway.subscriptions.single;
+    unhealthy.emitStatus(AccountRealtimeStatus.subscribed);
+    await _flush();
+    expect(reconciliations, 1);
+    unhealthy.closeCompleter = Completer<void>();
+    unhealthy.emitStatus(AccountRealtimeStatus.channelError);
+
+    coordinator.resume();
+    coordinator.resume();
+    coordinator.setAccount('account-a');
+    await _flush();
+
+    expect(unhealthy.closeCalls, 1);
+    expect(gateway.subscriptions, hasLength(1));
+    expect(reconciliations, 2);
+
+    unhealthy.closeCompleter!.complete();
+    await _flush();
+
+    expect(gateway.accountIds, ['account-a', 'account-a']);
+    expect(gateway.subscriptions, hasLength(2));
+    expect(gateway.maximumOpenSubscriptions, 1);
+    final recovered = gateway.subscriptions.last;
+    recovered.emitStatus(AccountRealtimeStatus.subscribed);
+    await _flush();
+    expect(reconciliations, 3);
+    recovered.emitInvalidation();
+    await _flush();
+    expect(reconciliations, 4);
+    await coordinator.dispose();
+  });
+
+  test('a successful SDK rejoin cancels a pending replacement', () async {
+    final gateway = _FakeGateway();
+    final diagnostics = <AccountRealtimeDiagnostic>[];
+    final coordinator = AccountReconciliationCoordinator(
+      gateway,
+      ReconciliationRegistry(),
+      closedChannelRetryDelay: Duration.zero,
+      diagnosticSink: diagnostics.add,
+    );
+    coordinator.setAccount('account-a');
+    await _flush();
+    final subscription = gateway.subscriptions.single;
+
+    subscription.emitStatus(AccountRealtimeStatus.channelError);
+    subscription.emitStatus(AccountRealtimeStatus.subscribed);
+    await _flush();
+
+    expect(gateway.subscriptions, hasLength(1));
+    expect(subscription.closeCalls, 0);
+    expect(subscription.isOpen, isTrue);
+    expect(
+      diagnostics.last.action,
+      AccountRealtimeRecoveryAction.recoveryCancelled,
+    );
+    await coordinator.dispose();
+  });
+
+  test('account switch wins while unhealthy-channel teardown is serialized',
       () async {
     final gateway = _FakeGateway();
     final coordinator = AccountReconciliationCoordinator(
@@ -157,18 +279,78 @@ void main() {
     );
     coordinator.setAccount('account-a');
     await _flush();
-    final subscription = gateway.subscriptions.single;
-
-    subscription.emitStatus(AccountRealtimeStatus.channelError);
-    subscription.emitStatus(AccountRealtimeStatus.timedOut);
+    final oldSubscription = gateway.subscriptions.single;
+    oldSubscription.closeCompleter = Completer<void>();
+    oldSubscription.emitStatus(AccountRealtimeStatus.channelError);
     await _flush();
-    expect(gateway.subscriptions, hasLength(1));
+    expect(oldSubscription.closeCalls, 1);
 
-    subscription.emitStatus(AccountRealtimeStatus.closed);
+    coordinator.setAccount('account-b');
+    coordinator.resume();
     await _flush();
-    expect(subscription.closeCalls, 1);
+    expect(gateway.accountIds, ['account-a']);
+
+    oldSubscription.closeCompleter!.complete();
+    await _flush();
+
+    expect(gateway.accountIds, ['account-a', 'account-b']);
+    expect(gateway.maximumOpenSubscriptions, 1);
+    expect(coordinator.activeAccountId, 'account-b');
+    await coordinator.dispose();
+  });
+
+  test('failed teardown is retried before a replacement channel is created',
+      () async {
+    final gateway = _FakeGateway();
+    final coordinator = AccountReconciliationCoordinator(
+      gateway,
+      ReconciliationRegistry(),
+      closedChannelRetryDelay: Duration.zero,
+    );
+    coordinator.setAccount('account-a');
+    await _flush();
+    final unhealthy = gateway.subscriptions.single;
+    unhealthy.closeFailuresRemaining = 1;
+
+    unhealthy.emitStatus(AccountRealtimeStatus.channelError);
+    await _flush();
+    await _flush();
+
+    expect(unhealthy.closeCalls, 2);
     expect(gateway.subscriptions, hasLength(2));
-    expect(gateway.accountIds, ['account-a', 'account-a']);
+    expect(gateway.maximumOpenSubscriptions, 1);
+    await coordinator.dispose();
+  });
+
+  test('diagnostics contain status and action but no transport error values',
+      () async {
+    final gateway = _FakeGateway();
+    final messages = <String>[];
+    final coordinator = AccountReconciliationCoordinator(
+      gateway,
+      ReconciliationRegistry(),
+      closedChannelRetryDelay: const Duration(days: 1),
+      diagnosticSink: (diagnostic) => messages.add(diagnostic.message),
+    );
+    coordinator.setAccount('account-a');
+    await _flush();
+
+    const jwt = 'jwt-secret-value';
+    const topic = 'account:private-profile-id';
+    const payload = '{"amount_minor":12345}';
+    gateway.subscriptions.single.emitStatus(
+      AccountRealtimeStatus.channelError,
+      error: Exception('$jwt $topic $payload'),
+    );
+    await _flush();
+
+    expect(messages, hasLength(1));
+    expect(messages.single, contains('status=channelError'));
+    expect(messages.single, contains('error=reported'));
+    expect(messages.single, contains('action=recoveryScheduled'));
+    for (final privateValue in [jwt, topic, payload, '12345']) {
+      expect(messages.single, isNot(contains(privateValue)));
+    }
     await coordinator.dispose();
   });
 
@@ -275,35 +457,59 @@ Future<void> _flush() async {
 class _FakeGateway implements AccountRealtimeGateway {
   final List<String> accountIds = [];
   final List<_FakeSubscription> subscriptions = [];
+  int openSubscriptions = 0;
+  int maximumOpenSubscriptions = 0;
 
   @override
   AccountRealtimeSubscription subscribe({
     required String authenticatedProfileId,
     required void Function() onInvalidation,
-    required void Function(AccountRealtimeStatus status) onStatus,
+    required void Function(AccountRealtimeStatusUpdate update) onStatus,
   }) {
     accountIds.add(authenticatedProfileId);
-    final subscription = _FakeSubscription(onInvalidation, onStatus);
+    openSubscriptions += 1;
+    if (openSubscriptions > maximumOpenSubscriptions) {
+      maximumOpenSubscriptions = openSubscriptions;
+    }
+    late final _FakeSubscription subscription;
+    subscription = _FakeSubscription(
+      onInvalidation,
+      onStatus,
+      () => openSubscriptions -= 1,
+    );
     subscriptions.add(subscription);
     return subscription;
   }
 }
 
 class _FakeSubscription implements AccountRealtimeSubscription {
-  _FakeSubscription(this._onInvalidation, this._onStatus);
+  _FakeSubscription(this._onInvalidation, this._onStatus, this._onClosed);
 
   final void Function() _onInvalidation;
-  final void Function(AccountRealtimeStatus status) _onStatus;
+  final void Function(AccountRealtimeStatusUpdate update) _onStatus;
+  final void Function() _onClosed;
   Completer<void>? closeCompleter;
+  int closeFailuresRemaining = 0;
   int closeCalls = 0;
+  bool isOpen = true;
 
   void emitInvalidation() => _onInvalidation();
 
-  void emitStatus(AccountRealtimeStatus status) => _onStatus(status);
+  void emitStatus(AccountRealtimeStatus status, {Object? error}) => _onStatus(
+        AccountRealtimeStatusUpdate.fromTransport(status, error: error),
+      );
 
   @override
   Future<void> close() async {
     closeCalls += 1;
     await closeCompleter?.future;
+    if (closeFailuresRemaining > 0) {
+      closeFailuresRemaining -= 1;
+      throw StateError('private close failure');
+    }
+    if (isOpen) {
+      isOpen = false;
+      _onClosed();
+    }
   }
 }

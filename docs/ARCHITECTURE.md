@@ -295,18 +295,32 @@ profile changes. Fanout targets affected account topics and sends no row, resour
 actor, transition, timestamp, or authorization data. A failed or rolled-back
 mutation commits no message; duplicate transport signals are harmless.
 
-Only the injected Supabase adapter uses the channel API. A session-scoped
-coordinator starts after verified onboarding, removes the old channel before an
-account switch, relies on the pinned SDK for token refresh and error/timeout
-rejoin, replaces an unexpected closed channel, and reconciles after every
-`SUBSCRIBED` state and app resume. Mounted feature controllers register
-repository refresh work. One pass runs at a time; bursts mark one dirty follow-up
-and are cooldown-bounded. Cached UI remains usable on transport failure. Access
-revocation clears inaccessible detail/member content and navigates once to Lists
-with generic localized wording; a remote active-to-archived detail transition also
-returns to Lists once without presenting it as revocation. Notification projection
-reconciliation marks only unread rows, preventing its own read writes from
-producing a Broadcast feedback loop. Manual refresh remains a required fallback.
+Only the injected Supabase adapter uses the channel API. Supabase initialization
+injects a testable WebSocket transport with a named conservative handshake
+deadline. A stalled ready future therefore fails within a bound instead of
+retaining an unusable non-null SDK connection; the pinned SDK can release and
+retry it while remaining authoritative for authenticated-session token
+propagation.
+
+A session-scoped coordinator starts after verified onboarding, removes the old
+channel before an account switch, and serializes recovery after channel errors,
+timeouts, closure, or app resume. Recovery is idempotent and preserves exactly one
+account channel and callback registration. Privacy-safe diagnostics retain
+lifecycle status, whether an error was reported, and the recovery action without
+tokens, keys, complete topics, profile IDs, payloads, financial data, or other
+private content.
+
+Every valid invalidation, successful subscription, and app resume schedules
+authoritative repository reload work registered by mounted feature controllers.
+Broadcast is only a best-effort content-free invalidation; it never mutates a
+projection or supplies authorization data directly. One reconciliation pass runs
+at a time; bursts mark one dirty follow-up and are cooldown-bounded. Cached UI
+remains usable on transport failure. Access revocation clears inaccessible
+detail/member content and navigates once to Lists with generic localized wording;
+a remote active-to-archived detail transition also returns to Lists once without
+presenting it as revocation. Notification projection reconciliation marks only
+unread rows, preventing its own read writes from producing a Broadcast feedback
+loop. Manual refresh remains a required fallback.
 
 Broadcast is best-effort and has no replay or durable-history promise. Presence,
 Broadcast Replay, Postgres Changes client subscriptions, client sends, REST/Edge
@@ -804,6 +818,12 @@ writes are implemented.
   view-model transitions with repository fakes rather than a live backend.
 - Test RLS policies, database constraints, triggers, and functions with allowed
   and denied identities for every business migration.
+- Realtime client tests deterministically cover bounded stalled handshakes,
+  joined-channel recovery, duplicate recovery signals, diagnostic redaction, and
+  the production gateway-to-coordinator-to-registry path through a mounted feature
+  controller. The separately enabled local two-client smoke retains real private
+  channel authorization and database Broadcast coverage; broader hosted
+  cross-service automation remains open under O-A15.
 - Split server tests cover integer arithmetic, equal-share remainders, eligibility,
   historical identity, exact share conservation, settlement/reversal history,
   deterministic suggestions, balances, pagination, versions, concurrency,
