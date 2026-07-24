@@ -171,6 +171,34 @@ void main() {
     expect(find.byType(FilledButton), findsNothing);
     expect(find.byType(OutlinedButton), findsNothing);
   });
+
+  testWidgets('item assignment is informational and names item and list',
+      (tester) async {
+    final notifications = FakeNotificationRepository()
+      ..notifications = [itemAssignmentNotification()];
+    await pumpCentre(tester, notifications: notifications);
+
+    expect(find.text('Assigned to Sunscreen in Shared trip'), findsOneWidget);
+    expect(find.text('@owner_user'), findsOneWidget);
+    expect(find.text('You were assigned to this item.'), findsOneWidget);
+    expect(find.byType(FilledButton), findsNothing);
+    expect(find.byType(OutlinedButton), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('item assignment is localized in Portuguese', (tester) async {
+    final notifications = FakeNotificationRepository()
+      ..notifications = [itemAssignmentNotification()];
+    await pumpCentre(
+      tester,
+      notifications: notifications,
+      locale: const Locale('pt'),
+    );
+
+    expect(find.text('Atribuição de Sunscreen em Shared trip'), findsOneWidget);
+    expect(find.text('Este item foi-lhe atribuído.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> pumpCentre(
@@ -179,6 +207,7 @@ Future<void> pumpCentre(
   FakeFriendshipRepository? friendships,
   FakeActiveListRepository? activeLists,
   ThemeMode themeMode = ThemeMode.light,
+  Locale? locale,
   bool settle = true,
 }) async {
   await tester.pumpWidget(
@@ -196,6 +225,7 @@ Future<void> pumpCentre(
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: themeMode,
+        locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: const NotificationCentreScreen(),
@@ -257,5 +287,25 @@ InAppNotification ownershipTransferNotification() {
     activeListId: 'list-1',
     activeListTitle: 'Shared trip',
     activeListStatus: 'active',
+  );
+}
+
+InAppNotification itemAssignmentNotification() {
+  return InAppNotification(
+    id: 'assignment-n-1',
+    type: InAppNotificationType.listItemAssigned,
+    createdAt: DateTime.utc(2026, 7, 24, 9, 30),
+    isRead: false,
+    actorProfileId: 'owner-1',
+    actorUsername: 'owner_user',
+    actorDisplayName: 'Owner User',
+    actionStatus: NotificationActionStatus.unavailable,
+    expectedRelationshipVersion: null,
+    activeListId: 'list-1',
+    activeListTitle: 'Shared trip',
+    activeListStatus: 'active',
+    activeListItemId: 'item-1',
+    activeListItemName: 'Sunscreen',
+    assignmentItemVersion: 8,
   );
 }

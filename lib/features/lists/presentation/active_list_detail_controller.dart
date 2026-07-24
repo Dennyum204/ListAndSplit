@@ -125,6 +125,7 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
       final results = await Future.wait<Object>([
         _repository.getList(listId),
         _repository.listItems(listId),
+        _repository.listParticipants(listId),
       ]).timeout(_requestTimeout);
       if (!mounted || generation != _loadGeneration) return false;
       final refreshedSummary = results[0] as ActiveListSummary;
@@ -138,6 +139,7 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
           ActiveListDetail(
             summary: refreshedSummary,
             items: results[1] as List<ActiveListItem>,
+            participants: results[2] as List<ActiveListParticipant>,
           ),
         ),
         message: message,
@@ -230,6 +232,7 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
     String name, {
     required ListQuantity quantity,
     required ListUnit? unit,
+    Set<String> assigneeProfileIds = const {},
   }) async {
     final detail = _startMutable();
     final normalized = name.trim();
@@ -242,8 +245,13 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
       _finish(ActiveListDetailMessage.invalidInput);
       return ActiveListMutationOutcome.invalid;
     }
-    final payload =
-        '$normalized\u0000${quantity.thousandths}\u0000${unit?.code ?? ''}';
+    final assigneeIds = _validatedAssigneeIds(detail, assigneeProfileIds);
+    if (assigneeIds == null) {
+      _finish(ActiveListDetailMessage.invalidInput);
+      return ActiveListMutationOutcome.invalid;
+    }
+    final payload = '$normalized\u0000${quantity.thousandths}\u0000'
+        '${unit?.code ?? ''}\u0000${assigneeIds.join(',')}';
     final requestId = _pendingItemPayload == payload
         ? _pendingItemRequestId!
         : _requestIdGenerator();
@@ -255,10 +263,12 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
         normalized,
         quantity: quantity,
         unit: unit,
+        assigneeProfileIds: assigneeIds,
         requestId: requestId,
         expectedListVersion: detail.summary.version,
       ),
       ActiveListDetailMessage.itemCreated,
+      reconcileInvalid: true,
     );
     if (created == ActiveListMutationOutcome.succeeded) {
       _pendingItemPayload = null;
@@ -272,11 +282,21 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
     String name, {
     required ListQuantity quantity,
     required ListUnit? unit,
+    Set<String>? assigneeProfileIds,
   }) async {
     final detail = _startMutable();
     final normalized = name.trim();
     if (detail == null) return ActiveListMutationOutcome.failed;
     if (normalized.isEmpty || normalized.length > 120) {
+      _finish(ActiveListDetailMessage.invalidInput);
+      return ActiveListMutationOutcome.invalid;
+    }
+    final assigneeIds = _validatedAssigneeIds(
+      detail,
+      assigneeProfileIds ??
+          item.assignees.map((assignee) => assignee.profileId).toSet(),
+    );
+    if (assigneeIds == null) {
       _finish(ActiveListDetailMessage.invalidInput);
       return ActiveListMutationOutcome.invalid;
     }
@@ -287,11 +307,26 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
         normalized,
         quantity: quantity,
         unit: unit,
+        assigneeProfileIds: assigneeIds,
         expectedListVersion: detail.summary.version,
         expectedItemVersion: item.version,
       ),
       ActiveListDetailMessage.itemUpdated,
+      reconcileInvalid: true,
     );
+  }
+
+  List<String>? _validatedAssigneeIds(
+    ActiveListDetail detail,
+    Set<String> selectedIds,
+  ) {
+    final currentParticipantIds =
+        detail.participants.map((participant) => participant.profileId).toSet();
+    if (selectedIds.length > 20 ||
+        !currentParticipantIds.containsAll(selectedIds)) {
+      return null;
+    }
+    return selectedIds.toList(growable: false)..sort();
   }
 
   Future<ActiveListMutationOutcome> setItemCompleted(
@@ -403,8 +438,9 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
 
   Future<ActiveListMutationOutcome> _run(
     Future<Object?> Function() mutation,
-    ActiveListDetailMessage successMessage,
-  ) async {
+    ActiveListDetailMessage successMessage, {
+    bool reconcileInvalid = false,
+  }) async {
     try {
       await mutation().timeout(_requestTimeout);
       if (!mounted) return ActiveListMutationOutcome.failed;
@@ -419,6 +455,9 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
       return _beginUncertainRecovery();
     } on ActiveListFailure catch (failure) {
       if (!mounted) return ActiveListMutationOutcome.failed;
+      if (reconcileInvalid && failure.code == ActiveListFailureCode.invalid) {
+        return _beginStaleRecovery(ActiveListDetailMessage.staleRefreshed);
+      }
       return _handleFailure(failure);
     } catch (_) {
       if (!mounted) return ActiveListMutationOutcome.failed;

@@ -29,6 +29,9 @@ class AccountDataExportDocument {
         activeLists.any(
           (activeList) =>
               activeList.includesSplitField != (schemaVersion >= 5) ||
+              activeList.items.any(
+                (item) => item.includesAssigneesField != (schemaVersion >= 7),
+              ) ||
               (activeList.split != null &&
                   activeList.split!.includesSettlementsField !=
                       (schemaVersion >= 6)),
@@ -52,6 +55,7 @@ class AccountDataExportDocument {
         4 => _schemaFourRootKeys,
         5 => _schemaFiveRootKeys,
         6 => _schemaSixRootKeys,
+        7 => _schemaSevenRootKeys,
         _ => const <String>{},
       },
     );
@@ -104,13 +108,14 @@ class AccountDataExportDocument {
   }
 
   static const supportedProduct = 'list_and_split';
-  static const supportedSchemaVersion = 6;
+  static const supportedSchemaVersion = 7;
   static const supportedSchemaVersions = {
     1,
     2,
     3,
     4,
     5,
+    6,
     supportedSchemaVersion,
   };
   static const _schemaOneRootKeys = {
@@ -138,6 +143,7 @@ class AccountDataExportDocument {
   };
   static const _schemaFiveRootKeys = _schemaFourRootKeys;
   static const _schemaSixRootKeys = _schemaFiveRootKeys;
+  static const _schemaSevenRootKeys = _schemaSixRootKeys;
 
   final String product;
   final int schemaVersion;
@@ -775,7 +781,12 @@ class AccountActiveListExport {
       updatedAt: _requiredUtcDateTime(json, 'updated_at'),
       archivedAt: archivedAt,
       items: _requiredObjects(json, 'items')
-          .map(AccountActiveListItemExport.fromJson)
+          .map(
+            (item) => AccountActiveListItemExport.fromJson(
+              item,
+              includeAssignees: splitSchemaVersion >= 7,
+            ),
+          )
           .toList(growable: false),
       split: includeSplit && json['split'] != null
           ? AccountListSplitExport.fromJson(
@@ -1279,10 +1290,22 @@ class AccountActiveListItemExport {
     required this.completedBy,
     required this.createdAt,
     required this.updatedAt,
-  });
+    List<AccountActiveListItemAssigneeExport> assignees = const [],
+    this.includesAssigneesField = false,
+  }) : assignees = List.unmodifiable(assignees) {
+    final profileIds = assignees.map((assignee) => assignee.profileId).toSet();
+    if ((!includesAssigneesField && assignees.isNotEmpty) ||
+        assignees.length > 20 ||
+        profileIds.length != assignees.length) {
+      throw const AccountDataExportFailure();
+    }
+  }
 
-  factory AccountActiveListItemExport.fromJson(Map<String, dynamic> json) {
-    _expectExactKeys(json, _keys);
+  factory AccountActiveListItemExport.fromJson(
+    Map<String, dynamic> json, {
+    bool includeAssignees = false,
+  }) {
+    _expectExactKeys(json, includeAssignees ? _schemaSevenKeys : _legacyKeys);
     final name = _requiredString(json, 'name');
     if (name != name.trim() || name.length > 120) {
       throw const AccountDataExportFailure();
@@ -1311,10 +1334,16 @@ class AccountActiveListItemExport {
       completedBy: completedBy,
       createdAt: _requiredUtcDateTime(json, 'created_at'),
       updatedAt: _requiredUtcDateTime(json, 'updated_at'),
+      assignees: includeAssignees
+          ? _requiredObjects(json, 'assignees')
+              .map(AccountActiveListItemAssigneeExport.fromJson)
+              .toList(growable: false)
+          : const [],
+      includesAssigneesField: includeAssignees,
     );
   }
 
-  static const _keys = {
+  static const _legacyKeys = {
     'id',
     'name',
     'quantity_thousandths',
@@ -1326,6 +1355,7 @@ class AccountActiveListItemExport {
     'created_at',
     'updated_at',
   };
+  static const _schemaSevenKeys = {..._legacyKeys, 'assignees'};
   static const _unitCodes = {
     'piece',
     'kg',
@@ -1349,6 +1379,8 @@ class AccountActiveListItemExport {
   final String? completedBy;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final List<AccountActiveListItemAssigneeExport> assignees;
+  final bool includesAssigneesField;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -1361,6 +1393,54 @@ class AccountActiveListItemExport {
         'completed_by': completedBy,
         'created_at': _encodeDateTime(createdAt),
         'updated_at': _encodeDateTime(updatedAt),
+        if (includesAssigneesField)
+          'assignees':
+              assignees.map((entry) => entry.toJson()).toList(growable: false),
+      };
+}
+
+class AccountActiveListItemAssigneeExport {
+  const AccountActiveListItemAssigneeExport({
+    required this.profileId,
+    required this.username,
+    required this.displayName,
+    required this.isOwner,
+    required this.assignedAt,
+  });
+
+  factory AccountActiveListItemAssigneeExport.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    _expectExactKeys(json, _keys);
+    return AccountActiveListItemAssigneeExport(
+      profileId: _requiredUuid(json, 'profile_id'),
+      username: _requiredString(json, 'username'),
+      displayName: _requiredString(json, 'display_name'),
+      isOwner: _requiredBool(json, 'is_owner'),
+      assignedAt: _requiredUtcDateTime(json, 'assigned_at'),
+    );
+  }
+
+  static const _keys = {
+    'profile_id',
+    'username',
+    'display_name',
+    'is_owner',
+    'assigned_at',
+  };
+
+  final String profileId;
+  final String username;
+  final String displayName;
+  final bool isOwner;
+  final DateTime assignedAt;
+
+  Map<String, dynamic> toJson() => {
+        'profile_id': profileId,
+        'username': username,
+        'display_name': displayName,
+        'is_owner': isOwner,
+        'assigned_at': _encodeDateTime(assignedAt),
       };
 }
 

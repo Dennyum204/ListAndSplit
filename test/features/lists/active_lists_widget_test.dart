@@ -235,6 +235,440 @@ void main() {
     expect(repository.itemsByList['list-1'], hasLength(1));
   });
 
+  testWidgets('item rows render zero, one, two, and many assignees compactly',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    final owner = _participant();
+    final member = _participant(
+      profileId: 'member-1',
+      username: 'member',
+      displayName: 'Member',
+      isOwner: false,
+      accessVersion: 2,
+    );
+    final third = _participant(
+      profileId: 'third-1',
+      username: 'third',
+      displayName: 'Third',
+      isOwner: false,
+      accessVersion: 2,
+    );
+    final fourth = _participant(
+      profileId: 'fourth-1',
+      username: 'fourth',
+      displayName: 'Fourth',
+      isOwner: false,
+      accessVersion: 2,
+    );
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [owner, member, third, fourth]
+      ..itemsByList['list-1'] = [
+        _item(id: 'zero', name: 'Zero'),
+        _item(id: 'one', name: 'One', assignees: [_assignee(owner)]),
+        _item(
+          id: 'two',
+          name: 'Two',
+          assignees: [_assignee(owner), _assignee(member)],
+        ),
+        _item(
+          id: 'many',
+          name: 'Many',
+          assignees: [
+            _assignee(owner),
+            _assignee(member),
+            _assignee(third),
+            _assignee(fourth),
+          ],
+        ),
+      ];
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unassigned'), findsOneWidget);
+    expect(find.text('Owner'), findsOneWidget);
+    expect(find.text('Owner, Member'), findsOneWidget);
+    expect(find.text('Owner, Member +2'), findsOneWidget);
+    expect(
+      find.byKey(const Key('itemAssigneeAvatar-one-user-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('itemAssigneeAvatar-two-user-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('itemAssigneeAvatar-two-member-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('itemAssigneeAvatar-many-third-1')),
+      findsNothing,
+    );
+    final twoSummary = find.byKey(const Key('itemAssignees-two'));
+    await tester.ensureVisible(twoSummary);
+    await tester.pump();
+    expect(
+      tester.getSemantics(twoSummary).label,
+      contains('Two. Assigned to Owner, Member.'),
+    );
+    expect(
+      tester.getSemantics(find.byKey(const Key('itemAssignees-zero'))).label,
+      contains('Zero. Unassigned.'),
+    );
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets('item editor saves a complete multi-assignee selection',
+      (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final owner = _participant();
+    final member = _participant(
+      profileId: 'member-1',
+      username: 'member',
+      displayName: 'Member',
+      isOwner: false,
+      accessVersion: 2,
+    );
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [owner, member]
+      ..itemsByList['list-1'] = [
+        _item(assignees: [_assignee(owner)]),
+      ];
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+      themeMode: ThemeMode.dark,
+      textScale: 2,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('itemActions-item-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Assignees'), findsOneWidget);
+    expect(find.text('Owner (you)'), findsOneWidget);
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(const Key('itemAssignee-user-1')),
+          )
+          .value,
+      isTrue,
+    );
+    final memberAssignee = find.byKey(const Key('itemAssignee-member-1'));
+    await tester.ensureVisible(memberAssignee);
+    await tester.tap(memberAssignee);
+    await tester.tap(find.byKey(const Key('saveItemButton')));
+    await tester.pumpAndSettle();
+
+    expect(repository.itemAssigneeCalls.last, ['member-1', 'user-1']);
+    expect(find.text('Owner, Member'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Portuguese assignment row and editor use localized copy',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    final owner = _participant();
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [owner]
+      ..itemsByList['list-1'] = [
+        _item(assignees: [_assignee(owner)]),
+      ];
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+      locale: const Locale('pt'),
+    );
+    await tester.pumpAndSettle();
+
+    final summary = find.byKey(const Key('itemAssignees-item-1'));
+    expect(
+      tester.getSemantics(summary).label,
+      contains('Coffee. Atribuído a Owner.'),
+    );
+
+    await tester.tap(find.byKey(const Key('itemActions-item-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Editar').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Responsáveis'), findsOneWidget);
+    expect(find.text('Owner (você)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets('remote assignment refresh closes and discards a stale editor',
+      (tester) async {
+    final owner = _participant();
+    final member = _participant(
+      profileId: 'member-1',
+      username: 'member',
+      displayName: 'Member',
+      isOwner: false,
+      accessVersion: 2,
+    );
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [owner, member]
+      ..itemsByList['list-1'] = [_item()];
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ActiveListDetailScreen)),
+    );
+
+    await tester.tap(find.byKey(const Key('itemActions-item-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('itemNameField')),
+      'Unsaved local draft',
+    );
+
+    await repository.updateItem(
+      'list-1',
+      'item-1',
+      'Remote item',
+      quantity: ListQuantity.fromThousandths(1500),
+      unit: ListUnit.pack,
+      assigneeProfileIds: ['member-1'],
+      expectedListVersion: 3,
+      expectedItemVersion: 2,
+    );
+    final registry = container.read(reconciliationRegistryProvider);
+    await registry.reconcile();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('itemNameField')), findsNothing);
+    expect(find.text('Unsaved local draft'), findsNothing);
+    expect(find.text('Remote item'), findsOneWidget);
+    expect(
+      find.text(
+        'This item changed on another device. Your draft was discarded and the latest item was loaded.',
+      ),
+      findsOneWidget,
+    );
+
+    await Future.wait([registry.reconcile(), registry.reconcile()]);
+    await tester.pump();
+
+    expect(find.byKey(const Key('itemNameField')), findsNothing);
+    expect(
+      find.text(
+        'This item changed on another device. Your draft was discarded and the latest item was loaded.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'removed-assignee race closes editor and refreshes authoritatively',
+      (tester) async {
+    final repository = _InvalidAssignmentWidgetRepository();
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('itemActions-item-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit').last);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(const Key('itemAssignee-member-1')),
+          )
+          .value,
+      isTrue,
+    );
+
+    await tester.tap(find.byKey(const Key('saveItemButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('itemNameField')), findsNothing);
+    expect(find.text('Unassigned'), findsOneWidget);
+    expect(
+      find.text(
+        'This list changed on another device. The latest version was loaded.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'This item changed on another device. Your draft was discarded and the latest item was loaded.',
+      ),
+      findsNothing,
+    );
+    expect(repository.mutationCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'access loss closes an open item editor and exits to Lists exactly once',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary(isOwner: false)]
+      ..participantsByList['list-1'] = [
+        _participant(
+          profileId: 'member-1',
+          username: 'member',
+          displayName: 'Member',
+          isOwner: false,
+          accessVersion: 2,
+        ),
+      ]
+      ..itemsByList['list-1'] = [_item()];
+    final router = _detailTestRouter();
+    addTearDown(router.dispose);
+    await _pumpRoutedDetail(
+      tester,
+      repository: repository,
+      router: router,
+      userId: 'member-1',
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ActiveListDetailScreen)),
+    );
+    var listTransitions = 0;
+    var previousPath = router.routeInformationProvider.value.uri.path;
+    void trackRoute() {
+      final nextPath = router.routeInformationProvider.value.uri.path;
+      if (previousPath != '/lists' && nextPath == '/lists') {
+        listTransitions += 1;
+      }
+      previousPath = nextPath;
+    }
+
+    router.routeInformationProvider.addListener(trackRoute);
+    addTearDown(
+      () => router.routeInformationProvider.removeListener(trackRoute),
+    );
+
+    await tester.tap(find.byKey(const Key('itemActions-item-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('itemNameField')),
+      'Discard this draft',
+    );
+
+    repository.failure =
+        const ActiveListFailure(ActiveListFailureCode.unavailable);
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+
+    expect(router.routeInformationProvider.value.uri.path, '/lists');
+    expect(listTransitions, 1);
+    expect(find.byKey(const Key('itemNameField')), findsNothing);
+    expect(find.text('Lists landing'), findsOneWidget);
+    expect(
+      find.text(
+        'You no longer have access to this list. The latest Lists view was loaded.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'This item changed on another device. Your draft was discarded and the latest item was loaded.',
+      ),
+      findsNothing,
+    );
+
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+
+    expect(listTransitions, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'remote archive closes an open item editor without duplicate navigation',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary(isOwner: false)]
+      ..itemsByList['list-1'] = [_item()];
+    final router = _detailTestRouter();
+    addTearDown(router.dispose);
+    await _pumpRoutedDetail(
+      tester,
+      repository: repository,
+      router: router,
+      userId: 'member-1',
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ActiveListDetailScreen)),
+    );
+    var listTransitions = 0;
+    var previousPath = router.routeInformationProvider.value.uri.path;
+    void trackRoute() {
+      final nextPath = router.routeInformationProvider.value.uri.path;
+      if (previousPath != '/lists' && nextPath == '/lists') {
+        listTransitions += 1;
+      }
+      previousPath = nextPath;
+    }
+
+    router.routeInformationProvider.addListener(trackRoute);
+    addTearDown(
+      () => router.routeInformationProvider.removeListener(trackRoute),
+    );
+
+    await tester.tap(find.byKey(const Key('itemActions-item-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit').last);
+    await tester.pumpAndSettle();
+
+    await repository.setArchived(
+      'list-1',
+      archived: true,
+      expectedVersion: 3,
+    );
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+
+    expect(router.routeInformationProvider.value.uri.path, '/lists');
+    expect(listTransitions, 1);
+    expect(find.byKey(const Key('itemNameField')), findsNothing);
+    expect(find.text('Lists landing'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+
+    expect(listTransitions, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('detail renames, archives, restores, and confirms list deletion',
       (tester) async {
     final repository = FakeActiveListRepository()..activeLists = [_summary()];
@@ -695,6 +1129,44 @@ class _RevokedAccessRepository extends FakeActiveListRepository {
   }
 }
 
+class _InvalidAssignmentWidgetRepository extends FakeActiveListRepository {
+  _InvalidAssignmentWidgetRepository() {
+    final owner = _participant();
+    final member = _participant(
+      profileId: 'member-1',
+      username: 'member',
+      displayName: 'Member',
+      isOwner: false,
+      accessVersion: 2,
+    );
+    activeLists = [_summary()];
+    participantsByList['list-1'] = [owner, member];
+    itemsByList['list-1'] = [
+      _item(assignees: [_assignee(member)]),
+    ];
+  }
+
+  @override
+  Future<ActiveListItem> updateItem(
+    String listId,
+    String itemId,
+    String name, {
+    required ListQuantity quantity,
+    required ListUnit? unit,
+    required List<String> assigneeProfileIds,
+    required int expectedListVersion,
+    required int expectedItemVersion,
+  }) {
+    mutationCalls += 1;
+    participantsByList[listId] = [
+      for (final participant in participantsByList[listId]!)
+        if (participant.profileId != 'member-1') participant,
+    ];
+    itemsByList[listId] = [_item()];
+    throw const ActiveListFailure(ActiveListFailureCode.invalid);
+  }
+}
+
 class _StaleRenameWidgetRepository extends FakeActiveListRepository {
   _StaleRenameWidgetRepository() {
     activeLists = [_summary(title: 'Weekend Shopping')];
@@ -754,6 +1226,7 @@ class _StaleItemWidgetRepository extends FakeActiveListRepository {
     String name, {
     required ListQuantity quantity,
     required ListUnit? unit,
+    required List<String> assigneeProfileIds,
     required int expectedListVersion,
     required int expectedItemVersion,
   }) async {
@@ -790,11 +1263,58 @@ class _DelayedRenameWidgetRepository extends FakeActiveListRepository {
   }
 }
 
+GoRouter _detailTestRouter() => GoRouter(
+      initialLocation: '/lists/list-1',
+      routes: [
+        GoRoute(
+          path: '/lists',
+          builder: (_, __) => const Scaffold(body: Text('Lists landing')),
+          routes: [
+            GoRoute(
+              path: ':listId',
+              builder: (_, state) => ActiveListDetailScreen(
+                listId: state.pathParameters['listId']!,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
+Future<void> _pumpRoutedDetail(
+  WidgetTester tester, {
+  required FakeActiveListRepository repository,
+  required GoRouter router,
+  required String userId,
+}) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        verifiedUserIdProvider.overrideWithValue(userId),
+        activeListRepositoryProvider.overrideWithValue(repository),
+        notificationRepositoryProvider.overrideWithValue(
+          FakeNotificationRepository(),
+        ),
+      ],
+      child: MaterialApp.router(
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 Future<void> _pump(
   WidgetTester tester, {
   required FakeActiveListRepository repository,
   required Widget child,
   ThemeMode themeMode = ThemeMode.light,
+  double textScale = 1,
+  Locale locale = const Locale('en'),
 }) {
   return tester.pumpWidget(
     ProviderScope(
@@ -809,8 +1329,15 @@ Future<void> _pump(
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: themeMode,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(textScale),
+          ),
+          child: child!,
+        ),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
+        locale: locale,
         home: child,
       ),
     ),
@@ -843,9 +1370,14 @@ ActiveListSummary _summary({
   );
 }
 
-ActiveListItem _item({String name = 'Coffee', int version = 2}) {
+ActiveListItem _item({
+  String id = 'item-1',
+  String name = 'Coffee',
+  int version = 2,
+  List<ActiveListAssignee> assignees = const [],
+}) {
   return ActiveListItem(
-    id: 'item-1',
+    id: id,
     name: name,
     quantity: ListQuantity.fromThousandths(1500),
     unit: ListUnit.pack,
@@ -855,5 +1387,30 @@ ActiveListItem _item({String name = 'Coffee', int version = 2}) {
     completedBy: null,
     createdAt: DateTime.utc(2026, 7, 20, 9),
     updatedAt: DateTime.utc(2026, 7, 20, 10),
+    assignees: assignees,
   );
 }
+
+ActiveListParticipant _participant({
+  String profileId = 'user-1',
+  String username = 'owner',
+  String displayName = 'Owner',
+  bool isOwner = true,
+  int? accessVersion,
+}) =>
+    ActiveListParticipant(
+      profileId: profileId,
+      username: username,
+      displayName: displayName,
+      isOwner: isOwner,
+      accessVersion: accessVersion,
+    );
+
+ActiveListAssignee _assignee(ActiveListParticipant participant) =>
+    ActiveListAssignee(
+      profileId: participant.profileId,
+      username: participant.username,
+      displayName: participant.displayName,
+      isOwner: participant.isOwner,
+      assignedAt: DateTime.utc(2026, 7, 24, 12),
+    );

@@ -33,7 +33,7 @@ Profile --< versioned Relationship state >-- Profile
 Profile --owns--> Active List --< List Item
 Active List --< retained participant access >-- Profile
 
-Future: List Item --< Item Assignment >-- List Member
+List Item --< current Item Assignment >-- current List Participant
 Active List --< Split Participant --payer/beneficiary--> Expense / allocated share
 Active List --< immutable Settlement / one-time Reversal --payer/recipient/recorder--> Split Participant
 
@@ -124,8 +124,17 @@ same caller-owned-list `split` object. It allowlists immutable settlement
 identities, payer/recipient/recorder participant IDs, integer amounts, optional
 notes, server timestamps, and the one-time reversal's recorder, reason, and link to
 its settlement. Request IDs, derived balances, and suggested payments are omitted.
-Exact custom shares require no version `7`; versions `1` through `6` remain
-strictly readable.
+Exact custom shares require no new version.
+
+The existing parameterless `export_own_account_data()` remains the unchanged
+schema-version-6 boundary for legacy clients. The separate parameterless
+`export_own_account_data_v7()` preserves versions `1` through `6` and adds a
+non-null deterministic `assignees` array to each fully exported caller-owned item.
+Each assignment object allowlists only `profile_id`, `username`, `display_name`,
+`is_owner`, and `assigned_at`, ordered owner first and then by canonical username/
+profile ID. `shared_list_access` remains byte-for-byte metadata-only and gains no
+assignment array, item identifier, item name, or assignment timestamp. Versions
+`1` through `7` remain strictly readable by the assignment-aware client.
 
 Every nested object is built from an explicit field allowlist. The social arrays
 apply the same directional-block, caller-relative active-relationship, recipient,
@@ -143,11 +152,13 @@ both normalized relationship participant references, notification recipient and
 actor references, and the notification relationship reference cascade from the
 profile/relationship rows they protect. Owned-list and list-item foreign keys add
 the list aggregate to that same cascade. Private category/template ownership
-foreign keys add the complete personal template aggregate. Owned-list deletion
-cascades that list's Split aggregate. For a deleted non-owner in another person's
-list, a profile-deletion trigger clears the Split participant's snapshots and live
-profile link while preserving list-owned expense/share/settlement/reversal
-arithmetic. This removes or
+foreign keys add the complete personal template aggregate. Assignment foreign keys
+add the owned-list current-assignment aggregate. Owned-list deletion cascades that
+list's assignment and Split aggregates. For a deleted non-owner in another
+person's list, the profile-deletion boundary removes current item assignments and
+advances affected item/list versions before clearing the Split participant's
+snapshots and live profile link while preserving list-owned expense/share/
+settlement/reversal arithmetic. This removes or
 anonymizes every currently implemented record involving the deleted account in the
 same root transaction, while unrelated rows, including lists created or filled
 from template snapshots, remain unchanged.
@@ -365,10 +376,12 @@ item if a future actor identity disappears.
 
 List rename/archive/restore increments list version only. Item create/delete/
 reorder increments list version. Item edit/complete/reopen increments both list and
-item version. Real state changes update the corresponding server timestamps once;
-idempotent no-op retries update neither. Expected versions prevent stale overwrite
-with a stable `40001` conflict. Creation request UUIDs are checked against their
-payload for retry safety and never grant ownership.
+item version. A real assignment-set change also increments both list and item
+versions; a combined item-field/assignment update still increments each only once.
+Real state changes update the corresponding server timestamps once; idempotent
+no-op retries update neither. Expected versions prevent stale overwrite with a
+stable `40001` conflict. Creation request UUIDs are checked against their payload
+for retry safety and never grant ownership.
 
 A list has a hard addition capacity of 200 current item rows. Completed and
 uncompleted rows count equally; physical deletion frees capacity immediately.
@@ -378,8 +391,50 @@ remain editable, completable, reorderable, and deletable at capacity. A legacy
 list above 200 remains intact and readable but cannot receive additions until its
 count falls below 200.
 
-No assignment or item-event table exists yet. Multi-member assignment and its
-authorization/audit rules remain open with the collaborative-list phase.
+### Implemented current item assignment
+
+`public.active_list_item_assignments` contains exactly one current row per
+`(list_id, item_id, assignee_profile_id)`, which is also its composite primary key.
+The `(list_id, item_id)` reference cascades from the same-list item, the assignee
+profile reference cascades from account deletion, and database-owned `assigned_at`
+records when this current row was inserted. A reverse
+`(assignee_profile_id, list_id, item_id)` index supports account/access cleanup.
+The table contains no assigned-by identity, assignment-local version, soft-delete
+state, event history, template link, or copied profile text.
+
+An item has zero through 20 assignment rows, bounded by the current
+list-participant capacity.
+The exact eligible set is the current unblocked list owner plus current accepted
+members. Pending, declined, cancelled, removed, left, foreign-list, deleted, or
+otherwise ineligible profiles cannot be referenced through the application
+boundary. Every current owner/member may assign or unassign any eligible
+participant, including themselves, on active completed or uncompleted items.
+
+`list_active_list_items_v2` returns each item with a non-null deterministic
+`assignees` array. `create_active_list_item_v2` and
+`update_active_list_item_v2` accept the complete assignee profile-ID array and
+atomically validate item fields, caller authority, eligibility, uniqueness, and
+expected versions before replacing the set. A real set change increments parent
+list/item versions once; exact retries/no-ops change nothing; stale or invalid
+requests create no partial row, notification, version, or Realtime output. Legacy
+item listing/creation/update signatures remain unchanged: legacy creation has zero
+assignments and legacy update preserves them.
+
+Before a mutation can create or retain a profile-backed reference, it locks the
+relevant profile identities in UUID order. Participant-set lifecycle operations
+also recheck their sorted preflight snapshot after acquiring the list lock.
+Account-deletion cleanup then locks each surviving list, its affected items, and
+retained participant rows in deterministic order, avoiding profile/list foreign-key
+deadlocks without making stable read RPCs lock rows.
+
+Explicit unassignment and parent item deletion remove current rows. Member
+leave/removal, block-driven access loss, and non-owner account deletion remove all
+of that profile's current assignments on surviving lists, permanently suppress
+their assignment notifications, increment each affected item once and its list
+once, and emit no unassignment notification. List deletion cascades all assignment
+rows. Ownership transfer preserves assignments because the new and former owner
+remain current participants. No assignment survives as item history or copies into
+a template.
 
 ### General note and mentions
 
@@ -413,8 +468,8 @@ retain at most 100 templates.
 1-120-character name, exact integer `quantity_thousandths` from `1` through
 `999999999`, positive deterministic position, positive monotonic `bigint` version,
 a payload-bound creation request UUID, and database-owned creation/update times.
-It deliberately has no unit, completion, actor, reminder, date, membership,
-source-list, or destination-list field. Duplicate names are valid.
+It deliberately has no unit, completion, actor, assignment, reminder, date,
+membership, source-list, or destination-list field. Duplicate names are valid.
 
 Every category, template, and item mutation derives the owner only from
 `auth.uid()`. Category/template counts are serialized by a caller-scoped
@@ -595,25 +650,25 @@ number of transactions.
 
 ### Persistent notification
 
-A notification belongs to one recipient. The accepted initial physical record is
-`public.user_notifications` and contains:
+A notification belongs to one recipient. The current
+`public.user_notifications` record contains:
 
 - a database-generated UUID primary key;
 - recipient and actor profile references that cascade through account deletion;
-- a check-constrained type, initially only `friend_request`;
-- normalized low/high relationship participant IDs and a composite relationship
-  reference that cascades when account deletion removes the relationship;
-- the positive relationship version that caused the notification;
+- a check-constrained friend-request, list-access, ownership-transfer, or
+  `list_item_assigned` type;
+- type-specific nullable relationship, participant-access, list, or assignment-item
+  references and the positive authoritative version that caused the notification;
 - database-managed creation time and expiry exactly 180 days later;
 - nullable database-managed read time; and
 - nullable permanent suppression time.
 
-Named constraints require actor and recipient to differ, prove they are exactly
-the normalized relationship participants, require valid pair ordering and a
-positive version, preserve exact expiry, and prevent read/suppression timestamps
-from preceding creation. A unique recipient/type/pair/version constraint prevents
-duplicate creation. The row stores no username, display name, email, Auth metadata,
-arbitrary message, or independent action state.
+Named constraints require actor and recipient to differ, enforce each type's exact
+reference shape, require valid normalized relationship ordering and positive
+versions, preserve exact expiry, and prevent read/suppression timestamps from
+preceding creation. Type-specific recipient/resource/version uniqueness prevents
+duplicate creation. The row stores no username, display name, list title, item
+name, email, Auth metadata, arbitrary message, or independent action state.
 
 Every real transition into a new pending relationship version creates one
 notification for that recipient. A same-requester retry, crossed send into
@@ -622,10 +677,10 @@ creates one for its new pending version.
 
 The RPC-only boundary lists the current recipient's visible rows newest first by
 deterministic `(created_at, id)` keyset, returns a matching unread count, and marks
-a bounded set of caller-owned displayed IDs read. Listing resolves only the actor's
-ID, username, and display name and projects `actionable`, `friends`, or generic
-`unavailable` from the current relationship. Only the exact matching pending
-version with the actor as requester and recipient as caller is actionable.
+a bounded set of caller-owned displayed IDs read. Listing resolves only currently
+authorized actor/resource fields and projects action state from the authoritative
+relationship or participant row. Only the exact matching pending version with the
+actor as requester and recipient as caller is actionable.
 
 Expired rows and permanently suppressed rows are excluded from listing and badge
 counts. Creating a block suppresses every existing pair notification in the same
@@ -637,16 +692,32 @@ new owner is the recipient, the former owner is the actor, and the reference use
 the former owner's resulting retained member-access version. No copied profile or
 list text is stored.
 
+`list_item_assigned` is informational. One real absent-to-present assignment
+creates one row only for each newly assigned recipient other than the authenticated
+actor, keyed by the resulting item version. A retry/no-op, self-assignment,
+unassignment, other item edit, cleanup, or rejection creates none. Removing then
+later re-adding the same assignee may create one new row at the new item version.
+The item foreign key cascades item/list deletion. Names are joined live only while
+the recipient retains current list access; access loss or either-direction block
+permanently suppresses the row, so later reinvitation/unblocking cannot restore it.
+Normal 180-day logical expiry otherwise applies.
+
+Legacy notification listing/count functions exclude `list_item_assigned`, while
+the v2 functions include all legacy types plus its current authorized list/item
+projection. The shared mark-read function remains bounded, caller-owned, and
+idempotent. This preserves strict old clients without duplicating the notification
+table or creating a second action authority.
+
 Accepted future notification types remain:
 
 - actionable sent template;
-- informational item assignment; and
 - informational note mention.
 
-Invitation and sent-template action state will belong to their underlying records,
-as friend-request action state belongs to the relationship. Archive/delete and
-preference controls, future-type payload localization, physical cleanup, and
-retention beyond the implemented current-aggregate account deletion remain open.
+Implemented invitation action state belongs to participant access, as
+friend-request action state belongs to the relationship. Sent-template action state
+will likewise belong to its underlying record. Archive/delete and preference
+controls, later-type payload localization, physical cleanup, and retention beyond
+the implemented current-aggregate account deletion remain open.
 
 Push tokens and delivery attempts are future infrastructure for FCM/APNs and are
 outside the initial identity/profile schema. Device token ownership, rotation,
@@ -680,6 +751,10 @@ Ownership transfer changes both visible authority/access projections and creates
 the new-owner notification in the same transaction, so the existing list,
 participant, and notification triggers invalidate both affected accounts without
 changing the wire contract.
+Assignment create/update/cleanup likewise changes parent item/list versions and
+uses the same list fanout; a `list_item_assigned` insert additionally invalidates
+its recipient through the existing notification trigger. No assignment identifier,
+content, actor, item, or version enters the Broadcast payload.
 
 The one `realtime.messages` receive policy compares the requested channel topic
 with `auth.uid()` and restricts the extension to `broadcast`. There is no client
@@ -701,7 +776,8 @@ anonymous denial unless public read is explicitly intended.
 | Active/shared lists | RPC-only owner/accepted-member reads; owner-only metadata/access management; member item mutations while active |
 | Active-list participants | RPC-only caller-derived transitions; pending visible only to owner/recipient; minimal accepted participant projection |
 | List items | RPC-only through the owner/accepted-member boundary; archived lists reject mutations |
-| Future assignments, notes, mentions | Authorized list members, with mutations limited by later accepted rules |
+| Current item assignments | RPC-only full-set v2 item mutations by current unblocked owner/members; eligible current participants only; direct CRUD denied |
+| Future notes and mentions | Authorized list members, with mutations limited by later accepted rules |
 | Invitations | Exact recipient and owner through versioned participant-access RPCs |
 | Private templates/categories | RPC-only owner access; copies into accessible lists recheck destination membership and state |
 | Public templates | Readable according to approved public-profile policy; mutation remains owner-only |
@@ -718,14 +794,14 @@ explicit grants, protected search paths, and adversarial policy/function tests.
 ## Physical-model decisions still required
 
 - Identifier types, timestamp/audit conventions, soft delete, and archival for
-  later aggregates beyond the accepted profile, relationship, notification, and
-  owner-list records.
+  later aggregates beyond the accepted profile, relationship, notification,
+  owner-list, and current-assignment records.
 - Support/administrator correction and audit rules for immutable usernames.
 - Avatar Storage, validation, replacement, retention, and deletion lifecycle.
 - Mention representation and parser ownership.
 - Public-template visibility/copy placement, sent-template version/provenance,
   attribution, and offer idempotency.
-- Future notification-type payload/localization, archive/preferences, physical
+- Later notification-type payload/localization, archive/preferences, physical
   cleanup, account-lifecycle retention, and push-token tables.
 - Offline mutation identifiers, tombstones, cache reconciliation, and conflict
   resolution.

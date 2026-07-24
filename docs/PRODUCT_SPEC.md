@@ -22,8 +22,8 @@ are the evidence of implementation status.
   prohibited.
 - The mobile information architecture has four primary destinations. Notifications
   are important, but not a fifth tab.
-- English is the initial UI language, while code and content structure remain ready
-  for localization.
+- English and Portuguese are supported UI languages, while code and content
+  structure remain ready for additional locales.
 
 ## Functional requirements
 
@@ -77,10 +77,16 @@ are the evidence of implementation status.
   adds private template categories, templates, and ordered template items; version
   `5` adds Split expense data nested only under the caller's fully exported owned
   lists; version `6` adds that owned-list Split ledger's immutable settlement and
-  one-time reversal history. Equal and custom allocations are represented by
-  their explicit integer share rows; no allocation-mode field or schema version
-  `7` is introduced. Collections are deterministic arrays and are empty rather
-  than null, and export versions `1` through `6` remain compatible.
+  one-time reversal history; and version `7` adds current item assignments only
+  inside fully exported caller-owned list items. Equal and custom allocations are
+  represented by their explicit integer share rows; no allocation-mode field is
+  introduced. Collections are deterministic arrays and are empty rather than
+  null, and export versions `1` through `7` remain compatible.
+- The existing parameterless `export_own_account_data()` remains unchanged at
+  schema version `6` for legacy clients. Assignment-aware clients call the separate
+  parameterless `export_own_account_data_v7()`. Version `7` adds no assignment,
+  item identifier, item name, or assignment timestamp to `shared_list_access`;
+  lists owned by another user remain byte-for-byte privacy-minimal metadata.
 - The export includes nullable onboarding fields faithfully. It includes only the
   existing caller-visible block, relationship, and notification projections, so
   either-direction block suppression, dormant relationship privacy, notification
@@ -88,11 +94,14 @@ are the evidence of implementation status.
 - The list export contains both active and archived owned lists and only approved
   list/item identifiers, title/name, status, exact integer quantity thousandths,
   stable unit code, integer position, completion attribution/time, versions, and
-  timestamps. Split export includes the persistent participant identities needed
-  to understand expenses and settlements, settlement endpoints, recorder
-  attribution, amounts, notes, reversal links/reasons, and server timestamps. It
-  excludes creation/reversal request IDs, derived balances and suggestions, and
-  internal locking or authorization details.
+  timestamps. Version `7` adds each owned item's deterministic current assignee
+  projection with only profile ID, username, display name, owner flag, and
+  assignment time, without request identifiers or assignment history. Split
+  export includes the persistent participant identities needed to understand
+  expenses and settlements, settlement endpoints, recorder attribution, amounts,
+  notes, reversal links/reasons, and server timestamps. It excludes creation/
+  reversal request IDs, derived balances and suggestions, and internal locking or
+  authorization details.
 - After ownership transfer, the new owner receives the list only in the full owned
   projection and the former owner receives its caller-relative shared-access
   metadata. The internal retained owner-access state is never exported as shared
@@ -101,10 +110,10 @@ are the evidence of implementation status.
   metadata, another person's email or Auth data, incoming blocks, raw dormant
   relationship state, reopening/requester internals, suppressed/expired/
   block-hidden notifications, server logs, security records, participant data
-  beyond the persistent financial identities required inside the caller's owned
-  Split ledgers, shared-list contents, public/shared-template data, or Split data
-  from a list the caller does not own. Shared-list export remains privacy-minimal
-  metadata.
+  beyond the approved current assignment projection and persistent financial
+  identities inside caller-owned lists, shared-list contents or assignments,
+  public/shared-template data, or Split data from a list the caller does not own.
+  Shared-list export remains privacy-minimal metadata.
 - Export is generated synchronously on demand and returned to the caller. The
   server retains no export file or export record. The mobile app validates and
   pretty-prints the versioned document, writes it to OS-managed temporary/cache
@@ -136,8 +145,11 @@ are the evidence of implementation status.
 - Deleting the Auth user is the atomic root operation. Database cascades remove
   the profile, incoming and outgoing blocks, relationships in either participant
   position, notifications where the user is recipient or actor, notifications
-  attached to a deleted relationship, every owned list and item, and every private
-  template, template item, and category. No
+  attached to a deleted relationship or item, every owned list, item, and current
+  assignment, and every private template, template item, and category. On another
+  owner's surviving list, the deleted profile's current item assignments are
+  removed transactionally and affected item/list versions advance before the
+  profile disappears. No
   application cleanup transaction is committed separately before the Auth
   deletion. On another owner's list, the deleted account's Split identity is
   anonymized in that same root transaction while its integer expense, settlement,
@@ -165,9 +177,9 @@ are the evidence of implementation status.
 
 ### Active and shared lists
 
-Each list has one fully onboarded owner and retained, versioned access rows.
-Assignment, note, mention, and offline cache records are not implemented. Private
-templates and the first Split expense-ledger slice use separate list-integrated
+Each list has one fully onboarded owner, retained versioned access rows, and
+current zero-to-20 item assignments. Note, mention, and offline cache records
+are not implemented. Private templates and Split use separate list-integrated
 aggregates.
 
 - The owner can create, list, open, rename, archive, restore, and permanently
@@ -183,6 +195,20 @@ aggregates.
 - The owner and accepted members can add, edit, complete, reopen, reorder, and
   permanently delete items while the list is active. Only the owner can rename,
   archive, restore, permanently delete, invite, cancel, or remove members.
+- The owner and every accepted member may assign zero to 20 current
+  eligible participants to any active-list item, including themselves, and may
+  remove any current assignment. Completed items remain assignment-editable.
+  Eligibility is exactly the current unblocked owner plus current accepted
+  members; pending, removed, left, declined, cancelled, foreign, deleted, or
+  otherwise ineligible profiles are rejected without revealing private state.
+- Assignment is current state only. There is no assignment audit/event history,
+  assigned-by field, soft deletion, or retained historical assignee. New-client
+  item create/update operations accept the complete assignee set atomically with
+  the item fields. A real change advances the list and item versions exactly once,
+  regardless of assignee count; an exact completed retry/no-op changes no version,
+  timestamp, notification, or Realtime output. Stale or invalid work writes
+  nothing. Legacy item creation creates zero assignments, and legacy item updates
+  preserve the existing assignment set.
 - Quantity defaults to `1`, must be positive, supports at most three decimal
   places, and is at most `999999.999`. Authority is an integer number of
   thousandths (`1` = `1000`, `1.5` = `1500`, `0.001` = `1`); Flutter never parses
@@ -203,8 +229,10 @@ aggregates.
   completion time with a null actor, but actor deletion can never delete the item.
 - Positive monotonic versions prevent stale overwrite. List metadata changes
   increment list version; item create/delete/reorder increment list version; item
-  edit/complete/reopen increment list and item versions. Real changes update the
-  corresponding timestamps once; completed retries/no-ops update neither.
+  edit/complete/reopen or assignment-set changes increment list and item versions.
+  A combined item-field/assignment update still increments each version only once.
+  Real changes update the corresponding timestamps once; completed retries/no-ops
+  update neither.
   Creation is retry-safe through a payload-bound client request UUID that never
   grants authority. Stale conflicts refresh instead of silently overwriting.
 
@@ -223,7 +251,15 @@ aggregates.
   leaves when blocking the owner, and a member who blocks another member leaves
   their shared third-party lists. Unblocking restores nothing and notification text
   never discloses block direction or cause.
-- Routine item changes create no persistent notifications. Real invitation
+- Explicit unassignment, item deletion, member leave/removal, block-driven access
+  loss, list deletion, and account deletion remove affected current assignments.
+  Access-loss cleanup is atomic with the existing transition, advances each
+  affected item version and the list version once, and permanently suppresses that
+  former participant's assignment notifications so reinvitation cannot restore
+  them. Ownership transfer preserves assignments because both users remain current
+  participants.
+- Routine item changes create no persistent notifications. The only item-level
+  exception is a newly added assignment for another user. Real invitation
   transitions create one actionable notification for the exact access version;
   owners receive generic accepted/declined/member-left information and removed
   recipients receive generic information. A pending invitation remains actionable
@@ -250,9 +286,11 @@ aggregates.
   visible state may have changed, never content or authorization evidence.
   Valid events, successful subscription joins, and app resume reconcile mounted
   list, detail, member, notification, badge, and relevant community projections
-  through existing repositories. Remote rename updates mounted list titles; remote
-  archive/restore moves the list between projections, and a remotely archived open
-  detail returns to Lists once. Manual refresh remains available.
+  through existing repositories. Assignment changes authoritatively refresh item
+  rows, item editors, participant eligibility, notifications, and the badge without
+  adding another topic or payload. Remote rename updates mounted list titles;
+  remote archive/restore moves the list between projections, and a remotely
+  archived open detail returns to Lists once. Manual refresh remains available.
 
 ### Templates
 
@@ -289,7 +327,8 @@ future work.
 An owner or accepted member may save any active or archived shopping list they can
 still access as their own private template. The preview includes completed and
 uncompleted items, selects all by default, permits deselection, and requires 1-200
-selected items. Only the selected names, quantities, and current order are copied.
+selected items. Only the selected names, quantities, and current order are copied;
+assignments and assignment notifications are never copied.
 The template is an independent snapshot that survives later source changes,
 deletion, access loss, friendship changes, or blocking.
 
@@ -534,8 +573,18 @@ copies succeed; duplicate-name rows each consume one place.
   pre-production follow-up and no scheduled deletion is introduced here.
 - Templates sent by friends remain an accepted future actionable type requiring
   Accept or Decline. Active-list invitation actions are implemented.
-- Users receive informational notifications for new item assignments and note
-  mentions.
+- A real absent-to-present item assignment creates one informational
+  `list_item_assigned` notification only when another person performed it. A batch
+  change creates at most one notification per newly assigned recipient. Duplicate
+  retries, self-assignment, unassignment, item edits, and completed no-ops create
+  none. Removing and later re-adding a user is a new assignment and may create one
+  new notification.
+- Assignment notifications store references and the creating item version, never
+  copied profile/list/item text. Listing resolves the current actor, list, and item
+  names only while the recipient still has current list access. They use normal
+  180-day logical expiry and are permanently suppressed on either-direction block
+  or recipient access loss; unblocking or reinvitation never restores them.
+- Note mentions and their notifications remain accepted future work.
 - A successful ownership transfer creates one informational notification for the
   new owner without copying profile or list text into the notification row.
 - User-facing archive, delete, mark-unread, preference, and notification-history
@@ -595,10 +644,13 @@ feature deep-link contracts remain open.
 ### Accessibility and localization
 
 - Material 3 light and dark themes are part of the application foundation.
-- User-facing strings should be centralized/localization-ready even while English
-  is the only initial language.
+- User-facing strings are supplied in English and Portuguese and remain structured
+  for additional locales.
 - New flows should support semantic labels, scalable text, adequate contrast, and
   non-color-only state cues.
+- Assignment controls expose the complete selected state to assistive technology,
+  remain usable with large system text, and do not rely on initials, color, or
+  compact visual chips as their only meaning.
 
 ## Explicit non-goals and deferrals
 
@@ -614,6 +666,9 @@ feature deep-link contracts remain open.
 - No promise of fully offline operation until cache and conflict rules are defined.
 - No Presence, Broadcast Replay, Postgres Changes subscription, client-originated
   Broadcast, or push delivery is part of the implemented Realtime contract.
+- No assignment history, template-assignment copy, unassignment notification,
+  assignment notification deep link, reminder, due date, or offline assignment
+  mutation is part of the item-assignment foundation.
 
 ## Open product decisions
 
@@ -627,12 +682,12 @@ choose them:
 - Public-template copied visibility/category defaults, attribution and provenance
   display, and community-feed ranking/retention.
 - Invitation and sent-template expiry, revocation, and idempotent re-acceptance.
-- Notification archive/delete/preferences, future types, push-safe payloads,
+- Notification archive/delete/preferences, later types, push-safe payloads,
   physical cleanup, and account-lifecycle retention beyond the accepted
-  friend-request behavior.
+  friend/list/assignment behavior.
 - Reporting scope, moderation workflow, evidence retention, and appeal behavior.
 - Offline conflict resolution and which operations are permitted while offline.
 - Shared-resource ownership/deletion, administrator-initiated deletion,
   moderation retention, Storage cleanup, and legal/compliance export obligations
   beyond the accepted current-aggregate account lifecycle.
-- Which additional locales ship first.
+- Which additional locales beyond English and Portuguese ship first.

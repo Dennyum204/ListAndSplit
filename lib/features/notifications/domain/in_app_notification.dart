@@ -6,6 +6,7 @@ enum InAppNotificationType {
   listMemberLeft,
   listMemberRemoved,
   listOwnershipTransferred,
+  listItemAssigned,
 }
 
 enum NotificationActionStatus { actionable, friends, accepted, unavailable }
@@ -32,6 +33,9 @@ class InAppNotification {
     this.activeListTitle,
     this.activeListStatus,
     this.expectedAccessVersion,
+    this.activeListItemId,
+    this.activeListItemName,
+    this.assignmentItemVersion,
   });
 
   final String id;
@@ -47,6 +51,9 @@ class InAppNotification {
   final String? activeListTitle;
   final String? activeListStatus;
   final int? expectedAccessVersion;
+  final String? activeListItemId;
+  final String? activeListItemName;
+  final int? assignmentItemVersion;
 
   NotificationCursor get cursor => NotificationCursor(
         createdAt: createdAt,
@@ -68,6 +75,9 @@ class InAppNotification {
       activeListTitle: activeListTitle,
       activeListStatus: activeListStatus,
       expectedAccessVersion: expectedAccessVersion,
+      activeListItemId: activeListItemId,
+      activeListItemName: activeListItemName,
+      assignmentItemVersion: assignmentItemVersion,
     );
   }
 }

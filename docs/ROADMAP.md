@@ -102,8 +102,8 @@ Implemented slices:
   retry-safe creation.
 - Owner list items with exact integer-thousandths quantities, stable unit codes,
   add/edit/complete/reopen/delete, atomic deterministic reorder, and archived
-  read-only enforcement. The next additive slice caps current rows at 200 without
-  changing or deleting legacy data.
+  read-only enforcement, plus a hard 200-current-item limit that never changes or
+  deletes legacy over-capacity data.
 - RPC-only tables with forced RLS, explicit rejection policies, reviewed
   definer-rights functions, Auth-root deletion cascade, and account export schema
   version `3`.
@@ -120,17 +120,30 @@ Implemented slices:
   confirmation, monotonic retained access versions, unchanged capacity/content,
   informational notification, lifecycle projection updates, and private Realtime
   reconciliation.
+- Current zero-to-20 item assignments for the owner and accepted members,
+  including self-assignment, completed-item editing, atomic initial/full-set writes,
+  exact version protection, legacy item-client compatibility, and automatic
+  access-loss cleanup. Assignments remain current state only and never copy into
+  templates.
+- Informational notifications only when another user newly assigns the recipient,
+  with live-resolved names, normal 180-day logical expiry, permanent block/access-
+  loss suppression, private Realtime reconciliation, and localized accessible
+  English/Portuguese presentation.
+- Assignment-aware account export schema version `7` for caller-owned item
+  contents through the new `export_own_account_data_v7()` RPC. The existing
+  schema-version-6 endpoint remains unchanged, and shared lists remain
+  metadata-only without item or assignment data.
 
 Remaining candidate slices:
 
-- Multi-member item assignment and assignment notifications.
 - General note editing, member `@mentions`, and mention notifications.
-- Authorization and concurrent-update tests for future membership and notes.
+- Authorization and concurrent-update tests for future notes and mentions.
 
 Required decisions still include mention parsing and offline conflict behavior.
 Role lifecycle, ownership transfer, invitation retention/revocation,
-shared-resource blocking, archive/delete, item quantity/order, and online
-concurrency are resolved.
+shared-resource blocking, archive/delete, item quantity/order, item-assignment
+permissions/lifecycle/notifications/export, and online assignment concurrency are
+resolved.
 
 ## Phase 3 — Templates and community discovery (in progress)
 
@@ -260,7 +273,8 @@ future, explicit task with environment and cost approval.
 ## Sequencing decisions still open
 
 - Which minimum persistent-notification capability belongs in later
-  action-producing phases beyond the accepted friend-request foundation.
+  action-producing phases beyond the accepted friend-request, list, and item-
+  assignment foundations.
 - When the accepted compile-time configuration should expand into a full
   development/staging/production flavor model.
 - Whether offline read caching can ship safely before offline mutations.

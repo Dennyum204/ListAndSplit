@@ -494,6 +494,7 @@ class FakeActiveListRepository implements ActiveListRepository {
   int mutationCalls = 0;
   final List<String> createRequestIds = [];
   final List<String> itemRequestIds = [];
+  final List<List<String>> itemAssigneeCalls = [];
 
   ActiveListSummary _find(String listId) => [...activeLists, ...archivedLists]
       .firstWhere((entry) => entry.id == listId);
@@ -657,10 +658,12 @@ class FakeActiveListRepository implements ActiveListRepository {
     required int expectedListVersion,
     ListQuantity quantity = ListQuantity.one,
     ListUnit? unit,
+    List<String> assigneeProfileIds = const [],
     required String requestId,
   }) async {
     mutationCalls += 1;
     itemRequestIds.add(requestId);
+    itemAssigneeCalls.add(List.unmodifiable(assigneeProfileIds));
     if (failure != null) throw failure!;
     final entries = itemsByList.putIfAbsent(listId, () => []);
     final now = DateTime.utc(2026, 7, 20, 13, entries.length);
@@ -675,6 +678,7 @@ class FakeActiveListRepository implements ActiveListRepository {
       completedBy: null,
       createdAt: now,
       updatedAt: now,
+      assignees: _assigneesFor(listId, assigneeProfileIds, now),
     );
     entries.add(item);
     return item;
@@ -687,10 +691,12 @@ class FakeActiveListRepository implements ActiveListRepository {
     String name, {
     required ListQuantity quantity,
     required ListUnit? unit,
+    required List<String> assigneeProfileIds,
     required int expectedListVersion,
     required int expectedItemVersion,
   }) async {
     mutationCalls += 1;
+    itemAssigneeCalls.add(List.unmodifiable(assigneeProfileIds));
     if (failure != null) throw failure!;
     final entries = itemsByList[listId]!;
     final index = entries.indexWhere((entry) => entry.id == itemId);
@@ -706,6 +712,11 @@ class FakeActiveListRepository implements ActiveListRepository {
       completedBy: current.completedBy,
       createdAt: current.createdAt,
       updatedAt: current.updatedAt.add(const Duration(seconds: 1)),
+      assignees: _assigneesFor(
+        listId,
+        assigneeProfileIds,
+        current.updatedAt.add(const Duration(seconds: 1)),
+      ),
     );
     entries[index] = updated;
     return updated;
@@ -736,6 +747,7 @@ class FakeActiveListRepository implements ActiveListRepository {
       completedBy: completed ? 'user-1' : null,
       createdAt: current.createdAt,
       updatedAt: now,
+      assignees: current.assignees,
     );
     entries[index] = updated;
     return updated;
@@ -765,6 +777,39 @@ class FakeActiveListRepository implements ActiveListRepository {
     final byId = {for (final item in itemsByList[listId]!) item.id: item};
     itemsByList[listId] = [for (final id in orderedItemIds) byId[id]!];
     return expectedListVersion + 1;
+  }
+
+  List<ActiveListAssignee> _assigneesFor(
+    String listId,
+    List<String> profileIds,
+    DateTime assignedAt,
+  ) {
+    final participants = participantsByList[listId] ?? const [];
+    final assignees = profileIds.map((profileId) {
+      return participants.firstWhere(
+        (candidate) => candidate.profileId == profileId,
+      );
+    }).toList(growable: false)
+      ..sort((left, right) {
+        final ownerOrder =
+            (right.isOwner ? 1 : 0).compareTo(left.isOwner ? 1 : 0);
+        if (ownerOrder != 0) return ownerOrder;
+        final usernameOrder = left.username.compareTo(right.username);
+        return usernameOrder != 0
+            ? usernameOrder
+            : left.profileId.compareTo(right.profileId);
+      });
+    return assignees
+        .map(
+          (participant) => ActiveListAssignee(
+            profileId: participant.profileId,
+            username: participant.username,
+            displayName: participant.displayName,
+            isOwner: participant.isOwner,
+            assignedAt: assignedAt,
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override

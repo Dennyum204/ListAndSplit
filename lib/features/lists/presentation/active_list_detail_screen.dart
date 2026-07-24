@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_controller.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
+import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/templates/domain/private_template.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
@@ -558,7 +560,14 @@ class _ItemCard extends ConsumerWidget {
               ? const TextStyle(decoration: TextDecoration.lineThrough)
               : null,
         ),
-        subtitle: Text(quantity),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(quantity),
+            const SizedBox(height: 2),
+            _AssigneeSummary(item: item),
+          ],
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -646,8 +655,13 @@ class _ItemDialog extends ConsumerStatefulWidget {
 class _ItemDialogState extends ConsumerState<_ItemDialog> {
   late final TextEditingController _name;
   late final TextEditingController _quantity;
+  late final Set<String> _assigneeProfileIds;
+  late final Set<String> _initialAssigneeProfileIds;
   ListUnit? _unit;
   bool _showValidation = false;
+  bool _submitted = false;
+  bool _dialogClosing = false;
+  ModalRoute<void>? _dialogRoute;
 
   @override
   void initState() {
@@ -656,6 +670,10 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
     _quantity = TextEditingController(
       text: widget.item?.quantity.format() ?? ListQuantity.one.format(),
     );
+    _assigneeProfileIds =
+        widget.item?.assignees.map((assignee) => assignee.profileId).toSet() ??
+            {};
+    _initialAssigneeProfileIds = Set.unmodifiable(_assigneeProfileIds);
     _unit = widget.item?.unit;
   }
 
@@ -668,11 +686,21 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
 
   @override
   Widget build(BuildContext context) {
+    _dialogRoute ??= ModalRoute.of(context);
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(activeListDetailControllerProvider(widget.listId));
+    final detail = state.detail.valueOrNull;
+    final participants =
+        detail?.participants ?? const <ActiveListParticipant>[];
+    final authenticatedProfileId = ref.watch(verifiedUserIdProvider);
+    ref.listen<ActiveListDetailState>(
+      activeListDetailControllerProvider(widget.listId),
+      (_, next) => _handleAuthoritativeChange(next),
+    );
     final quantity = ListQuantity.tryParse(_quantity.text);
     final nameValid =
         _name.text.trim().isNotEmpty && _name.text.trim().length <= 120;
+    final formEnabled = !state.isMutating && !_submitted && !_dialogClosing;
     return AlertDialog(
       title: Text(
         widget.item == null
@@ -687,7 +715,7 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
               key: const Key('itemNameField'),
               controller: _name,
               autofocus: true,
-              enabled: !state.isMutating,
+              enabled: formEnabled,
               maxLength: 120,
               textCapitalization: TextCapitalization.sentences,
               onChanged: (_) => setState(() {}),
@@ -703,7 +731,7 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
             TextField(
               key: const Key('itemQuantityField'),
               controller: _quantity,
-              enabled: !state.isMutating,
+              enabled: formEnabled,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               onChanged: (_) => setState(() {}),
@@ -735,22 +763,78 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
                   ),
                 ),
               ],
-              onChanged: state.isMutating
-                  ? null
-                  : (value) => setState(() => _unit = value),
+              onChanged:
+                  formEnabled ? (value) => setState(() => _unit = value) : null,
             ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                localizations.itemAssigneesLabel,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                localizations.itemAssigneesHelper,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            if (participants.isEmpty)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(localizations.itemUnassignedLabel),
+              )
+            else
+              for (final participant in participants)
+                CheckboxListTile(
+                  key: Key('itemAssignee-${participant.profileId}'),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: _assigneeProfileIds.contains(participant.profileId),
+                  onChanged: formEnabled
+                      ? (selected) => setState(() {
+                            if (selected == true) {
+                              _assigneeProfileIds.add(participant.profileId);
+                            } else {
+                              _assigneeProfileIds.remove(participant.profileId);
+                            }
+                          })
+                      : null,
+                  secondary: CircleAvatar(
+                    child: Text(_participantInitial(participant)),
+                  ),
+                  title: Text(
+                    participant.profileId == authenticatedProfileId
+                        ? localizations.itemAssigneeYouLabel(
+                            _identityName(
+                              displayName: participant.displayName,
+                              username: participant.username,
+                            ),
+                          )
+                        : _identityName(
+                            displayName: participant.displayName,
+                            username: participant.username,
+                          ),
+                  ),
+                  subtitle: Text('@${participant.username}'),
+                ),
           ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed:
-              state.isMutating ? null : () => Navigator.of(context).pop(),
+          onPressed: formEnabled ? _closeNow : null,
           child: Text(localizations.cancelButton),
         ),
         FilledButton(
           key: const Key('saveItemButton'),
-          onPressed: state.isMutating ? null : _submit,
+          onPressed: formEnabled ? _submit : null,
           child: state.isMutating
               ? const SizedBox.square(
                   dimension: 18,
@@ -763,6 +847,7 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
   }
 
   Future<void> _submit() async {
+    if (_submitted || _dialogClosing) return;
     final quantity = ListQuantity.tryParse(_quantity.text);
     if (_name.text.trim().isEmpty ||
         _name.text.trim().length > 120 ||
@@ -770,6 +855,8 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
       setState(() => _showValidation = true);
       return;
     }
+    _submitted = true;
+    setState(() {});
     final controller =
         ref.read(activeListDetailControllerProvider(widget.listId).notifier);
     final outcome = widget.item == null
@@ -777,15 +864,185 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
             _name.text,
             quantity: quantity,
             unit: _unit,
+            assigneeProfileIds: _assigneeProfileIds,
           )
         : await controller.updateItem(
             widget.item!,
             _name.text,
             quantity: quantity,
             unit: _unit,
+            assigneeProfileIds: _assigneeProfileIds,
           );
-    if (outcome.dismissesEditor && mounted) Navigator.of(context).pop();
+    if (!mounted) return;
+    if (outcome.dismissesEditor) {
+      _closeNow();
+    } else {
+      setState(() => _submitted = false);
+    }
   }
+
+  void _handleAuthoritativeChange(ActiveListDetailState next) {
+    if (_dialogClosing || _submitted || next.isMutating) {
+      return;
+    }
+    if (next.message == ActiveListDetailMessage.unavailable ||
+        next.message == ActiveListDetailMessage.remotelyArchived) {
+      _scheduleClose();
+      return;
+    }
+    final detail = next.detail.valueOrNull;
+    if (detail == null) return;
+    final participantIds =
+        detail.participants.map((participant) => participant.profileId).toSet();
+    var changed = !participantIds.containsAll(_assigneeProfileIds);
+    final original = widget.item;
+    if (original != null) {
+      ActiveListItem? current;
+      for (final item in detail.items) {
+        if (item.id == original.id) {
+          current = item;
+          break;
+        }
+      }
+      changed = changed ||
+          current == null ||
+          current.version != original.version ||
+          !setEquals(
+            current.assignees.map((assignee) => assignee.profileId).toSet(),
+            _initialAssigneeProfileIds,
+          );
+    }
+    if (!changed) return;
+
+    _scheduleClose(showRefreshMessage: true);
+  }
+
+  void _scheduleClose({bool showRefreshMessage = false}) {
+    if (_dialogClosing) return;
+    _dialogClosing = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final messenger =
+          showRefreshMessage ? ScaffoldMessenger.maybeOf(context) : null;
+      final message = showRefreshMessage
+          ? AppLocalizations.of(context).itemEditorRefreshedMessage
+          : null;
+      _popOwnedDialogRoute();
+      if (messenger != null && message != null) {
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+      }
+    });
+  }
+
+  void _closeNow() {
+    if (_dialogClosing) return;
+    _dialogClosing = true;
+    _popOwnedDialogRoute();
+  }
+
+  void _popOwnedDialogRoute() {
+    final route = _dialogRoute;
+    if (!mounted || route == null || !route.isActive) return;
+    final navigator = Navigator.of(context);
+    navigator.popUntil((candidate) => identical(candidate, route));
+    if (route.isCurrent) navigator.pop();
+  }
+}
+
+class _AssigneeSummary extends StatelessWidget {
+  const _AssigneeSummary({required this.item});
+
+  final ActiveListItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final names = item.assignees
+        .map(
+          (assignee) => _identityName(
+            displayName: assignee.displayName,
+            username: assignee.username,
+          ),
+        )
+        .toList(growable: false);
+    final compact = switch (names.length) {
+      0 => localizations.itemUnassignedLabel,
+      1 => names.single,
+      2 => '${names.first}, ${names.last}',
+      _ => localizations.itemAssigneesCompactMore(
+          names[0],
+          names[1],
+          names.length - 2,
+        ),
+    };
+    final full =
+        names.isEmpty ? localizations.itemUnassignedLabel : names.join(', ');
+    return Semantics(
+      key: Key('itemAssignees-${item.id}'),
+      label: names.isEmpty
+          ? localizations.itemUnassignedSemanticLabel(item.name)
+          : localizations.itemAssigneesSemanticLabel(item.name, full),
+      child: ExcludeSemantics(
+        child: Row(
+          children: [
+            if (item.assignees.isEmpty)
+              const Icon(Icons.person_off_outlined, size: 18)
+            else
+              for (final assignee in item.assignees.take(2)) ...[
+                CircleAvatar(
+                  key: Key(
+                    'itemAssigneeAvatar-${item.id}-${assignee.profileId}',
+                  ),
+                  radius: 10,
+                  child: Text(
+                    _identityInitial(
+                      displayName: assignee.displayName,
+                      username: assignee.username,
+                    ),
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ),
+                const SizedBox(width: 2),
+              ],
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                compact,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _participantInitial(ActiveListParticipant participant) {
+  return _identityInitial(
+    displayName: participant.displayName,
+    username: participant.username,
+  );
+}
+
+String _identityInitial({
+  required String displayName,
+  required String username,
+}) {
+  final source = _identityName(displayName: displayName, username: username);
+  return source.characters.first.toUpperCase();
+}
+
+String _identityName({
+  required String displayName,
+  required String username,
+}) {
+  final normalizedDisplayName = displayName.trim();
+  if (normalizedDisplayName.isNotEmpty) return normalizedDisplayName;
+  final normalizedUsername = username.trim();
+  return normalizedUsername.isNotEmpty ? normalizedUsername : '?';
 }
 
 String _unitLabel(AppLocalizations localizations, ListUnit unit) {

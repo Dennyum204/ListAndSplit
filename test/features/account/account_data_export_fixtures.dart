@@ -182,6 +182,23 @@ Map<String, dynamic> validAccountDataExportJson({
                     'completed_by': '11111111-1111-4111-8111-111111111111',
                     'created_at': '2026-07-19T05:30:00.000Z',
                     'updated_at': '2026-07-19T08:00:00.000Z',
+                    if (schemaVersion >= 7)
+                      'assignees': [
+                        {
+                          'profile_id': '11111111-1111-4111-8111-111111111111',
+                          'username': 'alpha_user',
+                          'display_name': 'Alpha User',
+                          'is_owner': true,
+                          'assigned_at': '2026-07-19T07:45:00.000Z',
+                        },
+                        {
+                          'profile_id': '33333333-3333-4333-8333-333333333333',
+                          'username': 'gamma_user',
+                          'display_name': 'Gamma User',
+                          'is_owner': false,
+                          'assigned_at': '2026-07-19T07:50:00.000Z',
+                        },
+                      ],
                   },
                 ],
               },

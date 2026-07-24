@@ -39,7 +39,7 @@ void main() {
     expect(result.single.actorDisplayName, 'Beta User');
     expect(result.single.actionStatus, NotificationActionStatus.actionable);
     expect(result.single.expectedRelationshipVersion, 4);
-    expect(calls.single.functionName, 'list_notifications');
+    expect(calls.single.functionName, 'list_notifications_v2');
     expect(calls.single.params, {
       'page_size': 20,
       'before_created_at': null,
@@ -141,6 +141,33 @@ void main() {
     }
   });
 
+  test('maps item-assignment notifications with live list and item names',
+      () async {
+    response = [
+      _row(
+        notificationType: 'list_item_assigned',
+        actionStatus: 'unavailable',
+        expectedVersion: null,
+        activeListId: 'list-1',
+        activeListTitle: 'Shared trip',
+        activeListStatus: 'active',
+        activeListItemId: 'item-1',
+        activeListItemName: 'Sunscreen',
+        assignmentItemVersion: 8,
+      ),
+    ];
+
+    final result = await repository.listNotifications(limit: 20);
+
+    expect(result.single.type, InAppNotificationType.listItemAssigned);
+    expect(result.single.activeListId, 'list-1');
+    expect(result.single.activeListTitle, 'Shared trip');
+    expect(result.single.activeListItemId, 'item-1');
+    expect(result.single.activeListItemName, 'Sunscreen');
+    expect(result.single.assignmentItemVersion, 8);
+    expect(result.single.actionStatus, NotificationActionStatus.unavailable);
+  });
+
   test('rejects malformed list and row payloads', () async {
     response = {'notification_id': 'notification-1'};
     await expectLater(
@@ -216,6 +243,47 @@ void main() {
         expectedAccessVersion: 2,
       ),
       _row(activeListId: 'list-1'),
+      _row(
+        notificationType: 'list_item_assigned',
+        actionStatus: 'unavailable',
+        expectedVersion: null,
+        activeListId: 'list-1',
+        activeListTitle: 'Shared trip',
+        activeListStatus: 'active',
+      ),
+      _row(
+        notificationType: 'list_member_left',
+        actionStatus: 'unavailable',
+        expectedVersion: null,
+        activeListId: 'list-1',
+        activeListTitle: 'Shared trip',
+        activeListStatus: 'active',
+        activeListItemId: 'item-1',
+        activeListItemName: 'Sunscreen',
+        assignmentItemVersion: 8,
+      ),
+      _row(
+        notificationType: 'list_item_assigned',
+        actionStatus: 'unavailable',
+        expectedVersion: null,
+        activeListId: 'list-1',
+        activeListTitle: 'Shared trip',
+        activeListStatus: 'active',
+        activeListItemId: 'item-1',
+        activeListItemName: ' Sunscreen ',
+        assignmentItemVersion: 8,
+      ),
+      _row(
+        notificationType: 'list_item_assigned',
+        actionStatus: 'unavailable',
+        expectedVersion: null,
+        activeListId: 'list-1',
+        activeListTitle: 'Shared trip',
+        activeListStatus: 'active',
+        activeListItemId: 'item-1',
+        activeListItemName: 'Sunscreen',
+        assignmentItemVersion: 0,
+      ),
     ]) {
       response = [row];
       await expectLater(
@@ -229,7 +297,7 @@ void main() {
     response = 12;
 
     expect(await repository.getUnreadCount(), 12);
-    expect(calls.single.functionName, 'get_unread_notification_count');
+    expect(calls.single.functionName, 'get_unread_notification_count_v2');
     expect(calls.single.params, isNull);
   });
 
@@ -283,6 +351,9 @@ Map<String, dynamic> _row({
   String? activeListTitle,
   String? activeListStatus,
   int? expectedAccessVersion,
+  String? activeListItemId,
+  String? activeListItemName,
+  int? assignmentItemVersion,
 }) {
   return {
     'notification_id': 'notification-1',
@@ -298,6 +369,9 @@ Map<String, dynamic> _row({
     'active_list_title': activeListTitle,
     'active_list_status': activeListStatus,
     'expected_access_version': expectedAccessVersion,
+    'active_list_item_id': activeListItemId,
+    'active_list_item_name': activeListItemName,
+    'assignment_item_version': assignmentItemVersion,
   };
 }
 

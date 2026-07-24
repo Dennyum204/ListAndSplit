@@ -12,6 +12,19 @@ import 'package:list_and_split/features/lists/presentation/active_lists_controll
 import '../../helpers/fakes.dart';
 
 void main() {
+  test('item model enforces the bounded unique assignee invariant', () {
+    final assignees = List.generate(
+      21,
+      (index) => _assignee(_participant(profileId: 'profile-$index')),
+    );
+
+    expect(() => _item(assignees: assignees), throwsArgumentError);
+    expect(
+      () => _item(assignees: [assignees.first, assignees.first]),
+      throwsArgumentError,
+    );
+  });
+
   test('overview loads active and archived lists independently', () async {
     final repository = FakeActiveListRepository()
       ..activeLists = [_summary()]
@@ -614,6 +627,196 @@ void main() {
       ActiveListMutationOutcome.succeeded,
     );
   });
+
+  test('detail loads participants and reconciles remote assignment changes',
+      () async {
+    final owner = _participant();
+    final member = _participant(
+      profileId: 'member-1',
+      username: 'member',
+      displayName: 'Member',
+      isOwner: false,
+      accessVersion: 2,
+    );
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [owner, member]
+      ..itemsByList['list-1'] = [
+        _item(assignees: [_assignee(owner)]),
+      ];
+    final controller = ActiveListDetailController(repository, 'list-1');
+    addTearDown(controller.dispose);
+
+    await controller.load();
+
+    expect(controller.state.detail.requireValue.participants, [owner, member]);
+    expect(
+      controller
+          .state.detail.requireValue.items.single.assignees.single.profileId,
+      owner.profileId,
+    );
+
+    await repository.updateItem(
+      'list-1',
+      'item-1',
+      'Coffee',
+      quantity: ListQuantity.fromThousandths(1500),
+      unit: ListUnit.pack,
+      assigneeProfileIds: [member.profileId],
+      expectedListVersion: 1,
+      expectedItemVersion: 1,
+    );
+    await controller.reconcile();
+
+    expect(
+      controller
+          .state.detail.requireValue.items.single.assignees.single.profileId,
+      member.profileId,
+    );
+  });
+
+  test('create and edit submit one authoritative complete assignee set',
+      () async {
+    final owner = _participant();
+    final member = _participant(
+      profileId: 'member-1',
+      username: 'member',
+      displayName: 'Member',
+      isOwner: false,
+      accessVersion: 2,
+    );
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [owner, member]
+      ..itemsByList['list-1'] = [_item()];
+    final controller = ActiveListDetailController(
+      repository,
+      'list-1',
+      requestIdGenerator: () => 'assignment-request',
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+
+    expect(
+      await controller.createItem(
+        'Tea',
+        quantity: ListQuantity.one,
+        unit: null,
+        assigneeProfileIds: {member.profileId, owner.profileId},
+      ),
+      ActiveListMutationOutcome.succeeded,
+    );
+    await _flushAsync();
+    expect(
+      repository.itemAssigneeCalls.last,
+      [member.profileId, owner.profileId]..sort(),
+    );
+    expect(
+      repository.itemsByList['list-1']!.last.assignees
+          .map((assignee) => assignee.profileId),
+      [owner.profileId, member.profileId],
+    );
+
+    final current = controller.state.detail.requireValue.items.first;
+    expect(
+      await controller.updateItem(
+        current,
+        current.name,
+        quantity: current.quantity,
+        unit: current.unit,
+        assigneeProfileIds: {member.profileId},
+      ),
+      ActiveListMutationOutcome.succeeded,
+    );
+    await _flushAsync();
+    expect(repository.itemAssigneeCalls.last, [member.profileId]);
+    expect(
+      repository.itemsByList['list-1']!.first.assignees.single.profileId,
+      member.profileId,
+    );
+  });
+
+  test('removed and unknown profiles are rejected before assignment transport',
+      () async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [_participant()]
+      ..itemsByList['list-1'] = [_item()];
+    final controller = ActiveListDetailController(repository, 'list-1');
+    addTearDown(controller.dispose);
+    await controller.load();
+    final mutationCalls = repository.mutationCalls;
+
+    final outcome = await controller.updateItem(
+      controller.state.detail.requireValue.items.single,
+      'Coffee',
+      quantity: ListQuantity.one,
+      unit: null,
+      assigneeProfileIds: {'removed-profile'},
+    );
+
+    expect(outcome, ActiveListMutationOutcome.invalid);
+    expect(controller.state.message, ActiveListDetailMessage.invalidInput);
+    expect(repository.mutationCalls, mutationCalls);
+  });
+
+  test('server-invalid create and update assignment races reconcile as stale',
+      () async {
+    for (final create in [true, false]) {
+      final owner = _participant();
+      final member = _participant(
+        profileId: 'member-1',
+        username: 'member',
+        displayName: 'Member',
+        isOwner: false,
+        accessVersion: 2,
+      );
+      final repository = _ServerInvalidAssignmentRepository(
+        rejectCreate: create,
+        rejectUpdate: !create,
+      )
+        ..activeLists = [_summary()]
+        ..participantsByList['list-1'] = [owner, member]
+        ..itemsByList['list-1'] = [
+          _item(assignees: [_assignee(member)]),
+        ];
+      final controller = ActiveListDetailController(
+        repository,
+        'list-1',
+        requestIdGenerator: () => 'assignment-race-request',
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      final outcome = create
+          ? await controller.createItem(
+              'Tea',
+              quantity: ListQuantity.one,
+              unit: null,
+              assigneeProfileIds: {member.profileId},
+            )
+          : await controller.updateItem(
+              controller.state.detail.requireValue.items.single,
+              'Coffee',
+              quantity: ListQuantity.one,
+              unit: null,
+              assigneeProfileIds: {member.profileId},
+            );
+      await _flushAsync();
+
+      expect(outcome, ActiveListMutationOutcome.stale);
+      expect(
+        controller.state.detail.requireValue.participants
+            .map((participant) => participant.profileId),
+        [owner.profileId],
+      );
+      expect(
+        controller.state.message,
+        ActiveListDetailMessage.staleRefreshed,
+      );
+      expect(controller.state.isMutating, isFalse);
+    }
+  });
 }
 
 Future<void> _flushAsync() async {
@@ -646,6 +849,94 @@ class _StaleOnceRepository extends FakeActiveListRepository {
       title,
       expectedVersion: expectedVersion,
     );
+  }
+}
+
+class _ServerInvalidAssignmentRepository extends FakeActiveListRepository {
+  _ServerInvalidAssignmentRepository({
+    required this.rejectCreate,
+    required this.rejectUpdate,
+  });
+
+  final bool rejectCreate;
+  final bool rejectUpdate;
+
+  @override
+  Future<ActiveListItem> createItem(
+    String listId,
+    String name, {
+    required int expectedListVersion,
+    ListQuantity quantity = ListQuantity.one,
+    ListUnit? unit,
+    List<String> assigneeProfileIds = const [],
+    required String requestId,
+  }) {
+    if (rejectCreate) {
+      _removeMemberBeforeWrite(listId);
+      throw const ActiveListFailure(ActiveListFailureCode.invalid);
+    }
+    return super.createItem(
+      listId,
+      name,
+      expectedListVersion: expectedListVersion,
+      quantity: quantity,
+      unit: unit,
+      assigneeProfileIds: assigneeProfileIds,
+      requestId: requestId,
+    );
+  }
+
+  @override
+  Future<ActiveListItem> updateItem(
+    String listId,
+    String itemId,
+    String name, {
+    required ListQuantity quantity,
+    required ListUnit? unit,
+    required List<String> assigneeProfileIds,
+    required int expectedListVersion,
+    required int expectedItemVersion,
+  }) {
+    if (rejectUpdate) {
+      _removeMemberBeforeWrite(listId);
+      throw const ActiveListFailure(ActiveListFailureCode.invalid);
+    }
+    return super.updateItem(
+      listId,
+      itemId,
+      name,
+      quantity: quantity,
+      unit: unit,
+      assigneeProfileIds: assigneeProfileIds,
+      expectedListVersion: expectedListVersion,
+      expectedItemVersion: expectedItemVersion,
+    );
+  }
+
+  void _removeMemberBeforeWrite(String listId) {
+    participantsByList[listId] = [
+      for (final participant in participantsByList[listId] ?? const [])
+        if (participant.profileId != 'member-1') participant,
+    ];
+    itemsByList[listId] = [
+      for (final item in itemsByList[listId] ?? const [])
+        ActiveListItem(
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit,
+          position: item.position,
+          version: item.version,
+          completedAt: item.completedAt,
+          completedBy: item.completedBy,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          assignees: [
+            for (final assignee in item.assignees)
+              if (assignee.profileId != 'member-1') assignee,
+          ],
+        ),
+    ];
   }
 }
 
@@ -708,6 +999,7 @@ class _VersionedActiveListRepository extends FakeActiveListRepository {
     String name, {
     required ListQuantity quantity,
     required ListUnit? unit,
+    required List<String> assigneeProfileIds,
     required int expectedListVersion,
     required int expectedItemVersion,
   }) async {
@@ -730,6 +1022,7 @@ class _VersionedActiveListRepository extends FakeActiveListRepository {
       completedBy: current.completedBy,
       createdAt: current.createdAt,
       updatedAt: updatedAt,
+      assignees: current.assignees,
     );
     items[index] = updated;
     _incrementListVersion(updatedAt);
@@ -760,6 +1053,7 @@ class _VersionedActiveListRepository extends FakeActiveListRepository {
           completedBy: current.completedBy,
           createdAt: current.createdAt,
           updatedAt: current.updatedAt,
+          assignees: current.assignees,
         ),
       );
     }
@@ -822,6 +1116,7 @@ ActiveListItem _item({
   String name = 'Coffee',
   int position = 1,
   int version = 1,
+  List<ActiveListAssignee> assignees = const [],
 }) {
   return ActiveListItem(
     id: id,
@@ -834,5 +1129,30 @@ ActiveListItem _item({
     completedBy: null,
     createdAt: DateTime.utc(2026, 7, 20, 9),
     updatedAt: DateTime.utc(2026, 7, 20, 10),
+    assignees: assignees,
   );
 }
+
+ActiveListParticipant _participant({
+  String profileId = 'owner-1',
+  String username = 'owner',
+  String displayName = 'Owner',
+  bool isOwner = true,
+  int? accessVersion,
+}) =>
+    ActiveListParticipant(
+      profileId: profileId,
+      username: username,
+      displayName: displayName,
+      isOwner: isOwner,
+      accessVersion: accessVersion,
+    );
+
+ActiveListAssignee _assignee(ActiveListParticipant participant) =>
+    ActiveListAssignee(
+      profileId: participant.profileId,
+      username: participant.username,
+      displayName: participant.displayName,
+      isOwner: participant.isOwner,
+      assignedAt: DateTime.utc(2026, 7, 24, 12),
+    );

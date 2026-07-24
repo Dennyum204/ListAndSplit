@@ -66,7 +66,7 @@ class SupabaseActiveListRepository implements ActiveListRepository {
     try {
       return _rows(
         await _rpc(
-          'list_active_list_items',
+          'list_active_list_items_v2',
           params: {'target_list_id': listId},
         ),
       ).map(_item).toList(growable: false);
@@ -220,18 +220,20 @@ class SupabaseActiveListRepository implements ActiveListRepository {
     required int expectedListVersion,
     ListQuantity quantity = ListQuantity.one,
     ListUnit? unit,
+    List<String> assigneeProfileIds = const [],
     required String requestId,
   }) async {
     try {
       return _item(
         _singleRow(
           await _rpc(
-            'create_active_list_item',
+            'create_active_list_item_v2',
             params: {
               'target_list_id': listId,
               'new_name': name,
               'creation_request_id': requestId,
               'expected_list_version': expectedListVersion,
+              'target_assignee_profile_ids': assigneeProfileIds,
               'new_quantity_thousandths': quantity.thousandths,
               'new_unit_code': unit?.code,
             },
@@ -250,6 +252,7 @@ class SupabaseActiveListRepository implements ActiveListRepository {
     String name, {
     required ListQuantity quantity,
     required ListUnit? unit,
+    required List<String> assigneeProfileIds,
     required int expectedListVersion,
     required int expectedItemVersion,
   }) async {
@@ -257,13 +260,14 @@ class SupabaseActiveListRepository implements ActiveListRepository {
       return _item(
         _singleRow(
           await _rpc(
-            'update_active_list_item',
+            'update_active_list_item_v2',
             params: {
               'target_list_id': listId,
               'target_item_id': itemId,
               'new_name': name,
               'new_quantity_thousandths': quantity.thousandths,
               'new_unit_code': unit?.code,
+              'target_assignee_profile_ids': assigneeProfileIds,
               'expected_list_version': expectedListVersion,
               'expected_item_version': expectedItemVersion,
             },
@@ -297,6 +301,7 @@ class SupabaseActiveListRepository implements ActiveListRepository {
             },
           ),
         ),
+        requireAssignees: false,
       );
     } catch (error) {
       throw _failure(error);
@@ -584,7 +589,10 @@ class SupabaseActiveListRepository implements ActiveListRepository {
         stateChangedAt: _nullableDateTime(json['state_changed_at']),
       );
 
-  static ActiveListItem _item(Map<String, dynamic> json) {
+  static ActiveListItem _item(
+    Map<String, dynamic> json, {
+    bool requireAssignees = true,
+  }) {
     final completedAt = _nullableDateTime(json['completed_at']);
     final completedBy =
         json['completed_by'] == null ? null : _uuid(json['completed_by']);
@@ -604,7 +612,48 @@ class SupabaseActiveListRepository implements ActiveListRepository {
       completedBy: completedBy,
       createdAt: _dateTime(json['created_at']),
       updatedAt: _dateTime(json['updated_at']),
+      assignees: requireAssignees
+          ? _assignees(json['assignees'])
+          : const <ActiveListAssignee>[],
     );
+  }
+
+  static List<ActiveListAssignee> _assignees(Object? value) {
+    if (value is! List || value.length > 20) {
+      throw const FormatException('invalid assignees');
+    }
+    final profileIds = <String>{};
+    return value.map((entry) {
+      if (entry is! Map) {
+        throw const FormatException('invalid assignee');
+      }
+      final json = Map<String, dynamic>.from(entry);
+      if (json.length != 5 ||
+          !json.keys.toSet().containsAll(const {
+            'profile_id',
+            'username',
+            'display_name',
+            'is_owner',
+            'assigned_at',
+          })) {
+        throw const FormatException('invalid assignee projection');
+      }
+      final profileId = _uuid(json['profile_id']);
+      if (!profileIds.add(profileId)) {
+        throw const FormatException('duplicate assignee');
+      }
+      final isOwner = json['is_owner'];
+      if (isOwner is! bool) {
+        throw const FormatException('invalid assignee owner flag');
+      }
+      return ActiveListAssignee(
+        profileId: profileId,
+        username: _string(json['username']),
+        displayName: _string(json['display_name']),
+        isOwner: isOwner,
+        assignedAt: _dateTime(json['assigned_at']),
+      );
+    }).toList(growable: false);
   }
 
   static List<Map<String, dynamic>> _rows(Object? response) {

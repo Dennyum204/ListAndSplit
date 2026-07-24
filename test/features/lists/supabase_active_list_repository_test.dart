@@ -184,7 +184,11 @@ void main() {
 
   test('item creation sends exact integer quantity and stable unit code',
       () async {
-    response = [_itemRow()];
+    response = [
+      _itemRow(
+        assignees: [_assigneeRow()],
+      ),
+    ];
 
     final item = await repository.createItem(
       '11111111-1111-4111-8111-111111111111',
@@ -192,17 +196,25 @@ void main() {
       expectedListVersion: 4,
       quantity: ListQuantity.fromThousandths(1500),
       unit: ListUnit.pack,
+      assigneeProfileIds: const [
+        '99999999-9999-4999-8999-999999999999',
+      ],
       requestId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     );
 
     expect(item.quantity.thousandths, 1500);
     expect(item.unit, ListUnit.pack);
-    expect(calls.single.functionName, 'create_active_list_item');
+    expect(item.assignees.single.displayName, 'Owner User');
+    expect(item.assignees.single.isOwner, isTrue);
+    expect(calls.single.functionName, 'create_active_list_item_v2');
     expect(calls.single.params, {
       'target_list_id': '11111111-1111-4111-8111-111111111111',
       'new_name': 'Coffee',
       'creation_request_id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       'expected_list_version': 4,
+      'target_assignee_profile_ids': [
+        '99999999-9999-4999-8999-999999999999',
+      ],
       'new_quantity_thousandths': 1500,
       'new_unit_code': 'pack',
     });
@@ -222,6 +234,7 @@ void main() {
       'Tea',
       quantity: ListQuantity.one,
       unit: null,
+      assigneeProfileIds: const [],
       expectedListVersion: 5,
       expectedItemVersion: 2,
     );
@@ -251,7 +264,7 @@ void main() {
         'rename_active_list',
         'set_active_list_archived',
         'delete_active_list',
-        'update_active_list_item',
+        'update_active_list_item_v2',
         'set_active_list_item_completed',
         'delete_active_list_item',
         'reorder_active_list_items',
@@ -259,9 +272,63 @@ void main() {
     );
     expect(calls[0].params?['expected_list_version'], 2);
     expect(calls[3].params?['expected_item_version'], 2);
+    expect(calls[3].params?['target_assignee_profile_ids'], isEmpty);
     expect(calls[4].params?['should_complete'], isTrue);
     expect(calls[5].params?['expected_item_version'], 4);
     expect(calls[6].params?['ordered_item_ids'], [itemId]);
+  });
+
+  test('legacy completion response remains compatible without assignments',
+      () async {
+    final legacyItemRow = _itemRow()..remove('assignees');
+    response = [legacyItemRow];
+
+    final item = await repository.setItemCompleted(
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+      completed: true,
+      expectedListVersion: 6,
+      expectedItemVersion: 3,
+    );
+
+    expect(calls.single.functionName, 'set_active_list_item_completed');
+    expect(item.assignees, isEmpty);
+  });
+
+  test('lists v2 item assignments with strict identity and timestamp fields',
+      () async {
+    response = [
+      _itemRow(
+        assignees: [
+          _assigneeRow(),
+          _assigneeRow(
+            profileId: '88888888-8888-4888-8888-888888888888',
+            username: 'member_user',
+            displayName: 'Member User',
+            isOwner: false,
+          ),
+        ],
+      ),
+    ];
+
+    final items = await repository.listItems(
+      '11111111-1111-4111-8111-111111111111',
+    );
+
+    expect(calls.single.functionName, 'list_active_list_items_v2');
+    expect(items.single.assignees, hasLength(2));
+    expect(
+      items.single.assignees.map((assignee) => assignee.profileId),
+      [
+        '99999999-9999-4999-8999-999999999999',
+        '88888888-8888-4888-8888-888888888888',
+      ],
+    );
+    expect(items.single.assignees.last.isOwner, isFalse);
+    expect(
+      items.single.assignees.last.assignedAt,
+      DateTime.utc(2026, 7, 24, 12),
+    );
   });
 
   test('membership RPCs carry only target IDs and exact access versions',
@@ -471,6 +538,47 @@ void main() {
     );
 
     response = [
+      _itemRow(
+        assignees: List.generate(
+          21,
+          (index) => _assigneeRow(
+            profileId:
+                '00000000-0000-4000-8000-${index.toString().padLeft(12, '0')}',
+          ),
+        ),
+      ),
+    ];
+    await expectLater(
+      repository.listItems('11111111-1111-4111-8111-111111111111'),
+      throwsA(isA<ActiveListFailure>()),
+    );
+
+    response = [
+      _itemRow(
+        assignees: [
+          _assigneeRow(),
+          _assigneeRow(),
+        ],
+      ),
+    ];
+    await expectLater(
+      repository.listItems('11111111-1111-4111-8111-111111111111'),
+      throwsA(isA<ActiveListFailure>()),
+    );
+
+    response = [
+      _itemRow(
+        assignees: [
+          _assigneeRow()..['private_value'] = 'must not be exposed',
+        ],
+      ),
+    ];
+    await expectLater(
+      repository.listItems('11111111-1111-4111-8111-111111111111'),
+      throwsA(isA<ActiveListFailure>()),
+    );
+
+    response = [
       _summaryRow()
         ..addAll({
           'is_owner': false,
@@ -519,7 +627,10 @@ Map<String, dynamic> _summaryRow({
       'archived_at': archivedAt,
     };
 
-Map<String, dynamic> _itemRow() => {
+Map<String, dynamic> _itemRow({
+  List<Map<String, dynamic>> assignees = const [],
+}) =>
+    {
       'item_id': '22222222-2222-4222-8222-222222222222',
       'name': 'Coffee',
       'quantity_thousandths': 1500,
@@ -530,6 +641,21 @@ Map<String, dynamic> _itemRow() => {
       'completed_by': null,
       'created_at': '2026-07-20T08:00:00.000Z',
       'updated_at': '2026-07-20T09:00:00.000Z',
+      'assignees': assignees,
+    };
+
+Map<String, dynamic> _assigneeRow({
+  String profileId = '99999999-9999-4999-8999-999999999999',
+  String username = 'owner_user',
+  String displayName = 'Owner User',
+  bool isOwner = true,
+}) =>
+    {
+      'profile_id': profileId,
+      'username': username,
+      'display_name': displayName,
+      'is_owner': isOwner,
+      'assigned_at': '2026-07-24T12:00:00.000Z',
     };
 
 class _RpcCall {

@@ -208,6 +208,101 @@ void main() {
       expect(document.toJson(), json);
     });
 
+    test('maps schema-v7 owned-list item assignments only', () {
+      final json = validAccountDataExportJson(schemaVersion: 7);
+      final document = AccountDataExportDocument.fromJson(json);
+
+      expect(document.schemaVersion, 7);
+      final item = document.activeLists.first.items.single;
+      expect(item.includesAssigneesField, isTrue);
+      expect(item.assignees, hasLength(2));
+      expect(
+        item.assignees.map((assignee) => assignee.profileId),
+        [
+          '11111111-1111-4111-8111-111111111111',
+          '33333333-3333-4333-8333-333333333333',
+        ],
+      );
+      expect(item.assignees.first.isOwner, isTrue);
+      expect(item.assignees.last.username, 'gamma_user');
+      expect(
+        item.assignees.last.assignedAt,
+        DateTime.utc(2026, 7, 19, 7, 50),
+      );
+      expect(
+        document.sharedListAccess.single.toJson().keys,
+        isNot(contains('items')),
+      );
+      expect(document.toJson(), json);
+    });
+
+    test('keeps schema-v6 item and root shapes unchanged', () {
+      final json = validAccountDataExportJson(schemaVersion: 6);
+      final item = (((json['active_lists'] as List).first
+              as Map<String, dynamic>)['items'] as List)
+          .single as Map<String, dynamic>;
+      final document = AccountDataExportDocument.fromJson(json);
+
+      expect(item, isNot(contains('assignees')));
+      expect(
+        document.activeLists.first.items.single.includesAssigneesField,
+        isFalse,
+      );
+      expect(document.activeLists.first.items.single.assignees, isEmpty);
+      expect(document.toJson(), json);
+    });
+
+    test('rejects malformed or privacy-expanded schema-v7 assignments', () {
+      Map<String, dynamic> itemOf(Map<String, dynamic> root) =>
+          ((((root['active_lists'] as List).first
+                  as Map<String, dynamic>)['items'] as List)
+              .single as Map<String, dynamic>);
+
+      final missing = validAccountDataExportJson(schemaVersion: 7);
+      itemOf(missing).remove('assignees');
+
+      final duplicate = validAccountDataExportJson(schemaVersion: 7);
+      final duplicateAssignments =
+          itemOf(duplicate)['assignees'] as List<dynamic>;
+      duplicateAssignments.add(
+        Map<String, Object>.from(duplicateAssignments.first as Map),
+      );
+
+      final tooMany = validAccountDataExportJson(schemaVersion: 7);
+      itemOf(tooMany)['assignees'] = List.generate(
+        21,
+        (index) => {
+          'profile_id':
+              '00000000-0000-4000-8000-${index.toString().padLeft(12, '0')}',
+          'username': 'user_$index',
+          'display_name': 'User $index',
+          'is_owner': false,
+          'assigned_at': '2026-07-19T07:50:00.000Z',
+        },
+      );
+
+      final malformedTimestamp = validAccountDataExportJson(schemaVersion: 7);
+      ((itemOf(malformedTimestamp)['assignees'] as List).first
+          as Map<String, dynamic>)['assigned_at'] = 'not-a-timestamp';
+
+      final sharedLeak = validAccountDataExportJson(schemaVersion: 7);
+      ((sharedLeak['shared_list_access'] as List).single
+          as Map<String, dynamic>)['assignments'] = <Object?>[];
+
+      for (final json in [
+        missing,
+        duplicate,
+        tooMany,
+        malformedTimestamp,
+        sharedLeak,
+      ]) {
+        expect(
+          () => AccountDataExportDocument.fromJson(json),
+          throwsA(isA<AccountDataExportFailure>()),
+        );
+      }
+    });
+
     test('keeps the schema-v5 Split key contract unchanged', () {
       final json = validAccountDataExportJson(schemaVersion: 5);
       final splitJson = _ownedSplit(json);
@@ -459,9 +554,9 @@ void main() {
       }
     });
 
-    test('continues decoding and round-tripping export schemas 1 through 6',
+    test('continues decoding and round-tripping export schemas 1 through 7',
         () {
-      for (var version = 1; version <= 6; version += 1) {
+      for (var version = 1; version <= 7; version += 1) {
         final json = validAccountDataExportJson(schemaVersion: version);
         final document = AccountDataExportDocument.fromJson(json);
 
@@ -483,7 +578,7 @@ void main() {
     });
 
     test('rejects unsupported schema versions', () {
-      final json = validAccountDataExportJson()..['schema_version'] = 7;
+      final json = validAccountDataExportJson()..['schema_version'] = 8;
 
       expect(
         () => AccountDataExportDocument.fromJson(json),

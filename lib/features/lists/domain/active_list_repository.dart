@@ -56,6 +56,7 @@ abstract interface class ActiveListRepository {
     required int expectedListVersion,
     ListQuantity quantity = ListQuantity.one,
     ListUnit? unit,
+    List<String> assigneeProfileIds = const [],
     required String requestId,
   });
 
@@ -65,6 +66,7 @@ abstract interface class ActiveListRepository {
     String name, {
     required ListQuantity quantity,
     required ListUnit? unit,
+    required List<String> assigneeProfileIds,
     required int expectedListVersion,
     required int expectedItemVersion,
   });

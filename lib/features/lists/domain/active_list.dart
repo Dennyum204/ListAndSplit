@@ -100,6 +100,22 @@ class ActiveListParticipant {
   final int? accessVersion;
 }
 
+class ActiveListAssignee {
+  const ActiveListAssignee({
+    required this.profileId,
+    required this.username,
+    required this.displayName,
+    required this.isOwner,
+    required this.assignedAt,
+  });
+
+  final String profileId;
+  final String username;
+  final String displayName;
+  final bool isOwner;
+  final DateTime assignedAt;
+}
+
 class ActiveListOwnershipTransferResult {
   const ActiveListOwnershipTransferResult({
     required this.listId,
@@ -177,7 +193,7 @@ class ActiveListPage {
 }
 
 class ActiveListItem {
-  const ActiveListItem({
+  ActiveListItem({
     required this.id,
     required this.name,
     required this.quantity,
@@ -188,7 +204,14 @@ class ActiveListItem {
     required this.completedBy,
     required this.createdAt,
     required this.updatedAt,
-  });
+    List<ActiveListAssignee> assignees = const [],
+  }) : assignees = List.unmodifiable(assignees) {
+    if (assignees.length > 20 ||
+        assignees.map((assignee) => assignee.profileId).toSet().length !=
+            assignees.length) {
+      throw ArgumentError.value(assignees, 'assignees');
+    }
+  }
 
   final String id;
   final String name;
@@ -200,6 +223,7 @@ class ActiveListItem {
   final String? completedBy;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final List<ActiveListAssignee> assignees;
 
   bool get isCompleted => completedAt != null;
 }
@@ -208,8 +232,11 @@ class ActiveListDetail {
   ActiveListDetail({
     required this.summary,
     required List<ActiveListItem> items,
-  }) : items = List.unmodifiable(items);
+    List<ActiveListParticipant> participants = const [],
+  })  : items = List.unmodifiable(items),
+        participants = List.unmodifiable(participants);
 
   final ActiveListSummary summary;
   final List<ActiveListItem> items;
+  final List<ActiveListParticipant> participants;
 }
