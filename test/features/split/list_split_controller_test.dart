@@ -104,6 +104,199 @@ void main() {
     controller.dispose();
   });
 
+  test('creates exact custom shares and recalculates balances immediately',
+      () async {
+    const pedroParticipantId = '30000000-0000-4000-8000-000000000003';
+    const pedroProfileId = '20000000-0000-4000-8000-000000000003';
+    final repository = FakeListSplitRepository(
+      initial: enabledSplitOverview(
+        participants: const [
+          ...[
+            ListSplitParticipant(
+              id: splitOwnerParticipantId,
+              profileId: splitOwnerProfileId,
+              username: 'fernando',
+              displayName: 'Fernando',
+              isAnonymized: false,
+              isCurrent: true,
+              paidMinor: 0,
+              owedMinor: 0,
+              balanceMinor: 0,
+            ),
+            ListSplitParticipant(
+              id: splitMemberParticipantId,
+              profileId: splitMemberProfileId,
+              username: 'susana',
+              displayName: 'Susana',
+              isAnonymized: false,
+              isCurrent: true,
+              paidMinor: 0,
+              owedMinor: 0,
+              balanceMinor: 0,
+            ),
+          ],
+          ListSplitParticipant(
+            id: pedroParticipantId,
+            profileId: pedroProfileId,
+            username: 'pedro',
+            displayName: 'Pedro',
+            isAnonymized: false,
+            isCurrent: true,
+            paidMinor: 0,
+            owedMinor: 0,
+            balanceMinor: 0,
+          ),
+        ],
+      ),
+    );
+    final controller = _controller(repository);
+    repository.settlements.add(
+      ListSplitSettlement(
+        id: '50000000-0000-4000-8000-000000000099',
+        payerParticipantId: splitMemberParticipantId,
+        recipientParticipantId: splitOwnerParticipantId,
+        recordedByParticipantId: splitOwnerParticipantId,
+        amountMinor: 1,
+        note: 'Earlier correction',
+        createdAt: DateTime.utc(2026, 7, 22, 8),
+        reversal: ListSplitSettlementReversal(
+          reversedByParticipantId: splitOwnerParticipantId,
+          reason: 'Already corrected',
+          createdAt: DateTime.utc(2026, 7, 22, 8, 1),
+        ),
+        canReverse: false,
+      ),
+    );
+    await controller.load();
+
+    expect(
+      await controller.createExpense(
+        description: 'Custom dinner',
+        amountMinor: 3000,
+        payerParticipantId: splitOwnerParticipantId,
+        beneficiaryParticipantIds: const [
+          splitOwnerParticipantId,
+          splitMemberParticipantId,
+          pedroParticipantId,
+        ],
+        customShares: const [
+          ListExpenseShare(
+            participantId: splitOwnerParticipantId,
+            amountMinor: 1500,
+          ),
+          ListExpenseShare(
+            participantId: splitMemberParticipantId,
+            amountMinor: 1000,
+          ),
+          ListExpenseShare(
+            participantId: pedroParticipantId,
+            amountMinor: 500,
+          ),
+        ],
+        requestId: '50000000-0000-4000-8000-000000000010',
+      ),
+      ListSplitMutationOutcome.succeeded,
+    );
+
+    final result = controller.state.overview.asData!.value;
+    expect(
+      result.participantById(splitOwnerParticipantId)?.balanceMinor,
+      1500,
+    );
+    expect(
+      result.participantById(splitMemberParticipantId)?.balanceMinor,
+      -1000,
+    );
+    expect(result.participantById(pedroParticipantId)?.balanceMinor, -500);
+    expect(
+      result.suggestions
+          .map(
+            (entry) => (
+              entry.payerParticipantId,
+              entry.recipientParticipantId,
+              entry.amountMinor,
+            ),
+          )
+          .toList(),
+      const [
+        (
+          splitMemberParticipantId,
+          splitOwnerParticipantId,
+          1000,
+        ),
+        (
+          pedroParticipantId,
+          splitOwnerParticipantId,
+          500,
+        ),
+      ],
+    );
+    expect(
+      result.expenses.single.usesCanonicalEqualAllocation,
+      isFalse,
+    );
+    expect(
+      controller.state.settlementHistory.asData!.value.entries.single.id,
+      '50000000-0000-4000-8000-000000000099',
+    );
+    controller.dispose();
+  });
+
+  test('rejects malformed custom allocations before repository mutation',
+      () async {
+    final repository = FakeListSplitRepository();
+    final controller = _controller(repository);
+    await controller.load();
+
+    final invalidAllocations = <List<ListExpenseShare>>[
+      const [
+        ListExpenseShare(
+          participantId: splitOwnerParticipantId,
+          amountMinor: 499,
+        ),
+      ],
+      const [
+        ListExpenseShare(
+          participantId: splitOwnerParticipantId,
+          amountMinor: 501,
+        ),
+      ],
+      const [
+        ListExpenseShare(
+          participantId: splitOwnerParticipantId,
+          amountMinor: 0,
+        ),
+      ],
+      const [
+        ListExpenseShare(
+          participantId: splitOwnerParticipantId,
+          amountMinor: 250,
+        ),
+        ListExpenseShare(
+          participantId: splitOwnerParticipantId,
+          amountMinor: 250,
+        ),
+      ],
+    ];
+    for (final shares in invalidAllocations) {
+      expect(
+        await controller.createExpense(
+          description: 'Invalid custom',
+          amountMinor: 500,
+          payerParticipantId: splitOwnerParticipantId,
+          beneficiaryParticipantIds: const [splitOwnerParticipantId],
+          customShares: shares,
+          requestId: '50000000-0000-4000-8000-000000000011',
+        ),
+        ListSplitMutationOutcome.invalid,
+      );
+    }
+
+    expect(repository.createCalls, 0);
+    expect(controller.state.overview.asData!.value.expenses, isEmpty);
+    controller.dispose();
+  });
+
   test('retains removed identities only in their existing expense roles',
       () async {
     const formerPayer = '30000000-0000-4000-8000-000000000003';
@@ -181,10 +374,28 @@ void main() {
         amountMinor: expense.amountMinor,
         payerParticipantId: formerPayer,
         beneficiaryParticipantIds: expense.beneficiaryParticipantIds,
+        customShares: const [
+          ListExpenseShare(
+            participantId: splitOwnerParticipantId,
+            amountMinor: 2000,
+          ),
+          ListExpenseShare(
+            participantId: formerBeneficiary,
+            amountMinor: 4000,
+          ),
+        ],
       ),
       ListSplitMutationOutcome.succeeded,
     );
     expect(repository.updateCalls, 1);
+    expect(
+      repository.overview.expenses.single.shares
+          .firstWhere(
+            (share) => share.participantId == formerBeneficiary,
+          )
+          .amountMinor,
+      4000,
+    );
 
     controller.dispose();
   });

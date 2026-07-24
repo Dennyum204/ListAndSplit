@@ -34,6 +34,8 @@ class FakeListSplitRepository implements ListSplitRepository {
   int listSettlementCalls = 0;
   int recordSettlementCalls = 0;
   int reverseSettlementCalls = 0;
+  List<ListExpenseShare>? lastCreatedCustomShares;
+  List<ListExpenseShare>? lastUpdatedCustomShares;
   final List<String> requestIds = [];
   final Set<String> completedRequestIds = {};
   final List<ListSplitSettlement> settlements = [];
@@ -104,10 +106,13 @@ class FakeListSplitRepository implements ListSplitRepository {
     required int amountMinor,
     required String payerParticipantId,
     required List<String> beneficiaryParticipantIds,
+    List<ListExpenseShare>? customShares,
     required String requestId,
     required int expectedSplitVersion,
   }) async {
     createCalls += 1;
+    lastCreatedCustomShares =
+        customShares == null ? null : List.unmodifiable(customShares);
     requestIds.add(requestId);
     _throwMutationFailure();
     if (completedRequestIds.contains(requestId)) return overview;
@@ -118,6 +123,7 @@ class FakeListSplitRepository implements ListSplitRepository {
       amountMinor: amountMinor,
       payerParticipantId: payerParticipantId,
       beneficiaryParticipantIds: beneficiaryParticipantIds,
+      customShares: customShares,
       createdAt: now,
     );
     overview = _withExpenses([...overview.expenses, expense]);
@@ -133,10 +139,13 @@ class FakeListSplitRepository implements ListSplitRepository {
     required int amountMinor,
     required String payerParticipantId,
     required List<String> beneficiaryParticipantIds,
+    List<ListExpenseShare>? customShares,
     required int expectedSplitVersion,
     required int expectedExpenseVersion,
   }) async {
     updateCalls += 1;
+    lastUpdatedCustomShares =
+        customShares == null ? null : List.unmodifiable(customShares);
     _throwMutationFailure();
     final existing =
         overview.expenses.firstWhere((entry) => entry.id == expenseId);
@@ -146,6 +155,7 @@ class FakeListSplitRepository implements ListSplitRepository {
       amountMinor: amountMinor,
       payerParticipantId: payerParticipantId,
       beneficiaryParticipantIds: beneficiaryParticipantIds,
+      customShares: customShares,
       version: existing.version + 1,
       createdAt: existing.createdAt,
     );
@@ -439,6 +449,8 @@ ListSplitExpense splitExpense({
     splitOwnerParticipantId,
     splitMemberParticipantId,
   ],
+  List<ListExpenseShare>? customShares,
+  int version = 1,
 }) =>
     _expense(
       id: id,
@@ -446,7 +458,9 @@ ListSplitExpense splitExpense({
       amountMinor: amountMinor,
       payerParticipantId: payerParticipantId,
       beneficiaryParticipantIds: beneficiaryParticipantIds,
+      customShares: customShares,
       createdAt: DateTime.utc(2026, 7, 22, 11),
+      version: version,
     );
 
 ListSplitExpense _expense({
@@ -455,12 +469,16 @@ ListSplitExpense _expense({
   required int amountMinor,
   required String payerParticipantId,
   required List<String> beneficiaryParticipantIds,
+  List<ListExpenseShare>? customShares,
   required DateTime createdAt,
   int version = 1,
 }) {
   final ordered = beneficiaryParticipantIds.toSet().toList()..sort();
-  final base = amountMinor ~/ ordered.length;
-  final remainder = amountMinor % ordered.length;
+  final shares = customShares ??
+      canonicalEqualExpenseShares(
+        amountMinor: amountMinor,
+        beneficiaryParticipantIds: ordered,
+      );
   return ListSplitExpense(
     id: id,
     description: description,
@@ -472,13 +490,7 @@ ListSplitExpense _expense({
     createdAt: createdAt,
     updatedAt: createdAt.add(Duration(seconds: version - 1)),
     beneficiaryParticipantIds: ordered,
-    shares: [
-      for (var index = 0; index < ordered.length; index += 1)
-        ListExpenseShare(
-          participantId: ordered[index],
-          amountMinor: base + (index < remainder ? 1 : 0),
-        ),
-    ],
+    shares: shares,
   );
 }
 

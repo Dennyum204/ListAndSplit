@@ -19,11 +19,11 @@ and persistent list-access notifications are implemented. Private account-scoped
 Supabase Broadcast now reconciles connected devices through the existing RPC
 repositories without carrying application data. Private templates support independent
 list snapshots and atomic selected-item list creation/import. List-scoped Split
-supports owner-selected CHF/EUR, exact integer equal-share expenses, derived
-balances, deterministic settle-up suggestions, immutable full/partial settlement
-records, one-time reversals, historical participants, and the same private
-reconciliation path. Public/shared templates, offline mutation queues, push
-delivery, custom shares, and payment-provider integration remain planned work.
+supports owner-selected CHF/EUR, exact integer equal and custom expense shares,
+derived balances, deterministic settle-up suggestions, immutable full/partial
+settlement records, one-time reversals, historical participants, and the same
+private reconciliation path. Public/shared templates, offline mutation queues,
+push delivery, and payment-provider integration remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English
@@ -183,9 +183,13 @@ Git.
 
 Split tables are likewise RPC-only: direct client operations are explicitly denied
 and every read/mutation rechecks current unblocked list access. Hardened transactional
-functions enforce currency, integer money, equal-share, participant, version, archive,
-capacity, settlement, one-time-reversal, idempotency, and stale-write invariants;
-opaque Realtime invalidations carry no financial content.
+functions enforce currency, integer money, equal/custom-share conservation,
+participant, version, archive, capacity, settlement, one-time-reversal,
+idempotency, and stale-write invariants; opaque Realtime invalidations carry no
+financial content. Explicit expense-share rows remain the durable truth; the
+Equal/Custom editor choice is inferred rather than persisted. Any environment
+must receive the reviewed custom-share migration before a client that calls its
+versioned expense RPCs is distributed.
 
 Community discovery and block management use only the reviewed
 `find_profile_by_username`, `block_profile`, `unblock_profile`, and
@@ -230,10 +234,11 @@ email-verified user, including before onboarding, followed by a validated UTF-8
 JSON file in app-scoped temporary cache and the native share sheet. The server
 retains no export file. Export schema version `6` preserves versions `1` through
 `5`, includes allowlisted Split settlement/reversal history only inside fully
-exported caller-owned lists, and keeps lists owned by someone else to
-caller-relative metadata. Shared items, owner identity, other participants, Split
-contents, request IDs, derived balances/suggestions, and internal authority details
-remain excluded.
+exported caller-owned lists, represents equal and custom allocations through their
+explicit exact share rows, and keeps lists owned by someone else to caller-relative
+metadata. Versions `1` through `6` remain compatible. Shared items, owner identity,
+other participants, Split contents, request IDs, derived balances/suggestions, and
+internal authority details remain excluded.
 
 Deletion is immediate and irreversible. Completed profiles confirm with their
 exact stored canonical username; incomplete profiles confirm with their exact
@@ -287,8 +292,9 @@ SQL into the Dashboard.
 
 The current slices do not implement unrestricted profile/directory search,
 avatars, public/shared/sent templates, notification archive/preferences or
-physical cleanup, reporting, custom expense shares, a mathematically minimum
-settlement solver, SQLite caching/offline
+physical cleanup, reporting, percentage/weight/ratio expense allocation,
+automatic custom-share remainder correction, a mathematically minimum settlement
+solver, SQLite caching/offline
 synchronization, push delivery,
 Firebase setup, administrator-initiated deletion, or a production backend.
 Private Realtime Broadcast is implemented as best-effort account invalidation:

@@ -37,6 +37,11 @@ enum SplitListStatus {
       };
 }
 
+enum SplitExpenseAllocationMode {
+  equal,
+  custom,
+}
+
 class MoneyAmount {
   const MoneyAmount._(this.minorUnits, this.currency);
 
@@ -50,8 +55,9 @@ class MoneyAmount {
     String input, {
     required SplitCurrency currency,
     int maxMinor = splitExpenseAmountMaxMinor,
+    bool allowZero = false,
   }) {
-    if (maxMinor < 1) return null;
+    if (maxMinor < (allowZero ? 0 : 1)) return null;
     final normalized = input.trim();
     final match = RegExp(r'^(\d+)(?:\.(\d{1,2}))?$').firstMatch(normalized);
     if (match == null) return null;
@@ -64,7 +70,9 @@ class MoneyAmount {
     final scale = _powerOfTen(currency.minorUnitDigits);
     if (whole > maxMinor ~/ scale) return null;
     final minorUnits = whole * scale + fraction;
-    if (minorUnits < 1 || minorUnits > maxMinor) return null;
+    if (minorUnits < (allowZero ? 0 : 1) || minorUnits > maxMinor) {
+      return null;
+    }
     return MoneyAmount._(minorUnits, currency);
   }
 
@@ -143,6 +151,52 @@ class ListExpenseShare {
   final int amountMinor;
 }
 
+List<ListExpenseShare> canonicalEqualExpenseShares({
+  required int amountMinor,
+  required Iterable<String> beneficiaryParticipantIds,
+}) {
+  final input = beneficiaryParticipantIds.toList(growable: false);
+  final ordered = input.toSet().toList(growable: false)..sort();
+  if (amountMinor < 1 || ordered.isEmpty || ordered.length != input.length) {
+    throw ArgumentError('invalid equal expense allocation');
+  }
+  final base = amountMinor ~/ ordered.length;
+  final remainder = amountMinor % ordered.length;
+  return List.unmodifiable([
+    for (var index = 0; index < ordered.length; index += 1)
+      ListExpenseShare(
+        participantId: ordered[index],
+        amountMinor: base + (index < remainder ? 1 : 0),
+      ),
+  ]);
+}
+
+bool expenseSharesAreCanonicalEqual({
+  required int amountMinor,
+  required Iterable<String> beneficiaryParticipantIds,
+  required Iterable<ListExpenseShare> shares,
+}) {
+  late final List<ListExpenseShare> canonical;
+  try {
+    canonical = canonicalEqualExpenseShares(
+      amountMinor: amountMinor,
+      beneficiaryParticipantIds: beneficiaryParticipantIds,
+    );
+  } on ArgumentError {
+    return false;
+  }
+  final actual = shares.toList(growable: false);
+  if (actual.length != canonical.length) return false;
+  final actualByParticipant = <String, int>{};
+  for (final share in actual) {
+    if (actualByParticipant.containsKey(share.participantId)) return false;
+    actualByParticipant[share.participantId] = share.amountMinor;
+  }
+  return canonical.every(
+    (share) => actualByParticipant[share.participantId] == share.amountMinor,
+  );
+}
+
 class ListSplitExpense {
   ListSplitExpense({
     required this.id,
@@ -171,6 +225,12 @@ class ListSplitExpense {
   final DateTime updatedAt;
   final List<String> beneficiaryParticipantIds;
   final List<ListExpenseShare> shares;
+
+  bool get usesCanonicalEqualAllocation => expenseSharesAreCanonicalEqual(
+        amountMinor: amountMinor,
+        beneficiaryParticipantIds: beneficiaryParticipantIds,
+        shares: shares,
+      );
 }
 
 class ListSettlementSuggestion {

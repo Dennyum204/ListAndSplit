@@ -60,21 +60,28 @@ class SupabaseListSplitRepository implements ListSplitRepository {
     required int amountMinor,
     required String payerParticipantId,
     required List<String> beneficiaryParticipantIds,
+    List<ListExpenseShare>? customShares,
     required String requestId,
     required int expectedSplitVersion,
-  }) =>
-      _call(
-        'create_active_list_expense',
-        {
-          'target_list_id': listId,
-          'new_description': description,
-          'new_amount_minor': amountMinor,
-          'payer_participant_id': payerParticipantId,
-          'beneficiary_participant_ids': beneficiaryParticipantIds,
-          'creation_request_id': requestId,
-          'expected_split_version': expectedSplitVersion,
-        },
-      );
+  }) {
+    final allocation = _allocationParameters(
+      beneficiaryParticipantIds,
+      customShares,
+    );
+    return _call(
+      'create_active_list_expense_v2',
+      {
+        'target_list_id': listId,
+        'new_description': description,
+        'new_amount_minor': amountMinor,
+        'payer_participant_id': payerParticipantId,
+        'beneficiary_participant_ids': allocation.$1,
+        'beneficiary_amounts_minor': allocation.$2,
+        'creation_request_id': requestId,
+        'expected_split_version': expectedSplitVersion,
+      },
+    );
+  }
 
   @override
   Future<ListSplitOverview> updateExpense(
@@ -84,22 +91,29 @@ class SupabaseListSplitRepository implements ListSplitRepository {
     required int amountMinor,
     required String payerParticipantId,
     required List<String> beneficiaryParticipantIds,
+    List<ListExpenseShare>? customShares,
     required int expectedSplitVersion,
     required int expectedExpenseVersion,
-  }) =>
-      _call(
-        'update_active_list_expense',
-        {
-          'target_list_id': listId,
-          'target_expense_id': expenseId,
-          'new_description': description,
-          'new_amount_minor': amountMinor,
-          'payer_participant_id': payerParticipantId,
-          'beneficiary_participant_ids': beneficiaryParticipantIds,
-          'expected_split_version': expectedSplitVersion,
-          'expected_expense_version': expectedExpenseVersion,
-        },
-      );
+  }) {
+    final allocation = _allocationParameters(
+      beneficiaryParticipantIds,
+      customShares,
+    );
+    return _call(
+      'update_active_list_expense_v2',
+      {
+        'target_list_id': listId,
+        'target_expense_id': expenseId,
+        'new_description': description,
+        'new_amount_minor': amountMinor,
+        'payer_participant_id': payerParticipantId,
+        'beneficiary_participant_ids': allocation.$1,
+        'beneficiary_amounts_minor': allocation.$2,
+        'expected_split_version': expectedSplitVersion,
+        'expected_expense_version': expectedExpenseVersion,
+      },
+    );
+  }
 
   @override
   Future<ListSplitOverview> deleteExpense(
@@ -445,6 +459,28 @@ class SupabaseListSplitRepository implements ListSplitRepository {
       }
     }
     return true;
+  }
+
+  static (List<String>, List<int>?) _allocationParameters(
+    List<String> beneficiaryParticipantIds,
+    List<ListExpenseShare>? customShares,
+  ) {
+    if (customShares == null) {
+      final orderedIds = beneficiaryParticipantIds.toList(growable: false)
+        ..sort();
+      return (orderedIds, null);
+    }
+    final orderedShares = customShares.toList(growable: false)
+      ..sort(
+          (left, right) => left.participantId.compareTo(right.participantId));
+    return (
+      List.unmodifiable(
+        orderedShares.map((share) => share.participantId),
+      ),
+      List.unmodifiable(
+        orderedShares.map((share) => share.amountMinor),
+      ),
+    );
   }
 
   static ListSplitExpense _expense(

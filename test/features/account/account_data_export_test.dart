@@ -138,6 +138,31 @@ void main() {
       expect(document.toJson(), validAccountDataExportJson(schemaVersion: 5));
     });
 
+    test('schema-v6 preserves non-equal exact shares without a mode field', () {
+      final json = validAccountDataExportJson(schemaVersion: 6);
+      final split = ((json['active_lists'] as List).first
+          as Map<String, dynamic>)['split'] as Map<String, dynamic>;
+      final expense =
+          (split['expenses'] as List).single as Map<String, dynamic>;
+      final shares = expense['shares'] as List;
+      (shares[0] as Map<String, dynamic>)['amount_minor'] = 701;
+      (shares[1] as Map<String, dynamic>)['amount_minor'] = 300;
+
+      final document = AccountDataExportDocument.fromJson(json);
+      final exportedExpense = document.activeLists.first.split!.expenses.single;
+
+      expect(
+        exportedExpense.shares.map((share) => share.amountMinor),
+        [701, 300],
+      );
+      expect(document.toJson(), json);
+      expect(
+        ((document.toJson()['active_lists'] as List).first
+            as Map<String, dynamic>)['split'],
+        isNot(contains('allocation_method')),
+      );
+    });
+
     test(
         'maps schema-v6 owned-list immutable settlements and optional reversal',
         () {
@@ -431,6 +456,17 @@ void main() {
         );
         expect(document.sharedListAccess, isEmpty);
         expect(document.toJson(), isNot(contains('shared_list_access')));
+      }
+    });
+
+    test('continues decoding and round-tripping export schemas 1 through 6',
+        () {
+      for (var version = 1; version <= 6; version += 1) {
+        final json = validAccountDataExportJson(schemaVersion: version);
+        final document = AccountDataExportDocument.fromJson(json);
+
+        expect(document.schemaVersion, version);
+        expect(document.toJson(), json, reason: 'schema version $version');
       }
     });
 

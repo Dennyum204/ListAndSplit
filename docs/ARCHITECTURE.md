@@ -392,6 +392,8 @@ contract is introduced.
 Every table enables and forces RLS, has an explicit restrictive direct-client
 rejection policy, and revokes table privileges from `PUBLIC`, `anon`,
 `authenticated`, and `service_role`. List deletion cascades the entire aggregate.
+Exact custom allocation reuses these tables and policies: it adds no table,
+column, persisted allocation mode, RLS policy, or Data API table grant.
 
 The independently generated persistent Split participant UUID is the financial
 identity; it is never copied from or derived from an Auth/profile ID. Its nullable live
@@ -420,14 +422,35 @@ stale work changes no row, version, notification, or Realtime output.
 Expense creation includes a caller-generated request UUID unique within the list.
 It is payload-bound, grants no authority, makes an identical lost-response retry
 idempotent, rejects conflicting reuse, and is excluded from reads and export.
+Versioned create/update RPCs accept either server-derived equal allocation or
+deterministically normalized participant/minor-unit pairs for exact custom
+allocation. They validate matching array cardinality, unique eligible identities,
+positive custom amounts, `bigint` bounds, exact conservation, current list/settings/
+expense versions, and historical-role eligibility inside the locked transaction.
+On creation, the normalized pairs are part of the request-ID payload binding; on
+update, the full pairs participate in exact no-op comparison under the existing
+expected-version contract.
 
 New expenses accept only current owner/accepted-member identities. An edit may
 retain an ineligible historical payer or beneficiary only if that exact identity
 is already attached to that expense; omitting it removes that exception until the
-account becomes eligible again. Shares are integer minor units and the server
-allocates the remainder in ascending participant UUID order. Read RPCs derive paid,
-owed, settlement-paid, settlement-received, and net balances from ledger rows and
-never persist a balance cache.
+account becomes eligible again. A retained historical beneficiary's amount may
+change, but an ineligible identity not already attached cannot be introduced.
+Custom submission accepts only positive integer shares; a zero editor input
+removes the participant before submission. Equal allocation remains server-owned:
+the server allocates the remainder in ascending participant UUID order. Both modes
+replace the complete explicit share set atomically. No allocation-mode column is
+stored. Flutter infers Equal only when the stored rows match that complete
+canonical equal result; an identical custom result is therefore indistinguishable
+from Equal by design.
+
+The legacy equal create contract remains available. Its update contract continues
+to edit canonical equal expenses but rejects an existing non-equal expense before
+mutation, preventing an older client from silently replacing custom shares. The
+new additive migration must be deployed before distributing a client that invokes
+the versioned contracts. Existing read projections remain unchanged. Read RPCs
+derive paid, owed, settlement-paid, settlement-received, and net balances from
+ledger rows and never persist a balance cache.
 
 Settlement and reversal records are separate immutable tables rather than expense
 variants. A settlement stores one same-list payer, recipient, server-derived
@@ -455,18 +478,23 @@ only `payer_participant_id`, `recipient_participant_id`, and `amount_minor`.
 
 Flutter keeps Split under the Lists feature behind a dedicated repository,
 session-scoped Riverpod controller, and list-ID route. Widgets own only display and
-intent. Currency parsing uses decimal text and integer minor units without
-`double`. Mounted overview/form controllers register with the existing
+intent. Equal remains the default editor state. Exact custom amount fields parse
+decimal text directly to integer minor units without `double`, show allocated and
+remaining/overallocated values, and disable Save until the selected positive
+shares exactly conserve the expense total. Equal-to-Custom prefills canonical
+current shares; Custom-to-Equal sends intent for the server to recompute on Save.
+Mounted overview/form controllers register with the existing
 reconciliation registry. Settings, expense, settlement, and reversal changes reuse
 private account Broadcast fanout to every current accepted list account;
 membership/list changes already invalidate those accounts. Authoritative refresh
 handles reconnect, resume, archive, removal, deletion, and concurrent ledger
-changes. An open settlement editor owns one stable request UUID and closes once on
-authoritative remote version/access/archive/delete invalidation; transport failure
-preserves the form for safe retry. Repeated taps cannot overlap. Localized widgets
-use semantic direction/status labels, non-color-only states, scalable scrolling,
-and the existing Material 3 light/dark themes. No offline mutation queue is
-introduced.
+changes. New-expense creation and settlement-create editors own stable request
+UUIDs; expense updates retain exact no-op plus expected-version semantics rather
+than introducing an update request ID. Editors close once on authoritative remote
+version/access/archive/delete invalidation; transport failure preserves the form
+for safe retry. Repeated taps cannot overlap. Localized widgets use semantic
+allocation/direction/status labels, non-color-only states, scalable scrolling, and
+the existing Material 3 light/dark themes. No offline mutation queue is introduced.
 
 ### Account export boundary
 
@@ -484,9 +512,11 @@ others and excludes their items, owner identity, other participants, and interna
 authorization data. Version `4` adds only the caller's private categories,
 templates, and ordered template items. Version `5` nests Split settings,
 participant live-or-anonymous state, expenses, payer/editor identities, and
-allocated shares only inside the caller's fully exported owned lists. Shared-list
-access stays metadata-only. Version `6` adds allowlisted immutable settlement and
-reversal history for those same owned-list Split ledgers, including endpoint and
+explicit allocated shares only inside the caller's fully exported owned lists.
+Those rows represent canonical equal and exact custom allocations without an
+allocation-mode field. Shared-list access stays metadata-only. Version `6` adds
+allowlisted immutable settlement and reversal history for those same owned-list
+Split ledgers, including endpoint and
 recorder participant IDs, integer amount, note/reason, reversal link, and server
 times. Request IDs, derived balances, and suggested payments are excluded because
 they are respectively private or reproducible. It is a hardened `SECURITY DEFINER`
@@ -523,8 +553,8 @@ changes. The file service writes pretty UTF-8 JSON to application-scoped
 temporary/cache storage and invokes the Android/iOS native share sheet with a
 privacy-safe UTC filename and JSON MIME type. It never falls back to public shared
 storage or promises guaranteed cache deletion. Production responses must be
-version `6`; the parser deliberately retains strict versions 1-5 support for
-historical fixtures and previously downloaded documents.
+version `6`; the parser deliberately retains strict compatibility for versions
+`1` through `6`, including non-equal explicit shares in version `5`/`6` documents.
 
 ### Permanent account-deletion boundary
 
@@ -760,9 +790,9 @@ Operations that span records or enforce important invariants should be atomic an
 idempotent where retries are possible. The active/shared-list and private-template
 aggregates use exact PostgreSQL RPCs because their validation, locking, version
 checks, capacity enforcement, and writes belong in one short database transaction.
-Split settlement and reversal operations follow the same exact PostgreSQL RPC
-boundary. Future public/sent-template and custom-share operations still require
-separate placement decisions.
+Split expense allocation, settlement, and reversal operations follow the same
+exact PostgreSQL RPC boundary. Future public/sent-template operations still
+require separate placement decisions.
 
 ## Money boundary
 
@@ -776,8 +806,13 @@ separate placement decisions.
   ever existed. The first settlement permanently locks the currency even if it is
   reversed.
 - The server validates current eligibility, historical-participant preservation,
-  amount/count limits, and exact equal-share totals. Equal-split remainders follow
-  ascending immutable list-participant ID order.
+  amount/count limits, and exact conservation for every allocation. Equal-split
+  remainders follow ascending immutable list-participant ID order. Custom shares
+  are exact positive minor-unit amounts whose sum equals the expense total; there
+  is no percentage/weight/ratio mode or automatic correction.
+- Explicit share rows are authoritative. Equal/Custom is editor input state, not a
+  persisted classification, and canonical equal detection includes the complete
+  UUID-ordered remainder algorithm.
 - Balances are computed on demand as expense paid minus expense owed, plus
   non-reversed settlements paid and minus non-reversed settlements received. No
   mutable balance aggregate or suggested-payment row is stored.
@@ -824,11 +859,11 @@ writes are implemented.
   controller. The separately enabled local two-client smoke retains real private
   channel authorization and database Broadcast coverage; broader hosted
   cross-service automation remains open under O-A15.
-- Split server tests cover integer arithmetic, equal-share remainders, eligibility,
-  historical identity, exact share conservation, settlement/reversal history,
-  deterministic suggestions, balances, pagination, versions, concurrency,
-  idempotency, deletion, and authorization. Later custom-share work must add its
-  own calculation coverage before shipping.
+- Split server tests cover integer arithmetic, equal-share remainders, exact custom
+  conservation and bounds, eligibility and historical roles, legacy overwrite
+  protection, settlement/reversal history, deterministic suggestions, balances,
+  pagination, versions, concurrency, idempotency, deletion, authorization, and
+  no-write/no-invalidation rejection behavior.
 - Logging must redact tokens, secrets, personal content, and notification payloads.
   A concrete telemetry/crash-reporting service has not been selected.
 

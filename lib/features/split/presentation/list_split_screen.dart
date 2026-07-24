@@ -1358,6 +1358,8 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
   late final String? _creationRequestId;
   late String? _payerId;
   late final Set<String> _beneficiaryIds;
+  late SplitExpenseAllocationMode _allocationMode;
+  final Map<String, TextEditingController> _customAmounts = {};
   bool _showValidation = false;
   bool _submitted = false;
   bool _dialogClosing = false;
@@ -1393,12 +1395,25 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
       else
         ...current.map((participant) => participant.id),
     };
+    _allocationMode = expense == null || expense.usesCanonicalEqualAllocation
+        ? SplitExpenseAllocationMode.equal
+        : SplitExpenseAllocationMode.custom;
+    if (_allocationMode == SplitExpenseAllocationMode.custom) {
+      for (final share in expense!.shares) {
+        _customAmountController(share.participantId).text =
+            MoneyAmount.fromMinorUnits(share.amountMinor, currency)
+                .format(includeCode: false);
+      }
+    }
   }
 
   @override
   void dispose() {
     _description.dispose();
     _amount.dispose();
+    for (final controller in _customAmounts.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -1421,7 +1436,10 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
     }
     if (unavailable ||
         (widget.expense != null && liveExpense == null) ||
-        !overview.writable) {
+        !overview.writable ||
+        (widget.expense != null &&
+            liveExpense != null &&
+            liveExpense.version != widget.expense!.version)) {
       _scheduleClose();
     }
     final currentExpense = liveExpense ?? widget.expense;
@@ -1457,6 +1475,13 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
         _beneficiaryIds.every(
           (id) => beneficiaryChoices.any((entry) => entry.id == id),
         );
+    final customAllocation = _readCustomAllocation(currency);
+    final customAllocationValid =
+        _allocationMode == SplitExpenseAllocationMode.equal ||
+            (parsed != null &&
+                beneficiariesValid &&
+                customAllocation.fieldsValid &&
+                customAllocation.allocatedMinor == parsed.minorUnits);
     final localizations = AppLocalizations.of(context);
     final formEnabled = !unavailable &&
         overview.writable &&
@@ -1562,19 +1587,20 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
                 CheckboxListTile(
                   key: ValueKey('splitBeneficiary-${participant.id}'),
                   contentPadding: EdgeInsets.zero,
-                  title: Text(_participantName(localizations, participant)),
+                  title: Text(
+                    _participantName(localizations, participant),
+                  ),
                   subtitle: participant.isCurrent
                       ? null
-                      : Text(localizations.splitHistoricalParticipantLabel),
+                      : Text(
+                          localizations.splitHistoricalParticipantLabel,
+                        ),
                   value: _beneficiaryIds.contains(participant.id),
                   onChanged: formEnabled
-                      ? (selected) => setState(() {
-                            if (selected == true) {
-                              _beneficiaryIds.add(participant.id);
-                            } else {
-                              _beneficiaryIds.remove(participant.id);
-                            }
-                          })
+                      ? (selected) => _setBeneficiarySelected(
+                            participant.id,
+                            selected == true,
+                          )
                       : null,
                 ),
               if (_showValidation && !beneficiariesValid)
@@ -1582,6 +1608,82 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
                   localizations.splitParticipantRequiredMessage,
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
+              const SizedBox(height: 16),
+              Text(
+                localizations.splitExpenseAllocationModeLabel,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 8),
+              Semantics(
+                label: localizations.splitExpenseAllocationModeLabel,
+                child: SegmentedButton<SplitExpenseAllocationMode>(
+                  key: const Key('splitExpenseAllocationMode'),
+                  segments: [
+                    ButtonSegment(
+                      value: SplitExpenseAllocationMode.equal,
+                      label: Text(localizations.splitExpenseEqualAllocation),
+                    ),
+                    ButtonSegment(
+                      value: SplitExpenseAllocationMode.custom,
+                      label: Text(localizations.splitExpenseCustomAllocation),
+                    ),
+                  ],
+                  selected: {_allocationMode},
+                  onSelectionChanged: formEnabled
+                      ? (selection) => _changeAllocationMode(
+                            selection.single,
+                            currency,
+                          )
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _allocationMode == SplitExpenseAllocationMode.equal
+                    ? localizations.splitExpenseEqualAllocationHelp
+                    : localizations.splitExpenseCustomAllocationHelp,
+              ),
+              if (_allocationMode == SplitExpenseAllocationMode.custom) ...[
+                const SizedBox(height: 16),
+                for (final participant in beneficiaryChoices)
+                  if (_beneficiaryIds.contains(participant.id))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: TextField(
+                        key: ValueKey(
+                          'splitCustomShareAmount-${participant.id}',
+                        ),
+                        controller: _customAmountController(participant.id),
+                        enabled: formEnabled,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        textInputAction: TextInputAction.next,
+                        onChanged: (value) => _customAmountChanged(
+                          participant.id,
+                          value,
+                          currency,
+                        ),
+                        decoration: InputDecoration(
+                          labelText:
+                              localizations.splitExpenseCustomAmountLabel(
+                            _participantName(localizations, participant),
+                            currency.code,
+                          ),
+                          errorText: _customAmountError(
+                                  participant.id, currency)
+                              ? localizations.splitExpenseCustomAmountInvalid
+                              : null,
+                        ),
+                      ),
+                    ),
+                _CustomAllocationSummary(
+                  currency: currency,
+                  totalMinor: parsed?.minorUnits,
+                  allocatedMinor: customAllocation.allocatedMinor,
+                  fieldsValid: customAllocation.fieldsValid,
+                ),
+              ],
             ],
           ),
         ),
@@ -1597,7 +1699,7 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
           ),
           FilledButton(
             key: const Key('saveSplitExpenseButton'),
-            onPressed: formEnabled ? _submit : null,
+            onPressed: formEnabled && customAllocationValid ? _submit : null,
             child: state.isMutating
                 ? const SizedBox.square(
                     dimension: 18,
@@ -1636,13 +1738,22 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
               overview.participantById(id)?.isCurrent == true ||
               retainedBeneficiaries.contains(id),
         );
+    final customAllocation = _readCustomAllocation(currency);
+    final customShares = _allocationMode == SplitExpenseAllocationMode.custom &&
+            customAllocation.fieldsValid &&
+            amount != null &&
+            customAllocation.allocatedMinor == amount.minorUnits
+        ? customAllocation.shares
+        : null;
     if (_description.text.trim().isEmpty ||
         _description.text.trim().length > splitExpenseDescriptionMaxLength ||
         amount == null ||
         overview?.writable != true ||
         !payerAllowed ||
         _beneficiaryIds.isEmpty ||
-        !beneficiariesAllowed) {
+        !beneficiariesAllowed ||
+        (_allocationMode == SplitExpenseAllocationMode.custom &&
+            customShares == null)) {
       setState(() => _showValidation = true);
       return;
     }
@@ -1655,6 +1766,7 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
             amountMinor: amount.minorUnits,
             payerParticipantId: _payerId!,
             beneficiaryParticipantIds: _beneficiaryIds,
+            customShares: customShares,
             requestId: _creationRequestId!,
           )
         : await controller.updateExpense(
@@ -1663,6 +1775,7 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
             amountMinor: amount.minorUnits,
             payerParticipantId: _payerId!,
             beneficiaryParticipantIds: _beneficiaryIds,
+            customShares: customShares,
           );
     if (!mounted) return;
     if (outcome.dismissesEditor) {
@@ -1679,6 +1792,137 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _popOwnedDialogRoute();
     });
+  }
+
+  TextEditingController _customAmountController(String participantId) =>
+      _customAmounts.putIfAbsent(
+        participantId,
+        TextEditingController.new,
+      );
+
+  void _changeAllocationMode(
+    SplitExpenseAllocationMode mode,
+    SplitCurrency currency,
+  ) {
+    if (mode == _allocationMode) return;
+    setState(() {
+      _allocationMode = mode;
+      _showValidation = false;
+      if (mode == SplitExpenseAllocationMode.custom) {
+        _prefillCanonicalCustomAmounts(currency);
+      }
+    });
+  }
+
+  void _prefillCanonicalCustomAmounts(SplitCurrency currency) {
+    final amount = MoneyAmount.tryParse(_amount.text, currency: currency);
+    if (amount == null || _beneficiaryIds.isEmpty) {
+      for (final participantId in _beneficiaryIds) {
+        _customAmountController(participantId).clear();
+      }
+      return;
+    }
+    final canonical = canonicalEqualExpenseShares(
+      amountMinor: amount.minorUnits,
+      beneficiaryParticipantIds: _beneficiaryIds,
+    );
+    _beneficiaryIds.clear();
+    for (final share in canonical) {
+      final controller = _customAmountController(share.participantId);
+      controller.text = MoneyAmount.fromMinorUnits(share.amountMinor, currency)
+          .format(includeCode: false);
+      if (share.amountMinor > 0) {
+        _beneficiaryIds.add(share.participantId);
+      }
+    }
+  }
+
+  void _setBeneficiarySelected(String participantId, bool selected) {
+    setState(() {
+      if (selected) {
+        _beneficiaryIds.add(participantId);
+        if (_allocationMode == SplitExpenseAllocationMode.custom) {
+          final controller = _customAmountController(participantId);
+          final parsed = MoneyAmount.tryParse(
+            controller.text,
+            currency: ref
+                    .read(listSplitControllerProvider(widget.listId))
+                    .overview
+                    .valueOrNull
+                    ?.currency ??
+                widget.initialOverview.currency!,
+            allowZero: true,
+          );
+          if (parsed == null || parsed.minorUnits == 0) controller.clear();
+        }
+      } else {
+        _beneficiaryIds.remove(participantId);
+      }
+    });
+  }
+
+  void _customAmountChanged(
+    String participantId,
+    String value,
+    SplitCurrency currency,
+  ) {
+    final parsed = MoneyAmount.tryParse(
+      value,
+      currency: currency,
+      allowZero: true,
+    );
+    setState(() {
+      if (parsed?.minorUnits == 0) {
+        _beneficiaryIds.remove(participantId);
+      }
+    });
+  }
+
+  bool _customAmountError(
+    String participantId,
+    SplitCurrency currency,
+  ) {
+    final text = _customAmountController(participantId).text;
+    if (text.isEmpty) return _showValidation;
+    final parsed = MoneyAmount.tryParse(
+      text,
+      currency: currency,
+      allowZero: true,
+    );
+    return parsed == null || parsed.minorUnits == 0;
+  }
+
+  ({
+    List<ListExpenseShare> shares,
+    int allocatedMinor,
+    bool fieldsValid,
+  }) _readCustomAllocation(SplitCurrency currency) {
+    final shares = <ListExpenseShare>[];
+    var allocatedMinor = 0;
+    var fieldsValid = _beneficiaryIds.isNotEmpty;
+    final orderedIds = _beneficiaryIds.toList(growable: false)..sort();
+    for (final participantId in orderedIds) {
+      final parsed = MoneyAmount.tryParse(
+        _customAmountController(participantId).text,
+        currency: currency,
+      );
+      if (parsed == null) {
+        fieldsValid = false;
+        continue;
+      }
+      allocatedMinor += parsed.minorUnits;
+      shares.add(
+        ListExpenseShare(
+          participantId: participantId,
+          amountMinor: parsed.minorUnits,
+        ),
+      );
+    }
+    return (
+      shares: List.unmodifiable(shares),
+      allocatedMinor: allocatedMinor,
+      fieldsValid: fieldsValid && shares.length == orderedIds.length,
+    );
   }
 
   void _scheduleOverlayDismissal() {
@@ -1705,6 +1949,62 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
     final navigator = Navigator.of(context);
     navigator.popUntil((candidate) => identical(candidate, route));
     if (route.isCurrent) navigator.pop();
+  }
+}
+
+class _CustomAllocationSummary extends StatelessWidget {
+  const _CustomAllocationSummary({
+    required this.currency,
+    required this.totalMinor,
+    required this.allocatedMinor,
+    required this.fieldsValid,
+  });
+
+  final SplitCurrency currency;
+  final int? totalMinor;
+  final int allocatedMinor;
+  final bool fieldsValid;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final allocated = _formatMinor(allocatedMinor, currency);
+    late final String status;
+    final total = totalMinor;
+    if (total == null) {
+      status = localizations.splitExpenseCustomNeedsAmount;
+    } else if (allocatedMinor < total) {
+      status = localizations.splitExpenseCustomRemaining(
+        _formatMinor(total - allocatedMinor, currency),
+      );
+    } else if (allocatedMinor > total) {
+      status = localizations.splitExpenseCustomOverallocated(
+        _formatMinor(allocatedMinor - total, currency),
+      );
+    } else if (!fieldsValid) {
+      status = localizations.splitExpenseCustomAmountInvalid;
+    } else {
+      status = localizations.splitExpenseCustomExact;
+    }
+    return Semantics(
+      key: const Key('splitCustomAllocationSummary'),
+      liveRegion: true,
+      label: '${localizations.splitExpenseCustomAllocated(allocated)} $status',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(localizations.splitExpenseCustomAllocated(allocated)),
+          Text(
+            status,
+            style: TextStyle(
+              color: total != null && allocatedMinor == total && fieldsValid
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

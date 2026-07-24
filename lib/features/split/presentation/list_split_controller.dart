@@ -185,12 +185,15 @@ class ListSplitController extends StateNotifier<ListSplitState> {
     required int amountMinor,
     required String payerParticipantId,
     required Iterable<String> beneficiaryParticipantIds,
+    Iterable<ListExpenseShare>? customShares,
     required String requestId,
   }) async {
     final overview = state.overview.valueOrNull;
     final settings = overview?.settings;
     final normalized = description.trim();
     final beneficiaryIds = _orderedUniqueIds(beneficiaryParticipantIds);
+    final normalizedCustomShares =
+        customShares == null ? null : _orderedCustomShares(customShares);
     if (overview == null ||
         settings == null ||
         !overview.writable ||
@@ -198,6 +201,12 @@ class ListSplitController extends StateNotifier<ListSplitState> {
         !_validDescriptionAndAmount(normalized, amountMinor) ||
         requestId.isEmpty ||
         beneficiaryIds.isEmpty ||
+        !_validCustomAllocation(
+          amountMinor: amountMinor,
+          beneficiaryParticipantIds: beneficiaryIds,
+          customShares: normalizedCustomShares,
+          originalShareCount: customShares?.length,
+        ) ||
         !_isEligible(overview, payerParticipantId) ||
         beneficiaryIds.any((id) => !_isEligible(overview, id))) {
       if (overview != null &&
@@ -216,6 +225,7 @@ class ListSplitController extends StateNotifier<ListSplitState> {
         amountMinor: amountMinor,
         payerParticipantId: payerParticipantId,
         beneficiaryParticipantIds: beneficiaryIds,
+        customShares: normalizedCustomShares,
         requestId: requestId,
         expectedSplitVersion: settings.version,
       ),
@@ -229,6 +239,7 @@ class ListSplitController extends StateNotifier<ListSplitState> {
     required int amountMinor,
     required String payerParticipantId,
     required Iterable<String> beneficiaryParticipantIds,
+    Iterable<ListExpenseShare>? customShares,
   }) {
     final overview = state.overview.valueOrNull;
     final settings = overview?.settings;
@@ -236,12 +247,20 @@ class ListSplitController extends StateNotifier<ListSplitState> {
         overview == null ? null : _expenseById(overview, expense.id);
     final normalized = description.trim();
     final beneficiaryIds = _orderedUniqueIds(beneficiaryParticipantIds);
+    final normalizedCustomShares =
+        customShares == null ? null : _orderedCustomShares(customShares);
     if (overview == null ||
         settings == null ||
         currentExpense == null ||
         !overview.writable ||
         !_validDescriptionAndAmount(normalized, amountMinor) ||
-        beneficiaryIds.isEmpty) {
+        beneficiaryIds.isEmpty ||
+        !_validCustomAllocation(
+          amountMinor: amountMinor,
+          beneficiaryParticipantIds: beneficiaryIds,
+          customShares: normalizedCustomShares,
+          originalShareCount: customShares?.length,
+        )) {
       return Future.value(_invalidOutcome());
     }
     final payerAllowed = _isEligible(overview, payerParticipantId) ||
@@ -262,6 +281,7 @@ class ListSplitController extends StateNotifier<ListSplitState> {
         amountMinor: amountMinor,
         payerParticipantId: payerParticipantId,
         beneficiaryParticipantIds: beneficiaryIds,
+        customShares: normalizedCustomShares,
         expectedSplitVersion: settings.version,
         expectedExpenseVersion: expense.version,
       ),
@@ -616,6 +636,54 @@ class ListSplitController extends StateNotifier<ListSplitState> {
   List<String> _orderedUniqueIds(Iterable<String> participantIds) {
     final unique = participantIds.toSet().toList(growable: false)..sort();
     return unique;
+  }
+
+  List<ListExpenseShare> _orderedCustomShares(
+    Iterable<ListExpenseShare> shares,
+  ) {
+    final ordered = shares.toList(growable: false)
+      ..sort(
+          (left, right) => left.participantId.compareTo(right.participantId));
+    return List.unmodifiable(ordered);
+  }
+
+  bool _validCustomAllocation({
+    required int amountMinor,
+    required List<String> beneficiaryParticipantIds,
+    required List<ListExpenseShare>? customShares,
+    required int? originalShareCount,
+  }) {
+    if (customShares == null) return true;
+    if (customShares.isEmpty ||
+        originalShareCount != customShares.length ||
+        customShares.length != beneficiaryParticipantIds.length ||
+        customShares.any(
+          (share) =>
+              share.amountMinor < 1 ||
+              share.amountMinor > splitExpenseAmountMaxMinor,
+        )) {
+      return false;
+    }
+    final shareIds = customShares
+        .map((share) => share.participantId)
+        .toList(growable: false);
+    if (shareIds.toSet().length != shareIds.length ||
+        !_sameOrderedIds(shareIds, beneficiaryParticipantIds)) {
+      return false;
+    }
+    return customShares.fold<int>(
+          0,
+          (sum, share) => sum + share.amountMinor,
+        ) ==
+        amountMinor;
+  }
+
+  bool _sameOrderedIds(List<String> left, List<String> right) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index += 1) {
+      if (left[index] != right[index]) return false;
+    }
+    return true;
   }
 
   ListSplitExpense? _expenseById(

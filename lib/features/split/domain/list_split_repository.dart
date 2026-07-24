@@ -37,6 +37,7 @@ abstract interface class ListSplitRepository {
     required int amountMinor,
     required String payerParticipantId,
     required List<String> beneficiaryParticipantIds,
+    List<ListExpenseShare>? customShares,
     required String requestId,
     required int expectedSplitVersion,
   });
@@ -48,6 +49,7 @@ abstract interface class ListSplitRepository {
     required int amountMinor,
     required String payerParticipantId,
     required List<String> beneficiaryParticipantIds,
+    List<ListExpenseShare>? customShares,
     required int expectedSplitVersion,
     required int expectedExpenseVersion,
   });
