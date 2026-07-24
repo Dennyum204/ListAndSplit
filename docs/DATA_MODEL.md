@@ -113,16 +113,19 @@ position, version, and timestamps.
 Schema version `5` adds a nullable `split` object to each fully exported owned
 list. When enabled it allowlists currency/settings, persistent financial
 participants and their live-or-anonymized display state, ordered expenses, payer
-and editor participant IDs, and ordered allocated shares. Balances are omitted
-because they are reproducible from those integer records. Shared-list access stays
-metadata-only and never includes another owner's Split contents.
+and editor participant IDs, and ordered explicit allocated shares. Those same rows
+represent canonical equal and exact custom allocations; no allocation-mode field
+is stored or exported. Balances are omitted because they are reproducible from
+those integer records. Shared-list access stays metadata-only and never includes
+another owner's Split contents.
 
 Schema version `6` adds deterministic settlement and reversal arrays inside that
 same caller-owned-list `split` object. It allowlists immutable settlement
 identities, payer/recipient/recorder participant IDs, integer amounts, optional
 notes, server timestamps, and the one-time reversal's recorder, reason, and link to
 its settlement. Request IDs, derived balances, and suggested payments are omitted.
-Versions `1` through `5` remain strictly readable.
+Exact custom shares require no version `7`; versions `1` through `6` remain
+strictly readable.
 
 Every nested object is built from an explicit field allowlist. The social arrays
 apply the same directional-block, caller-relative active-relationship, recipient,
@@ -513,11 +516,37 @@ request UUID is never returned or exported.
 For new expenses, payer and beneficiaries must be the current owner or accepted
 unblocked members; the payer may be outside the beneficiary subset. On edit, an
 ineligible historical participant may remain only in roles already held on that
-expense and cannot be newly introduced. Equal split uses `floor(total / count)`;
-the first `total mod count` immutable participant UUIDs in ascending order each
-receive one additional unit. Stored shares are non-negative and their sum equals
-the positive expense total. Create/update/delete RPCs replace the entire share set
-atomically and enforce list/settings/expense versions.
+expense and cannot be newly introduced. An attached historical beneficiary may
+retain or change their amount; omission removes that exception until the account
+becomes eligible again.
+
+Equal is the default input mode and is calculated only by the server. It uses
+`floor(total / count)`; the first `total mod count` immutable participant UUIDs in
+ascending order each receive one additional unit. Custom input consists only of
+exact CHF/EUR minor-unit amounts. Zero deselects the participant before submission;
+every submitted custom share is positive, identities are unique, and the complete
+set must sum exactly to the expense total. No percentage, weight, ratio,
+proportional allocation, automatic remainder correction, or partial adjustment
+exists.
+
+Stored share rows remain the only durable allocation truth. There is no persisted
+Equal/Custom classification. Flutter infers Equal only by comparing the complete
+stored share set with the canonical UUID-ordered equal result, so custom input
+identical to that result may reopen as Equal. Equal-to-Custom prefills the current
+canonical shares; Custom-to-Equal causes the server to recalculate on confirmed
+Save. Equal allocation may retain a zero share when the positive total contains
+fewer minor units than selected beneficiaries; custom submissions never store a
+zero share.
+
+Versioned create/update RPCs replace the entire share set atomically and enforce
+list/settings/expense versions. On creation, request IDs bind the deterministically
+normalized participant/minor-unit pairs, so identical logical retries are
+idempotent and conflicting allocation reuse is invalid. On update, those complete
+pairs participate in exact no-op comparison under the existing expected-version
+contract; there is no update request ID. The legacy equal create contract remains
+supported, while its update rejects an existing non-equal expense before mutation.
+Every rejection leaves rows, versions, notifications, and Realtime output
+unchanged.
 
 ### Settlement and reversal
 
@@ -696,7 +725,6 @@ explicit grants, protected search paths, and adversarial policy/function tests.
 - Mention representation and parser ownership.
 - Public-template visibility/copy placement, sent-template version/provenance,
   attribution, and offer idempotency.
-- Exact custom-share representation and validation.
 - Future notification-type payload/localization, archive/preferences, physical
   cleanup, account-lifecycle retention, and push-token tables.
 - Offline mutation identifiers, tombstones, cache reconciliation, and conflict

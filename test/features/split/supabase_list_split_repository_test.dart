@@ -99,7 +99,7 @@ void main() {
         'new_currency_code': 'EUR',
         'expected_split_version': 4,
       }),
-      const _RpcCall('create_active_list_expense', {
+      const _RpcCall('create_active_list_expense_v2', {
         'target_list_id': _listId,
         'new_description': 'Train',
         'new_amount_minor': 1200,
@@ -108,16 +108,18 @@ void main() {
           _ownerParticipantId,
           _memberParticipantId,
         ],
+        'beneficiary_amounts_minor': null,
         'creation_request_id': _requestId,
         'expected_split_version': 4,
       }),
-      const _RpcCall('update_active_list_expense', {
+      const _RpcCall('update_active_list_expense_v2', {
         'target_list_id': _listId,
         'target_expense_id': _expenseId,
         'new_description': 'Train tickets',
         'new_amount_minor': 1300,
         'payer_participant_id': _memberParticipantId,
         'beneficiary_participant_ids': [_memberParticipantId],
+        'beneficiary_amounts_minor': null,
         'expected_split_version': 5,
         'expected_expense_version': 2,
       }),
@@ -152,6 +154,84 @@ void main() {
     ]);
   });
 
+  test('sends normalized UUID-aligned exact shares to both v2 RPCs', () async {
+    await repository.createExpense(
+      _listId,
+      description: 'Custom dinner',
+      amountMinor: 3000,
+      payerParticipantId: _ownerParticipantId,
+      beneficiaryParticipantIds: const [
+        _memberParticipantId,
+        _ownerParticipantId,
+      ],
+      customShares: const [
+        ListExpenseShare(
+          participantId: _memberParticipantId,
+          amountMinor: 1000,
+        ),
+        ListExpenseShare(
+          participantId: _ownerParticipantId,
+          amountMinor: 2000,
+        ),
+      ],
+      requestId: _requestId,
+      expectedSplitVersion: 4,
+    );
+    await repository.updateExpense(
+      _listId,
+      _expenseId,
+      description: 'Custom dinner updated',
+      amountMinor: 3000,
+      payerParticipantId: _ownerParticipantId,
+      beneficiaryParticipantIds: const [
+        _memberParticipantId,
+        _ownerParticipantId,
+      ],
+      customShares: const [
+        ListExpenseShare(
+          participantId: _memberParticipantId,
+          amountMinor: 500,
+        ),
+        ListExpenseShare(
+          participantId: _ownerParticipantId,
+          amountMinor: 2500,
+        ),
+      ],
+      expectedSplitVersion: 5,
+      expectedExpenseVersion: 2,
+    );
+
+    expect(calls, [
+      const _RpcCall('create_active_list_expense_v2', {
+        'target_list_id': _listId,
+        'new_description': 'Custom dinner',
+        'new_amount_minor': 3000,
+        'payer_participant_id': _ownerParticipantId,
+        'beneficiary_participant_ids': [
+          _ownerParticipantId,
+          _memberParticipantId,
+        ],
+        'beneficiary_amounts_minor': [2000, 1000],
+        'creation_request_id': _requestId,
+        'expected_split_version': 4,
+      }),
+      const _RpcCall('update_active_list_expense_v2', {
+        'target_list_id': _listId,
+        'target_expense_id': _expenseId,
+        'new_description': 'Custom dinner updated',
+        'new_amount_minor': 3000,
+        'payer_participant_id': _ownerParticipantId,
+        'beneficiary_participant_ids': [
+          _ownerParticipantId,
+          _memberParticipantId,
+        ],
+        'beneficiary_amounts_minor': [2500, 500],
+        'expected_split_version': 5,
+        'expected_expense_version': 2,
+      }),
+    ]);
+  });
+
   test('strictly maps settings, participants, exact shares, and balances',
       () async {
     final overview = await repository.getSplit(_listId);
@@ -170,6 +250,48 @@ void main() {
     expect(
       overview.expenses.single.shares.map((share) => share.amountMinor),
       [501, 500],
+    );
+    expect(
+      overview.expenses.single.usesCanonicalEqualAllocation,
+      isTrue,
+    );
+  });
+
+  test('preserves a valid non-equal projection as custom allocation', () async {
+    final custom = _projection();
+    final expense = (custom['expenses'] as List).single as Map<String, dynamic>;
+    expense['shares'] = <Map<String, Object>>[
+      {
+        'participant_id': _memberParticipantId,
+        'amount_minor': 300,
+      },
+      {
+        'participant_id': _ownerParticipantId,
+        'amount_minor': 701,
+      },
+    ];
+    final participants =
+        (custom['participants'] as List).cast<Map<String, dynamic>>();
+    participants[0]
+      ..['owed_minor'] = 701
+      ..['balance_minor'] = 300;
+    participants[1]
+      ..['owed_minor'] = 300
+      ..['balance_minor'] = -300;
+    ((custom['suggestions'] as List).single
+        as Map<String, dynamic>)['amount_minor'] = 300;
+    response = custom;
+
+    final expenseResult = (await repository.getSplit(_listId)).expenses.single;
+
+    expect(expenseResult.usesCanonicalEqualAllocation, isFalse);
+    expect(
+      expenseResult.shares
+          .map((share) => (share.participantId, share.amountMinor)),
+      [
+        (_memberParticipantId, 300),
+        (_ownerParticipantId, 701),
+      ],
     );
   });
 

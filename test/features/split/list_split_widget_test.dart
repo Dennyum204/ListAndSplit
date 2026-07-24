@@ -115,6 +115,357 @@ void main() {
     expect(notifications.notifications, isEmpty);
   });
 
+  testWidgets('creates three exact custom shares and updates balances',
+      (tester) async {
+    const pedroParticipantId = '30000000-0000-4000-8000-000000000003';
+    final repository = FakeListSplitRepository(
+      initial: enabledSplitOverview(
+        participants: const [
+          ListSplitParticipant(
+            id: splitOwnerParticipantId,
+            profileId: splitOwnerProfileId,
+            username: 'fernando',
+            displayName: 'Fernando',
+            isAnonymized: false,
+            isCurrent: true,
+            paidMinor: 0,
+            owedMinor: 0,
+            balanceMinor: 0,
+          ),
+          ListSplitParticipant(
+            id: splitMemberParticipantId,
+            profileId: splitMemberProfileId,
+            username: 'susana',
+            displayName: 'Susana',
+            isAnonymized: false,
+            isCurrent: true,
+            paidMinor: 0,
+            owedMinor: 0,
+            balanceMinor: 0,
+          ),
+          ListSplitParticipant(
+            id: pedroParticipantId,
+            profileId: '20000000-0000-4000-8000-000000000003',
+            username: 'pedro',
+            displayName: 'Pedro',
+            isAnonymized: false,
+            isCurrent: true,
+            paidMinor: 0,
+            owedMinor: 0,
+            balanceMinor: 0,
+          ),
+        ],
+      ),
+    );
+    await _pump(tester, repository);
+    await tester.tap(find.byKey(const Key('addExpenseButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('splitExpenseDescriptionField')),
+      'Custom dinner',
+    );
+    await tester.enterText(
+      find.byKey(const Key('splitExpenseAmountField')),
+      '30.00',
+    );
+    await _selectCustomAllocation(tester);
+    await _enterCustomAmount(tester, splitOwnerParticipantId, '15.00');
+    await _enterCustomAmount(tester, splitMemberParticipantId, '10.00');
+    await _enterCustomAmount(tester, pedroParticipantId, '5.00');
+
+    final save = find.byKey(const Key('saveSplitExpenseButton'));
+    expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+
+    expect(repository.createCalls, 1);
+    expect(
+      repository.lastCreatedCustomShares?.map((share) => share.amountMinor),
+      [1500, 1000, 500],
+    );
+    expect(
+      repository.overview
+          .participantById(splitOwnerParticipantId)
+          ?.balanceMinor,
+      1500,
+    );
+    expect(
+      repository.overview
+          .participantById(splitMemberParticipantId)
+          ?.balanceMinor,
+      -1000,
+    );
+    expect(
+      repository.overview.participantById(pedroParticipantId)?.balanceMinor,
+      -500,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Equal to Custom prefills canonical remainder and zero deselects',
+      (tester) async {
+    final repository = FakeListSplitRepository();
+    await _pump(tester, repository);
+    await tester.tap(find.byKey(const Key('addExpenseButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('splitExpenseDescriptionField')),
+      'Odd amount',
+    );
+    await tester.enterText(
+      find.byKey(const Key('splitExpenseAmountField')),
+      '10.01',
+    );
+    await _selectCustomAllocation(tester);
+
+    expect(
+      _customAmountText(tester, splitOwnerParticipantId),
+      '5.01',
+    );
+    expect(
+      _customAmountText(tester, splitMemberParticipantId),
+      '5.00',
+    );
+
+    await _enterCustomAmount(tester, splitOwnerParticipantId, '0');
+    expect(
+      find.byKey(
+        const ValueKey(
+          'splitCustomShareAmount-$splitOwnerParticipantId',
+        ),
+      ),
+      findsNothing,
+    );
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(
+              const ValueKey(
+                'splitBeneficiary-$splitOwnerParticipantId',
+              ),
+            ),
+          )
+          .value,
+      isFalse,
+    );
+    expect(find.text('Remaining: CHF 5.01'), findsOneWidget);
+
+    await _enterCustomAmount(tester, splitMemberParticipantId, '10.01');
+    final save = find.byKey(const Key('saveSplitExpenseButton'));
+    expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+
+    expect(
+      repository.lastCreatedCustomShares
+          ?.map((share) => (share.participantId, share.amountMinor)),
+      [(splitMemberParticipantId, 1001)],
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('underallocation and overallocation keep Custom Save disabled',
+      (tester) async {
+    final repository = FakeListSplitRepository();
+    await _pump(tester, repository);
+    await _openCompletedCreateEditor(tester);
+    await _selectCustomAllocation(tester);
+    final save = find.byKey(const Key('saveSplitExpenseButton'));
+
+    await _enterCustomAmount(tester, splitOwnerParticipantId, '2.00');
+    expect(find.text('Remaining: CHF 0.50'), findsOneWidget);
+    expect(tester.widget<FilledButton>(save).onPressed, isNull);
+
+    await _enterCustomAmount(tester, splitOwnerParticipantId, '3.00');
+    expect(find.text('Overallocated: CHF 0.50'), findsOneWidget);
+    expect(tester.widget<FilledButton>(save).onPressed, isNull);
+
+    await _enterCustomAmount(tester, splitOwnerParticipantId, '2.50');
+    expect(find.text('The full amount is allocated.'), findsOneWidget);
+    expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+    expect(repository.createCalls, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('custom edit reopens exact shares and Equal recomputes on Save',
+      (tester) async {
+    final expense = splitExpense(
+      amountMinor: 1000,
+      customShares: const [
+        ListExpenseShare(
+          participantId: splitOwnerParticipantId,
+          amountMinor: 400,
+        ),
+        ListExpenseShare(
+          participantId: splitMemberParticipantId,
+          amountMinor: 600,
+        ),
+      ],
+    );
+    final repository = FakeListSplitRepository(
+      initial: enabledSplitOverview(expenses: [expense]),
+    );
+    await _pump(tester, repository);
+    await _scrollSplitUntilVisible(
+      tester,
+      find.byKey(ValueKey('splitExpense-${expense.id}')),
+    );
+    await tester.tap(find.byKey(ValueKey('splitExpense-${expense.id}')));
+    await tester.pumpAndSettle();
+
+    final mode = tester.widget<SegmentedButton<SplitExpenseAllocationMode>>(
+      find.byKey(const Key('splitExpenseAllocationMode')),
+    );
+    expect(mode.selected, {SplitExpenseAllocationMode.custom});
+    expect(_customAmountText(tester, splitOwnerParticipantId), '4.00');
+    expect(_customAmountText(tester, splitMemberParticipantId), '6.00');
+
+    final equal = find.text('Equal');
+    await tester.ensureVisible(equal);
+    await tester.tap(equal);
+    await tester.pump();
+    final save = find.byKey(const Key('saveSplitExpenseButton'));
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+
+    expect(repository.lastUpdatedCustomShares, isNull);
+    expect(
+      repository.overview.expenses.single.shares
+          .map((share) => share.amountMinor),
+      [500, 500],
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('custom edit preserves an attached historical beneficiary',
+      (tester) async {
+    const formerParticipantId = '30000000-0000-4000-8000-000000000004';
+    final expense = splitExpense(
+      beneficiaryParticipantIds: const [
+        splitOwnerParticipantId,
+        formerParticipantId,
+      ],
+      customShares: const [
+        ListExpenseShare(
+          participantId: splitOwnerParticipantId,
+          amountMinor: 2000,
+        ),
+        ListExpenseShare(
+          participantId: formerParticipantId,
+          amountMinor: 4000,
+        ),
+      ],
+    );
+    final repository = FakeListSplitRepository(
+      initial: enabledSplitOverview(
+        participants: const [
+          ListSplitParticipant(
+            id: splitOwnerParticipantId,
+            profileId: splitOwnerProfileId,
+            username: 'fernando',
+            displayName: 'Fernando',
+            isAnonymized: false,
+            isCurrent: true,
+            paidMinor: 0,
+            owedMinor: 0,
+            balanceMinor: 0,
+          ),
+          ListSplitParticipant(
+            id: formerParticipantId,
+            profileId: null,
+            username: null,
+            displayName: null,
+            isAnonymized: true,
+            isCurrent: false,
+            paidMinor: 0,
+            owedMinor: 0,
+            balanceMinor: 0,
+          ),
+        ],
+        expenses: [expense],
+      ),
+    );
+    await _pump(tester, repository);
+    await _scrollSplitUntilVisible(
+      tester,
+      find.byKey(ValueKey('splitExpense-${expense.id}')),
+    );
+    await tester.tap(find.byKey(ValueKey('splitExpense-${expense.id}')));
+    await tester.pumpAndSettle();
+
+    expect(_customAmountText(tester, formerParticipantId), '40.00');
+    await _enterCustomAmount(tester, splitOwnerParticipantId, '10.00');
+    await _enterCustomAmount(tester, formerParticipantId, '50.00');
+    await tester.tap(find.byKey(const Key('saveSplitExpenseButton')));
+    await tester.pumpAndSettle();
+
+    expect(repository.updateCalls, 1);
+    expect(
+      repository.overview.expenses.single.shares
+          .firstWhere(
+            (share) => share.participantId == formerParticipantId,
+          )
+          .amountMinor,
+      5000,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('remote expense change closes the stale custom editor once',
+      (tester) async {
+    final expense = splitExpense(
+      customShares: const [
+        ListExpenseShare(
+          participantId: splitOwnerParticipantId,
+          amountMinor: 4000,
+        ),
+        ListExpenseShare(
+          participantId: splitMemberParticipantId,
+          amountMinor: 2000,
+        ),
+      ],
+    );
+    final repository = FakeListSplitRepository(
+      initial: enabledSplitOverview(expenses: [expense]),
+    );
+    final container = await _pump(tester, repository);
+    await _scrollSplitUntilVisible(
+      tester,
+      find.byKey(ValueKey('splitExpense-${expense.id}')),
+    );
+    await tester.tap(find.byKey(ValueKey('splitExpense-${expense.id}')));
+    await tester.pumpAndSettle();
+    expect(find.byType(ExpenseFormDialog), findsOneWidget);
+
+    repository.overview = enabledSplitOverview(
+      expenses: [
+        splitExpense(
+          description: 'Remote exact edit',
+          version: 2,
+          customShares: const [
+            ListExpenseShare(
+              participantId: splitOwnerParticipantId,
+              amountMinor: 3000,
+            ),
+            ListExpenseShare(
+              participantId: splitMemberParticipantId,
+              amountMinor: 3000,
+            ),
+          ],
+        ),
+      ],
+    );
+    final controller =
+        container.read(listSplitControllerProvider(splitListId).notifier);
+    await Future.wait([controller.reconcile(), controller.reconcile()]);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ExpenseFormDialog), findsNothing);
+    expect(repository.updateCalls, 0);
+    expect(find.text('Remote exact edit'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('renders positive, negative, zero, and historical balances',
       (tester) async {
     final repository = FakeListSplitRepository(
@@ -183,8 +534,7 @@ void main() {
       splitMemberParticipantId,
     ]) {
       final checkbox = find.byKey(ValueKey('splitBeneficiary-$participantId'));
-      await tester.ensureVisible(checkbox);
-      await tester.tap(checkbox);
+      tester.widget<CheckboxListTile>(checkbox).onChanged!(false);
       await tester.pump();
     }
     final save = find.byKey(const Key('saveSplitExpenseButton'));
@@ -278,6 +628,7 @@ void main() {
     final repository = FakeListSplitRepository();
     await _pump(tester, repository);
     await _openCompletedCreateEditor(tester);
+    await _selectCustomAllocation(tester);
     repository.mutationCompleter = Completer<ListSplitOverview>();
     final save = find.byKey(const Key('saveSplitExpenseButton'));
     await tester.tap(save);
@@ -309,6 +660,21 @@ void main() {
     expect(find.bySemanticsLabel('Add expense'), findsOneWidget);
     await tester.tap(find.byKey(const Key('addExpenseButton')));
     await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('splitExpenseAmountField')),
+      '10.00',
+    );
+    await _selectCustomAllocation(tester);
+    final summary = find.byKey(const Key('splitCustomAllocationSummary'));
+    await tester.ensureVisible(summary);
+    expect(
+      tester.getSemantics(summary).label,
+      contains('Allocated: CHF 10.00'),
+    );
+    expect(
+      tester.getSemantics(summary).label,
+      contains('The full amount is allocated.'),
+    );
     final save = find.byKey(const Key('saveSplitExpenseButton'));
     await tester.ensureVisible(save);
     expect(save, findsOneWidget);
@@ -616,6 +982,35 @@ Future<void> _openCompletedCreateEditor(WidgetTester tester) async {
     '5.00',
   );
 }
+
+Future<void> _selectCustomAllocation(WidgetTester tester) async {
+  final custom = find.text('Custom amounts');
+  await tester.ensureVisible(custom);
+  await tester.tap(custom);
+  await tester.pump();
+}
+
+Future<void> _enterCustomAmount(
+  WidgetTester tester,
+  String participantId,
+  String amount,
+) async {
+  final field = find.byKey(
+    ValueKey('splitCustomShareAmount-$participantId'),
+  );
+  await tester.ensureVisible(field);
+  await tester.enterText(field, amount);
+  await tester.pump();
+}
+
+String _customAmountText(WidgetTester tester, String participantId) => tester
+    .widget<TextField>(
+      find.byKey(
+        ValueKey('splitCustomShareAmount-$participantId'),
+      ),
+    )
+    .controller!
+    .text;
 
 Future<void> _scrollSplitUntilVisible(
   WidgetTester tester,

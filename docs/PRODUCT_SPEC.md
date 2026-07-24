@@ -77,8 +77,10 @@ are the evidence of implementation status.
   adds private template categories, templates, and ordered template items; version
   `5` adds Split expense data nested only under the caller's fully exported owned
   lists; version `6` adds that owned-list Split ledger's immutable settlement and
-  one-time reversal history. Collections are deterministic arrays and are empty
-  rather than null.
+  one-time reversal history. Equal and custom allocations are represented by
+  their explicit integer share rows; no allocation-mode field or schema version
+  `7` is introduced. Collections are deterministic arrays and are empty rather
+  than null, and export versions `1` through `6` remain compatible.
 - The export includes nullable onboarding fields faithfully. It includes only the
   existing caller-visible block, relationship, and notification projections, so
   either-direction block suppression, dormant relationship privacy, notification
@@ -405,13 +407,29 @@ copies succeed; duplicate-name rows each consume one place.
   and balances but reject every Split mutation. These operations create no
   persistent notification or unread-badge change.
 - A new expense has one eligible current payer and a non-empty subset of eligible
-  current participants. The payer need not be a beneficiary. PR #14 supports only
-  equal splitting; custom amounts and percentages remain future work.
-- For total `A` and `N` selected participants, each share begins at
-  `floor(A / N)`. The first `A mod N` participants in ascending immutable
-  list-scoped participant-ID order receive one additional minor unit. Explicit
-  stored shares therefore sum exactly to the expense total and are stable across
-  devices.
+  current participants. The payer need not be a beneficiary. **Equal** is the
+  default allocation. The **Custom amounts** mode accepts exact positive CHF/EUR
+  minor-unit amounts only; percentages, weights, ratios, proportional allocation,
+  and automatic correction are not supported.
+- In custom allocation, zero deselects/removes that participant before submission.
+  Every submitted share is positive, participant identities are unique, and the
+  shares must sum exactly to the expense total. Underallocation and overallocation
+  disable confirmation; neither the client nor server silently adjusts,
+  redistributes, rounds, or partially saves the allocation.
+- For equal allocation with total `A` and `N` selected participants, each share
+  begins at `floor(A / N)`. The first `A mod N` participants in ascending
+  immutable list-scoped participant-ID order receive one additional minor unit.
+  Explicit stored shares therefore sum exactly to the expense total and are stable
+  across devices.
+- Explicit expense-share rows are the durable source of truth. Allocation mode is
+  editing/input state and is not stored. An expense is presented as Equal only
+  when its stored rows match the complete canonical deterministic equal result,
+  including UUID-ordered remainder distribution; a custom allocation with that
+  same result may therefore reopen as Equal.
+- Switching Equal to Custom prefills the current canonical share values. Switching
+  Custom to Equal asks the server to recompute the canonical equal shares when Save
+  is confirmed. Custom inputs are parsed directly to integer minor units without
+  binary floating point.
 - A participant's authoritative balance is expense total paid minus expense total
   owed, plus non-reversed settlements paid and minus non-reversed settlements
   received. Positive means they are owed money, negative means they owe money, and
@@ -420,7 +438,8 @@ copies succeed; duplicate-name rows each consume one place.
 - Split retains a list-scoped participant identity and display snapshot separately
   from live membership. Removing a member preserves their understandable identity,
   expenses, shares, and paid/owed totals. A removed person cannot enter a new
-  expense; an edit may retain only their associations already on that expense.
+  expense; an edit may retain and adjust only their associations already on that
+  expense.
   Once removed from that expense they cannot be re-added until accepted again.
   Reaccepting the same account reuses its existing list identity. Permanent account
   deletion instead clears the snapshots and live link, leaving a localized generic
@@ -430,6 +449,14 @@ copies succeed; duplicate-name rows each consume one place.
 - Creates use a payload-bound request UUID for safe lost-response retries. Creates,
   edits, and deletes are atomic, version checked, and reconcile stale
   membership, archive, deletion, and concurrent changes to authoritative state.
+  A creation request identity binds the complete deterministically normalized
+  participant/amount pairs: the same logical payload replays safely, while reuse
+  with another allocation is rejected. Update no-op comparison includes those
+  complete pairs under the existing expected-version contract. Older clients
+  retain their equal create and equal-expense edit behavior, but their equal-only
+  update is rejected for an existing non-equal expense so it cannot silently
+  destroy custom shares. A rejected request changes no rows or versions and emits
+  no invalidation.
   Private account Realtime invalidations refresh mounted Split projections and
   forms; manual refresh and resume reconciliation remain available.
 - A settlement records external bookkeeping only; List & Split never initiates,
@@ -476,9 +503,10 @@ copies succeed; duplicate-name rows each consume one place.
   error text. Payment direction and reversed state are not conveyed by color alone;
   controls have semantic labels, remain scrollable with large system text, and use
   the existing Material 3 light/dark themes.
-- Custom shares, conversion, guests, receipts, categories, charts, recurring
-  expenses, payment-provider integration, recipient approval/disputes, attachments,
-  backdating, and a mathematically minimum solver remain deferred.
+- Percentage, weight, ratio, proportional, or automatically adjusted allocation;
+  guests, receipts, categories, charts, recurring expenses, payment-provider
+  integration, recipient approval/disputes, attachments, backdating, and a
+  mathematically minimum solver remain deferred.
 
 ### Notifications and actionable requests
 
@@ -599,7 +627,6 @@ choose them:
 - Public-template copied visibility/category defaults, attribution and provenance
   display, and community-feed ranking/retention.
 - Invitation and sent-template expiry, revocation, and idempotent re-acceptance.
-- Exact custom-share validation.
 - Notification archive/delete/preferences, future types, push-safe payloads,
   physical cleanup, and account-lifecycle retention beyond the accepted
   friend-request behavior.

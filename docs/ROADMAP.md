@@ -166,7 +166,7 @@ Private category cardinality, copy atomicity, capacity, and versioning are resol
 Public copy visibility/category placement and attribution, feed ranking/pagination,
 provenance presentation, and sent-template expiry remain open.
 
-## Phase 4 — Split expense ledger (in progress)
+## Phase 4 — Split expense ledger (core scope complete)
 
 Goal: provide an optional, correct expense ledger inside active lists without
 processing payments.
@@ -180,6 +180,9 @@ Current slices:
   members, with persistent historical financial identities.
 - Transactional equal splits in integer minor units with deterministic UUID-order
   remainder allocation and on-demand settlement-adjusted balances.
+- Exact custom CHF/EUR minor-unit shares with positive unique participant amounts,
+  exact conservation, zero-as-deselection, payer exclusion, retained historical
+  roles, Equal/Custom conversion, and no persisted allocation-mode field.
 - Deterministic largest-balance-first suggested payments with stable participant-ID
   tie-breaks. They are deliberately not described as mathematically minimum.
 - Full and partial external-bookkeeping settlement records, server-derived recorder
@@ -188,11 +191,16 @@ Current slices:
 - Archived read-only history, payload-bound retry idempotency, stale/concurrent
   protection, private Realtime invalidation/reconciliation, caller-owned-list Split
   export schema version `6`, and hard-deletion-safe anonymization.
+- Additive versioned expense RPCs with normalized custom-pair validation, unchanged
+  read shapes, legacy equal-client compatibility, and a guard that prevents an old
+  client from replacing non-equal custom shares. The migration must deploy before
+  distributing the client; export remains version `6` with versions `1` through
+  `6` compatibility.
 - Comprehensive server constraint/RLS/RPC and Flutter repository/controller/widget
   coverage.
 
-Later slices require separate accepted decisions for custom shares. Recipient
-approval/disputes, backdating, attachments, a mathematically minimum solver,
+Percentage/weight/ratio or automatic proportional allocation, recipient approval/
+disputes, backdating, attachments, a mathematically minimum solver, and
 payment-provider or money-transfer integration remain out of scope.
 
 ## Phase 5 — Offline tolerance and push delivery (planned later)
