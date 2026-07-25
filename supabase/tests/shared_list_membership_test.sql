@@ -305,7 +305,7 @@ select ok(
 
 -- Blocking owner/member removes access and unblock restores nothing.
 select lives_ok($$select public.set_active_list_archived(
- (select list_id from membership_values where label='owner-list'),false,3)$$,
+ (select list_id from membership_values where label='owner-list'),false,4)$$,
  'owner restores without restoring cancelled/left access');
 select ok((select access_version=4 from public.invite_active_list_member(
  (select list_id from membership_values where label='owner-list'),
@@ -415,14 +415,14 @@ select is(
 -- Owner removal works while archived, and member-blocks-owner leaves without restoration.
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-4000-8000-000000000005';
-select lives_ok(format($$select * from public.set_active_list_archived(%L,true,1)$$,
+select lives_ok(format($$select * from public.set_active_list_archived(%L,true,2)$$,
  (select list_id from membership_values where label='third-list')),
  'third owner archives their list');
 select is(public.remove_active_list_member(
  (select list_id from membership_values where label='third-list'),
  '10000000-0000-4000-8000-000000000003',2),3::bigint,
  'owner may remove an accepted member while archived');
-select lives_ok(format($$select * from public.set_active_list_archived(%L,false,2)$$,
+select lives_ok(format($$select * from public.set_active_list_archived(%L,false,4)$$,
  (select list_id from membership_values where label='third-list')),
  'third owner restores without restoring members');
 -- Remove the member-member block, then reopen the caller's left row.

@@ -327,7 +327,7 @@ select ok(
     'public.block_profile(uuid)'::regprocedure
   ) like '%order by item_record.list_id, item_record.id%for update%'
   and pg_catalog.pg_get_functiondef(
-    'private.cleanup_active_list_item_assignments_before_profile_delete()'::regprocedure
+    'private.cleanup_active_list_dependents_before_profile_delete()'::regprocedure
   ) like '%order by item_record.list_id, item_record.id%for update%',
   'mutation and cleanup paths encode profile preflight plus deterministic current/desired and item lock ordering'
 );
@@ -339,7 +339,7 @@ select is(
     where not trigger_record.tgisinternal
       and trigger_record.tgname in (
         'active_list_item_assignments_enforce_eligibility',
-        'profiles_cleanup_item_assignments_before_delete',
+        'profiles_cleanup_active_list_dependents_before_delete',
         'user_blocks_suppress_item_assignment_notifications'
       )
   ),
@@ -365,9 +365,9 @@ select ok(
           '%BEFORE INSERT OR UPDATE ON public.active_list_item_assignments%'
         ),
         (
-          'profiles_cleanup_item_assignments_before_delete',
+          'profiles_cleanup_active_list_dependents_before_delete',
           'public.profiles'::regclass,
-          'private.cleanup_active_list_item_assignments_before_profile_delete()'::regprocedure,
+          'private.cleanup_active_list_dependents_before_profile_delete()'::regprocedure,
           '%BEFORE DELETE ON public.profiles%'
         ),
         (
@@ -3314,7 +3314,7 @@ select ok(
         'b1000000-0000-4000-8000-000000000004'
   )
   and (
-    select version = 3
+    select version = 4
     from public.active_lists
     where id = 'b2000000-0000-4000-8000-000000000002'
   )
@@ -3346,7 +3346,7 @@ select ok(
 
 select ok(
   (
-    select pg_catalog.count(*) = 3
+    select pg_catalog.count(*) = 4
       and pg_catalog.bool_and(
         extension = 'broadcast'
         and event = 'invalidate'
@@ -3361,7 +3361,7 @@ select ok(
     where topic like 'account:b1000000-0000-4000-8000-%'
   )
   and (
-    select pg_catalog.count(*) = 1
+    select pg_catalog.count(*) = 2
     from realtime.messages
     where topic =
       'account:b1000000-0000-4000-8000-000000000003'
