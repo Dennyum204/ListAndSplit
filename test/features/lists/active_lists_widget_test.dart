@@ -575,8 +575,8 @@ void main() {
       contains('Selected mention of Owner, at owner'),
     );
     expect(
-      tester.getSemantics(selectedSemantic),
-      containsSemantics(isSelected: true),
+      tester.widget<Semantics>(selectedSemantic).properties.selected,
+      isTrue,
     );
     expect(
       tester
@@ -671,10 +671,13 @@ void main() {
     expect(repository.mutationCalls, 1);
     expect(find.byKey(const Key('generalNoteDialogStatus')), findsOneWidget);
     expect(
-      tester.getSemantics(
-        find.byKey(const Key('generalNoteDialogStatus')),
-      ),
-      containsSemantics(isLiveRegion: true),
+      tester
+          .widget<Semantics>(
+            find.byKey(const Key('generalNoteDialogStatus')),
+          )
+          .properties
+          .liveRegion,
+      isTrue,
     );
     expect(
       find.descendant(
