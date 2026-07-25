@@ -32,6 +32,8 @@ Profile --< versioned Relationship state >-- Profile
 
 Profile --owns--> Active List --< List Item
 Active List --< retained participant access >-- Profile
+Active List --1:1 scalar--> General Note state
+Active List --< current resolved Note Mention >-- Profile
 
 List Item --< current Item Assignment >-- current List Participant
 Active List --< Split Participant --payer/beneficiary--> Expense / allocated share
@@ -136,6 +138,16 @@ profile ID. `shared_list_access` remains byte-for-byte metadata-only and gains n
 assignment array, item identifier, item name, or assignment timestamp. Versions
 `1` through `7` remain strictly readable by the assignment-aware client.
 
+The separate parameterless `export_own_account_data_v8()` preserves versions `1`
+through `7` and adds only to each fully exported caller-owned list its nullable
+General Note object containing text, note version, note-update time, and a
+deterministic currently resolved mention array. Each mention object allowlists
+profile ID, current canonical username, and current display name. Removed links
+leave only literal text. `shared_list_access` remains
+byte-for-byte P-039 metadata and gains no item, assignment, note, mention, or
+participant identity. Versions `1` through `8` remain strictly readable by the
+General-Note-aware client; the v6 and v7 functions are unchanged.
+
 Every nested object is built from an explicit field allowlist. The social arrays
 apply the same directional-block, caller-relative active-relationship, recipient,
 suppression, expiry, and either-direction block filters as their existing RPC
@@ -152,13 +164,17 @@ both normalized relationship participant references, notification recipient and
 actor references, and the notification relationship reference cascade from the
 profile/relationship rows they protect. Owned-list and list-item foreign keys add
 the list aggregate to that same cascade. Private category/template ownership
-foreign keys add the complete personal template aggregate. Assignment foreign keys
-add the owned-list current-assignment aggregate. Owned-list deletion cascades that
-list's assignment and Split aggregates. For a deleted non-owner in another
-person's list, the profile-deletion boundary removes current item assignments and
-advances affected item/list versions before clearing the Split participant's
-snapshots and live profile link while preserving list-owned expense/share/
-settlement/reversal arithmetic. This removes or
+foreign keys add the complete personal template aggregate. Assignment and mention
+foreign keys add the owned-list current-state links. Owned-list deletion cascades
+that list's assignment, resolved-mention, and Split aggregates. For a deleted
+non-owner in another person's list, one parent-first profile-deletion coordinator
+locks surviving affected lists before their children, removes current assignments
+and resolved mention links while preserving literal note text, applies the
+single-bump item/note/list rules, then clears the Split participant's snapshots and
+live profile link while preserving list-owned expense/share/settlement/reversal
+arithmetic. It supersedes the former child-first Split anonymization and later
+list-locking assignment cleanup paths, eliminating their lock-order inversion.
+This removes or
 anonymizes every currently implemented record involving the deleted account in the
 same root transaction, while unrelated rows, including lists created or filled
 from template snapshots, remain unchanged.
@@ -305,10 +321,12 @@ changes follow P-035 through P-039.
 `public.active_lists` has a UUID primary key, one non-null `owner_id` referencing
 `public.profiles(id) ON DELETE CASCADE`, a trimmed 1-80-character title, checked
 `active`/`archived` status, positive monotonic `bigint` version, a caller-generated
-creation request UUID used only for idempotency, and database-owned creation,
-update, and nullable archive timestamps. Status and archive time are constrained
-to agree. `(owner_id, creation_request_id)` is unique; duplicate titles remain
-valid.
+creation request UUID used only for idempotency, nullable normalized
+`general_note_text`, positive `general_note_version` defaulting to `1`, and
+database-owned creation, update, nullable archive, and nullable note-update
+timestamps. Status and archive time are constrained to agree; note text is null or
+1-2,000 Unicode code points after line-ending normalization and outer trimming.
+`(owner_id, creation_request_id)` is unique; duplicate titles remain valid.
 
 The owner can create, read, rename, archive, restore, permanently delete, and manage
 access. Accepted members can read the list and mutate items only while active.
@@ -438,10 +456,67 @@ a template.
 
 ### General note and mentions
 
-An active list has one general note. Mentions connect relevant ranges or parsed
-tokens to list members so notification delivery is not based solely on
-unvalidated client text. The storage and parsing model, editing behavior, and
-deduplication rules remain open.
+The one optional General Note is scalar state on `active_lists`, not an item,
+comment stream, rich-text document, or history record. CRLF and CR become LF,
+outer whitespace is trimmed, an empty normalized value becomes null, and internal
+whitespace, line breaks, and Unicode remain unchanged. PostgreSQL and Flutter
+enforce a maximum of 2,000 Unicode code points.
+
+`public.active_list_note_mentions` contains one current resolved row per
+`(list_id, mentioned_profile_id)`, which is its primary key. The list reference
+cascades list deletion, the profile reference cascades account deletion, and the
+reverse `(mentioned_profile_id, list_id)` index supports deterministic lifecycle
+cleanup. A server-owned `resolved_at` records when that current link was inserted.
+It stores no username/display snapshot, token range/offset, actor, mention-local
+version, soft deletion, or event history. Forced RLS, revoked API table privileges,
+and an explicit restrictive direct-client policy preserve an RPC-only boundary.
+
+Owner and current accepted unblocked members may read and update the note while
+active; archived notes remain readable but immutable. Pending, removed, left,
+historical, blocked, foreign, deleted, or otherwise unauthorized profiles cannot
+read or write it. The dedicated update operation derives its actor from
+`auth.uid()`, treats submitted profile IDs as an untrusted complete desired link
+set, deduplicates/canonicalizes them independently of client order, and validates
+each as:
+
+- one fully onboarded current owner/member;
+- unblocked in either direction; and
+- represented in the normalized saved text by its complete immutable canonical
+  `@username` token.
+
+Token matching is ASCII case-insensitive. Before and after the token must be
+start/end or a character other than an ASCII letter, digit, underscore, or `@`.
+Punctuation, whitespace, and line boundaries therefore qualify; email-like text,
+doubled `@`, and longer/partial username tokens do not. Manually typed unresolved
+text remains plain text. Repeated occurrences resolve one row. Self-mentions may
+resolve but never notify. Rendering joins the stable profile ID to current
+username/display name, so display-name changes remain live.
+Completed usernames cannot change; incomplete onboarding candidates are not
+eligible and cannot affect a mention.
+
+A real text or desired-link change advances `general_note_version` and the parent
+list version once. No-op and payload-equivalent completed retry change nothing;
+payload-different stale work returns `40001` without partial state. Removal,
+leave, block separation, or account deletion removes only the affected link and
+preserves literal text. Reinvitation, unblocking, or later reuse of the old
+username does not restore it; only a new explicit selection/edit can create a
+current link.
+
+Cross-identity mutation locking follows one hierarchy: non-locking preflight,
+relevant profiles in UUID order, relationship-pair advisory lock only for
+relationship lifecycle operations, affected lists in list UUID order, then items,
+access rows, assignments, mentions, and Split children in deterministic internal
+order, followed by notification/suppression/Broadcast work. No path acquires a new
+profile, pair, or parent list after child mutation begins.
+
+The combined child cleanup removes assignments and mentions and returns its exact
+effects to the high-level access-loss coordinator. After ordered Split work, that
+coordinator applies permanent suppression and the operation's single parent-list
+advance. Each affected item advances once, and the note advances only if a link
+changed, even when access, assignment, and mention state all change together.
+Profile deletion uses one parent-first coordinator for every surviving list
+referenced by access, assignment, mention, Split history, or completion
+attribution, repairing the former child-first Split/list inversion.
 
 ## Private template aggregate and copy semantics
 
@@ -468,8 +543,9 @@ retain at most 100 templates.
 1-120-character name, exact integer `quantity_thousandths` from `1` through
 `999999999`, positive deterministic position, positive monotonic `bigint` version,
 a payload-bound creation request UUID, and database-owned creation/update times.
-It deliberately has no unit, completion, actor, assignment, reminder, date,
-membership, source-list, or destination-list field. Duplicate names are valid.
+It deliberately has no unit, completion, actor, assignment, General Note, mention,
+reminder, date, membership, source-list, or destination-list field. Duplicate
+names are valid.
 
 Every category, template, and item mutation derives the owner only from
 `auth.uid()`. Category/template counts are serialized by a caller-scoped
@@ -497,17 +573,23 @@ archived list into a new private template. The transaction validates the exact
 list version and 1-200 unique selected current item IDs against authoritative rows,
 locks the source list/items and the caller's template quota, then copies only name,
 quantity, and source order. Completed state, unit, attribution, participants,
-invitations, ownership, reminders, dates, and list state are excluded. The new
-template and items have new IDs and no live source dependency.
+invitations, ownership, assignments, General Note text, resolved mentions,
+notifications, reminders, dates, and list state are excluded. The new template and
+items have new IDs and no live source dependency.
 
 ### Creating or filling a list from a private template
 
 Creating a new list validates one exact caller-owned template version and 1-200
 unique selected current item IDs, creates one active caller-owned list, and copies
-the selected rows in template order as new uncompleted list items. Importing into
-an existing list additionally locks that active destination and rechecks normal
+the selected rows in template order as new uncompleted list items. The new list's
+General Note is null at version `1`, with no note-update timestamp or mention rows.
+Importing into an existing list additionally locks that active destination and
+rechecks normal
 owner/member authorization, exact list version, and remaining capacity as `200 -
 current item count`.
+
+Existing-list import changes no General Note text, note version, note-update
+timestamp, or resolved mention row.
 
 Both operations validate every source identifier and reject null, duplicate,
 missing, foreign, or stale selections. Each copied row consumes one capacity place,
@@ -656,9 +738,10 @@ A notification belongs to one recipient. The current
 - a database-generated UUID primary key;
 - recipient and actor profile references that cascade through account deletion;
 - a check-constrained friend-request, list-access, ownership-transfer, or
-  `list_item_assigned` type;
-- type-specific nullable relationship, participant-access, list, or assignment-item
-  references and the positive authoritative version that caused the notification;
+  `list_item_assigned` or `list_note_mentioned` type;
+- type-specific nullable relationship, participant-access, list, assignment-item,
+  or General Note context and the positive authoritative version that caused the
+  notification;
 - database-managed creation time and expiry exactly 180 days later;
 - nullable database-managed read time; and
 - nullable permanent suppression time.
@@ -708,10 +791,32 @@ projection. The shared mark-read function remains bounded, caller-owned, and
 idempotent. This preserves strict old clients without duplicating the notification
 table or creating a second action authority.
 
+`list_note_mentioned` is informational. One real newly resolved link creates one
+row for each other-user recipient, uniquely bounded by `(active_list_id,
+recipient_id, notification_type, general_note_version)`. Retained mentions,
+repeated tokens, self-mentions, removal, unrelated text edits, retry/no-op, cleanup,
+and rejection create none. A later explicit re-resolution may create one new row
+at the later note version. The row stores no note text/excerpt or copied actor/list
+identity and has no deep-link action.
+
+V1 listing/count explicitly excludes assignments and mention notifications. V2
+continues to include assignments while excluding mentions. V3 includes both and
+returns a mention only while recipient and actor retain list access, neither
+direction is blocked, the list/context exists, and the row is unsuppressed and
+unexpired. Each unread count uses its corresponding listing predicates. The shared
+mark-read function keeps its signature/limits but repeats the v3 note authorization
+and privacy checks, leaving inaccessible, suppressed, blocked, foreign, expired, or
+deleted-context IDs unread.
+
+Access loss by the mention actor or recipient and either-direction blocking set
+`suppressed_at = coalesce(suppressed_at, mutation_time)`. No operation clears that
+timestamp. Reinvitation/unblocking cannot restore the historical row, although a
+later new explicit mention may create a new unsuppressed version. Profile and list
+deletion use the established physical cascades.
+
 Accepted future notification types remain:
 
 - actionable sent template;
-- informational note mention.
 
 Implemented invitation action state belongs to participant access, as
 friend-request action state belongs to the relationship. Sent-template action state
@@ -756,6 +861,11 @@ uses the same list fanout; a `list_item_assigned` insert additionally invalidate
 its recipient through the existing notification trigger. No assignment identifier,
 content, actor, item, or version enters the Broadcast payload.
 
+General Note update/mention cleanup likewise uses the parent-list fanout; a
+`list_note_mentioned` insert additionally invalidates only its recipient. No note
+text, mention identity, actor, list, or version enters the payload, and no new
+topic, event, channel, policy, or transport record is added.
+
 The one `realtime.messages` receive policy compares the requested channel topic
 with `auth.uid()` and restricts the extension to `broadcast`. There is no client
 send or Presence policy and no application table in `supabase_realtime`.
@@ -777,7 +887,7 @@ anonymous denial unless public read is explicitly intended.
 | Active-list participants | RPC-only caller-derived transitions; pending visible only to owner/recipient; minimal accepted participant projection |
 | List items | RPC-only through the owner/accepted-member boundary; archived lists reject mutations |
 | Current item assignments | RPC-only full-set v2 item mutations by current unblocked owner/members; eligible current participants only; direct CRUD denied |
-| Future notes and mentions | Authorized list members, with mutations limited by later accepted rules |
+| General Note and current resolved mentions | RPC-only current unblocked owner/accepted-member read; active-only update through exact server-validated text/link replacement; archived read-only; direct mention-table CRUD denied |
 | Invitations | Exact recipient and owner through versioned participant-access RPCs |
 | Private templates/categories | RPC-only owner access; copies into accessible lists recheck destination membership and state |
 | Public templates | Readable according to approved public-profile policy; mutation remains owner-only |
@@ -798,7 +908,6 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   owner-list, and current-assignment records.
 - Support/administrator correction and audit rules for immutable usernames.
 - Avatar Storage, validation, replacement, retention, and deletion lifecycle.
-- Mention representation and parser ownership.
 - Public-template visibility/copy placement, sent-template version/provenance,
   attribution, and offer idempotency.
 - Later notification-type payload/localization, archive/preferences, physical

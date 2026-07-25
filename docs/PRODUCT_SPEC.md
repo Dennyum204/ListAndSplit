@@ -77,16 +77,20 @@ are the evidence of implementation status.
   adds private template categories, templates, and ordered template items; version
   `5` adds Split expense data nested only under the caller's fully exported owned
   lists; version `6` adds that owned-list Split ledger's immutable settlement and
-  one-time reversal history; and version `7` adds current item assignments only
-  inside fully exported caller-owned list items. Equal and custom allocations are
-  represented by their explicit integer share rows; no allocation-mode field is
-  introduced. Collections are deterministic arrays and are empty rather than
-  null, and export versions `1` through `7` remain compatible.
+  one-time reversal history; version `7` adds current item assignments only inside
+  fully exported caller-owned list items; and version `8` adds the General Note
+  text and minimal currently resolved mention identities only inside fully exported
+  caller-owned lists. Equal and custom allocations are represented by their
+  explicit integer share rows; no allocation-mode field is introduced. Collections
+  are deterministic arrays and are empty rather than null, and export versions `1`
+  through `8` remain compatible.
 - The existing parameterless `export_own_account_data()` remains unchanged at
-  schema version `6` for legacy clients. Assignment-aware clients call the separate
-  parameterless `export_own_account_data_v7()`. Version `7` adds no assignment,
-  item identifier, item name, or assignment timestamp to `shared_list_access`;
-  lists owned by another user remain byte-for-byte privacy-minimal metadata.
+  schema version `6` for legacy clients, and
+  `export_own_account_data_v7()` remains unchanged for assignment-aware clients.
+  General-Note-aware clients call the separate parameterless
+  `export_own_account_data_v8()`. Versions `7` and `8` add no assignment, item,
+  General Note, mention, or participant identity to `shared_list_access`; lists
+  owned by another user remain byte-for-byte privacy-minimal metadata under P-039.
 - The export includes nullable onboarding fields faithfully. It includes only the
   existing caller-visible block, relationship, and notification projections, so
   either-direction block suppression, dormant relationship privacy, notification
@@ -96,7 +100,11 @@ are the evidence of implementation status.
   stable unit code, integer position, completion attribution/time, versions, and
   timestamps. Version `7` adds each owned item's deterministic current assignee
   projection with only profile ID, username, display name, owner flag, and
-  assignment time, without request identifiers or assignment history. Split
+  assignment time, without request identifiers or assignment history. Version `8`
+  adds each owned list's nullable General Note object with text, note version,
+  note-update time, and deterministic currently resolved mentions containing only
+  profile ID, current username, and current display name. Removed links leave only
+  literal note text. Split
   export includes the persistent participant identities needed to understand
   expenses and settlements, settlement endpoints, recorder attribution, amounts,
   notes, reversal links/reasons, and server timestamps. It excludes creation/
@@ -148,8 +156,9 @@ are the evidence of implementation status.
   attached to a deleted relationship or item, every owned list, item, and current
   assignment, and every private template, template item, and category. On another
   owner's surviving list, the deleted profile's current item assignments are
-  removed transactionally and affected item/list versions advance before the
-  profile disappears. No
+  removed transactionally, its resolved General Note link is removed while literal
+  text remains, and affected item/note/list versions advance under the single-bump
+  rules before the profile disappears. No
   application cleanup transaction is committed separately before the Auth
   deletion. On another owner's list, the deleted account's Split identity is
   anonymized in that same root transaction while its integer expense, settlement,
@@ -177,10 +186,10 @@ are the evidence of implementation status.
 
 ### Active and shared lists
 
-Each list has one fully onboarded owner, retained versioned access rows, and
-current zero-to-20 item assignments. Note, mention, and offline cache records
-are not implemented. Private templates and Split use separate list-integrated
-aggregates.
+Each list has one fully onboarded owner, retained versioned access rows, current
+zero-to-20 item assignments, and one optional shared General Note. Private
+templates and Split use separate list-integrated aggregates; offline cache records
+are not implemented.
 
 - The owner can create, list, open, rename, archive, restore, and permanently
   delete a list. Duplicate titles are allowed; titles are trimmed and contain
@@ -209,6 +218,42 @@ aggregates.
   timestamp, notification, or Realtime output. Stale or invalid work writes
   nothing. Legacy item creation creates zero assignments, and legacy item updates
   preserve the existing assignment set.
+- One General Note belongs to the list rather than to an item. The current owner
+  and accepted unblocked members may read and edit it while the list is active.
+  Archived lists retain and display it read-only. Pending, removed, historical,
+  blocked, deleted, and unrelated users cannot read or mutate it.
+- General Note input normalizes CRLF and CR to LF, trims outer whitespace, stores
+  an empty normalized result as null, preserves internal whitespace, line breaks,
+  and Unicode, and accepts at most 2,000 Unicode code points in PostgreSQL and
+  Flutter.
+- Resolved mentions are explicit stable-profile-ID links, never a username
+  snapshot or a result inferred from client text alone. The client may leave
+  manually typed `@text` unresolved. Every submitted link is deduplicated and
+  server-validated as a completed current owner/member, unblocked in either
+  direction, whose immutable current canonical username appears as a complete
+  `@username` token in the saved text. Repeated occurrences create one link.
+  Token comparison is ASCII case-insensitive. Its preceding and following boundary
+  is start/end or any character other than ASCII letter, digit, underscore, or
+  `@`, so punctuation, whitespace, and line breaks are valid while email-like
+  text, doubled `@`, and longer partial usernames are not. Self-mentions may
+  resolve and render but never notify.
+- Mention rendering uses the linked profile's live canonical username and display
+  name. Display-name edits therefore remain visible without rewriting the note.
+  Completed usernames are immutable. If access is lost through removal, leave,
+  blocking, or account deletion, the literal note text remains while only the
+  affected structured link is removed. Reinvitation, unblocking, or later reuse
+  of the old username never restores that link; a later edit must explicitly
+  select the participant again.
+- A real note-text or resolved-link change advances the note version and parent
+  list version exactly once and emits the existing private invalidations. Exact
+  no-ops and payload-equivalent completed retries change no state. A payload-
+  different stale write returns the established `40001` conflict and writes
+  nothing. The UI preserves a dirty draft across remote note, version, or mention-
+  eligibility conflicts, presents one localized explanation, and requires an
+  explicit deterministic recovery choice. Caller access loss or list deletion
+  closes/exits through the established privacy-safe path once; remote archive
+  closes mutation UI and transitions safely to read-only/Lists with one localized
+  outcome.
 - Quantity defaults to `1`, must be positive, supports at most three decimal
   places, and is at most `999999.999`. Authority is an integer number of
   thousandths (`1` = `1000`, `1.5` = `1500`, `0.001` = `1`); Flutter never parses
@@ -253,11 +298,14 @@ aggregates.
   never discloses block direction or cause.
 - Explicit unassignment, item deletion, member leave/removal, block-driven access
   loss, list deletion, and account deletion remove affected current assignments.
-  Access-loss cleanup is atomic with the existing transition, advances each
-  affected item version and the list version once, and permanently suppresses that
-  former participant's assignment notifications so reinvitation cannot restore
-  them. Ownership transfer preserves assignments because both users remain current
-  participants.
+  The same access-loss operation removes the departing profile's resolved General
+  Note link without removing literal text. Cleanup is atomic with the existing
+  transition: each affected item version advances once, the note version advances
+  once only when a link changed, and the parent list advances at most once for the
+  complete high-level operation. Assignment and mention notifications affected by
+  the privacy transition are permanently suppressed, so reinvitation cannot
+  restore them. Ownership transfer preserves assignments and mentions because both
+  users remain current participants.
 - Routine item changes create no persistent notifications. The only item-level
   exception is a newly added assignment for another user. Real invitation
   transitions create one actionable notification for the exact access version;
@@ -288,7 +336,10 @@ aggregates.
   list, detail, member, notification, badge, and relevant community projections
   through existing repositories. Assignment changes authoritatively refresh item
   rows, item editors, participant eligibility, notifications, and the badge without
-  adding another topic or payload. Remote rename updates mounted list titles;
+  adding another topic or payload. General Note and mention changes similarly
+  refresh mounted detail/editor, notification, and badge projections while
+  preserving a dirty draft and coalescing repeated invalidations. Remote rename
+  updates mounted list titles;
   remote archive/restore moves the list between projections, and a remotely
   archived open detail returns to Lists once. Manual refresh remains available.
 
@@ -328,7 +379,8 @@ An owner or accepted member may save any active or archived shopping list they c
 still access as their own private template. The preview includes completed and
 uncompleted items, selects all by default, permits deselection, and requires 1-200
 selected items. Only the selected names, quantities, and current order are copied;
-assignments and assignment notifications are never copied.
+assignments, General Note text, resolved mentions, and their notifications are
+never copied.
 The template is an independent snapshot that survives later source changes,
 deletion, access loss, friendship changes, or blocking.
 
@@ -337,7 +389,8 @@ A private template can be used in two ways:
 1. Create a new active shopping list owned by the caller, with an editable name
    prefilled from the template and 1-200 selected items copied atomically as
    uncompleted items. It starts without other members, invitations, reminders, or
-   dates.
+   dates. Its General Note is null at version `1`, with no note-update timestamp or
+   resolved mention links.
 2. Import selected template items into an existing active shopping list where the
    caller may normally add items. Remaining capacity is `200` minus the
    authoritative current destination-item count. Confirmation is disabled for no
@@ -345,6 +398,8 @@ A private template can be used in two ways:
    start from a template and choose a destination, or start from an already-open
    active list and choose one of their private templates. The list-first path
    keeps that list fixed through preview and returns directly to it after success.
+   Import changes only item content and the ordinary list version; it preserves
+   the destination's General Note text, note version/timestamp, and resolved links.
 
 Both previews select all items by default and preserve selected template order.
 Every imported row is a new independent list item. Possible duplicates are marked
@@ -584,7 +639,26 @@ copies succeed; duplicate-name rows each consume one place.
   names only while the recipient still has current list access. They use normal
   180-day logical expiry and are permanently suppressed on either-direction block
   or recipient access loss; unblocking or reinvitation never restores them.
-- Note mentions and their notifications remain accepted future work.
+- A real new resolved General Note link creates one informational
+  `list_note_mentioned` notification for each newly mentioned recipient other than
+  the authenticated actor, keyed by the resulting General Note version. Retained
+  mentions, repeated tokens, self-mentions, removals, unrelated text edits, exact
+  retries, and rejected writes create none. Removing a link and explicitly
+  resolving it in a later saved version may create one new notification.
+- Mention notification rows store actor/list references and the creating note
+  version, never note text, excerpts, or copied identity/list text. Rendering
+  resolves live actor and list names and has no action or deep link. The row is
+  visible only while actor and recipient both retain list access, neither direction
+  is blocked, its referenced context exists, and it is unsuppressed/unexpired.
+  Actor or recipient access loss and either-direction blocking store permanent
+  suppression with the first suppression timestamp; reinvitation or unblocking
+  never clears it.
+- Notification v1 continues to exclude assignments and mention types. V2 continues
+  to add assignments while excluding mentions. V3 includes both with matching
+  version-specific unread-count predicates. The shared mark-read operation remains
+  bounded and idempotent but applies the v3 authorization/privacy predicates, so a
+  suppressed, inaccessible, blocked, foreign, expired, or deleted-context ID
+  cannot change `read_at`.
 - A successful ownership transfer creates one informational notification for the
   new owner without copying profile or list text into the notification row.
 - User-facing archive, delete, mark-unread, preference, and notification-history
@@ -651,6 +725,9 @@ feature deep-link contracts remain open.
 - Assignment controls expose the complete selected state to assistive technology,
   remain usable with large system text, and do not rely on initials, color, or
   compact visual chips as their only meaning.
+- General Note editing, mention suggestions/selections, counters, errors, conflict
+  recovery, and read-only state follow the same semantic, scalable-text,
+  light/dark, and non-color-only requirements in both supported languages.
 
 ## Explicit non-goals and deferrals
 
@@ -669,13 +746,16 @@ feature deep-link contracts remain open.
 - No assignment history, template-assignment copy, unassignment notification,
   assignment notification deep link, reminder, due date, or offline assignment
   mutation is part of the item-assignment foundation.
+- No per-item notes, rich text/Markdown, comments, note history, attachments,
+  reactions, read receipts, `@everyone`, non-member mention, mention deep link,
+  push/email mention delivery, or offline note-mutation queue is introduced by the
+  General Note foundation.
 
 ## Open product decisions
 
 These decisions are intentionally unresolved; implementations must not silently
 choose them:
 
-- Note mention parsing, eligibility, editing, and notification deduplication.
 - A support or administrator correction process for immutable usernames, including
   its authorization and audit requirements.
 - Avatar storage, upload validation, privacy, replacement, and deletion lifecycle.
@@ -684,7 +764,7 @@ choose them:
 - Invitation and sent-template expiry, revocation, and idempotent re-acceptance.
 - Notification archive/delete/preferences, later types, push-safe payloads,
   physical cleanup, and account-lifecycle retention beyond the accepted
-  friend/list/assignment behavior.
+  friend/list/assignment/mention behavior.
 - Reporting scope, moderation workflow, evidence retention, and appeal behavior.
 - Offline conflict resolution and which operations are permitted while offline.
 - Shared-resource ownership/deletion, administrator-initiated deletion,

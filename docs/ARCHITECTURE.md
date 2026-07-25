@@ -176,6 +176,21 @@ assignees without relying on initials or color alone. All labels, errors, select
 semantics, and notification text are supplied in English and Portuguese and remain
 usable with large system text and light/dark themes.
 
+General Note presentation also remains inside the Lists feature. A dedicated
+repository contract loads and updates note state through exact RPCs; widgets never
+query note or mention rows. The list-detail controller renders the shared note and
+an accessible multiline editor owns the local text, explicit resolved-profile set,
+selection/caret insertion, 2,000-code-point feedback, overlap guard, and expected
+note version. Eligible suggestions contain only current unblocked owner/member
+profile ID, canonical username, and display name. A clean editor may reconcile
+authoritatively; a dirty editor preserves its draft across remote note/version or
+mention-eligibility conflict, receives one localized state-change outcome, and
+requires an explicit reload-or-continue recovery choice. Caller access loss or
+list deletion follows the established privacy-safe one-time editor close/navigation
+path; remote archive closes mutation UI and transitions safely to the read-only/
+Lists outcome with one localized explanation. Repeated invalidations never
+duplicate those messages, closures, or navigation.
+
 List providers are keyed by the current verified user identity and are invalidated
 on sign-out, account deletion, invalid-session recovery, or identity change. No
 global list/member/invitation payload survives a session boundary. There is no
@@ -234,8 +249,9 @@ required rights.
 ### Active-list database boundary
 
 `public.active_lists`, `public.active_list_items`,
-`public.active_list_item_assignments`, and `public.active_list_participants` are an
-RPC-only aggregate. All tables enable and force RLS, explicitly reject every direct
+`public.active_list_item_assignments`, `public.active_list_note_mentions`, and
+`public.active_list_participants` are an RPC-only aggregate. All tables enable and
+force RLS, explicitly reject every direct
 `anon` and `authenticated` operation, and revoke all table privileges from
 `PUBLIC`, `anon`, `authenticated`, and `service_role`. Owner/list cascade foreign
 keys integrate the aggregate with Auth-root deletion. A nullable completion-actor
@@ -249,6 +265,21 @@ reverse assignee index supports cleanup. `assigned_at` is database owned. There 
 no assigned-by column, assignment-local version, soft deletion, event table, or
 template source link. Direct client CRUD remains rejected by the explicit
 `active_list_item_assignments_reject_direct_client_access` policy.
+
+The scalar General Note state lives on `active_lists` as nullable normalized text,
+a positive `general_note_version` defaulting to `1`, and a nullable database-owned
+update time. Text is normalized from CRLF/CR to LF, outer-trimmed, null when empty,
+and limited to 2,000 PostgreSQL/Flutter Unicode code points while preserving
+internal whitespace and line breaks.
+
+`active_list_note_mentions` is current resolved state, not copied identity or
+history. Its primary key is `(list_id, mentioned_profile_id)` and its reverse
+`(mentioned_profile_id, list_id)` index supports deterministic cleanup. It stores
+one server-owned current-link resolution time but no username snapshot, token
+offset/range, display name, actor, local version, or event history. List/profile
+foreign keys cascade only through their established deletion roots.
+Forced RLS, revoked API-role table privileges, and an explicit `FOR ALL`
+`USING (false)`/`WITH CHECK (false)` policy deny direct access.
 
 Participant rows retain one profile's versioned `pending`, `member`, `declined`,
 `cancelled`, `removed`, or `left` state. After ownership transfer, the promoted
@@ -267,8 +298,17 @@ use `(updated_at, id)` descending; archived lists use `(archived_at, id)`
 descending. Aggregate counts are returned in the same list query rather than by
 N+1 calls.
 
-Mutations lock the list row before item rows; when multiple items are locked they
-use UUID order. Expected positive `bigint` versions reject stale writes with
+Cross-identity mutations use one global hierarchy: non-locking preflight; relevant
+profile rows in UUID order; a canonical relationship-pair advisory lock only for
+relationship lifecycle operations; affected parent lists in list UUID order; then
+deterministically ordered children (items, participant/access rows, assignments,
+mentions, and Split children in their established order); and finally notification/
+suppression and transactional Broadcast work. A path never acquires a new profile,
+pair, or parent-list lock after child mutation starts. Stable read RPCs remain
+lock-free, and paths may skip unused tiers without reversing the order.
+
+Ordinary mutations lock the list row before item rows; when multiple items are locked
+they use UUID order. Expected positive `bigint` versions reject stale writes with
 SQLSTATE `40001`. List metadata changes increment only list version. Item
 create/delete/reorder increment list version; item edit/complete/reopen increment
 both list and item versions. A real assignment-set change also increments both
@@ -286,8 +326,26 @@ Mutation paths that can write a profile foreign key first take deterministic
 locks. Paths whose current participant set can change between preflight and the
 list lock recheck the exact sorted snapshot and return `40001` rather than writing.
 This narrow identity preflight prevents account deletion from deadlocking against
-list mutation; after it, aggregate locking remains list, item, then participant
-rows in deterministic UUID order. Stable read RPCs remain lock-free.
+list mutation; after it, aggregate locking follows the global hierarchy.
+
+Dedicated General Note read/update RPCs preserve every legacy list projection and
+write signature. The updater derives the actor from `auth.uid()`, performs
+non-locking eligibility preflight, locks the caller plus current/submitted mention
+profiles in distinct UUID order, locks the list, authoritatively rechecks list
+access and every submitted mention target, locks relevant access and current
+mention rows in UUID order, and atomically replaces text/links, creates
+notifications, advances versions, and sends invalidations. Note mutations acquire
+no relationship advisory lock.
+
+Submitted mention IDs are independently deduplicated/canonicalized and cannot be
+trusted as recipients. Each must be an onboarded current unblocked owner/member and
+its immutable canonical username must occur in the normalized saved text as a
+complete valid `@username` token. Manually typed unresolved text remains text.
+Repeated occurrences resolve once; self-resolution is allowed without notification.
+A real text/link change advances `general_note_version` and parent list version
+once. An exact no-op or payload-equivalent completed retry changes nothing; a stale
+payload-different write returns `40001` with no partial row, notification, version,
+timestamp, or Broadcast message.
 
 New clients read through `list_active_list_items_v2(uuid)` and mutate through
 `create_active_list_item_v2(..., uuid[], ...)` and
@@ -306,14 +364,19 @@ owner first and then by canonical username/profile ID. Legacy
 legacy creation makes no assignments and legacy update preserves the current set.
 Item deletion continues to cascade assignments.
 
-Access-loss cleanup is part of the authoritative participant transition. A shared
-hardened trigger/helper removes the departing profile's assignments, permanently
-suppresses their assignment notifications for that list, increments every affected
-item once and the list once, and emits no unassignment notification. The same
-contract covers removal, leave, block-driven separation, and deletion of a
-non-owner profile from surviving lists; parent item/list deletion uses cascades.
-Ownership transfer retains assignments because both profiles remain current.
-The assignment boundary adds no note/mention parser, assignment history,
+Access-loss cleanup is part of the authoritative participant transition. One
+hardened combined child helper removes the departing profile's assignments and
+resolved mention link, preserves literal note text, and reports the exact effects
+to the high-level coordinator. After ordered Split work, that coordinator
+permanently suppresses affected assignment and mention notifications. Each
+affected item advances once; the note version advances only when a link changed;
+and the parent list advances at most once for the complete
+remove/leave/block/account-deletion operation even when membership, assignment,
+and mention state all change. When no assignment or mention state changes,
+cleanup adds no item/note increment; any real membership or block transition
+still owns its single parent-list advance. Parent item/list deletion uses cascades.
+Ownership transfer retains assignments and mentions because both profiles remain
+current. The item-assignment API itself adds no assignment history,
 template-copy behavior, deep link, push delivery, notification preference,
 offline mutation, dependency, or platform configuration.
 
@@ -356,6 +419,11 @@ updates invalidate all current list accounts; the assignment-notification insert
 also invalidates its recipient. No assignment-specific topic, event, payload,
 publication, channel, or client send exists.
 
+General Note mutations and mention cleanup reuse the same parent-list fanout, and
+a mention-notification insert invalidates its recipient. The event remains
+content-free: no note text, link, recipient, actor, or version enters the payload.
+No note-specific topic, transport, or policy exists.
+
 Only the injected Supabase adapter uses the channel API. Supabase initialization
 injects a testable WebSocket transport with a named conservative handshake
 deadline. A stalled ready future therefore fails within a bound instead of
@@ -385,7 +453,9 @@ loop. Manual refresh remains a required fallback.
 
 Mounted list detail reloads item fields and assignees together, and an open editor
 reconciles its authoritative selection without overwriting a local submission.
-Mounted notification pages and badges use the assignment-aware v2 read contracts.
+Mounted note state reloads with detail; a clean editor may adopt it, while a dirty
+draft remains locally owned and receives one deterministic recovery outcome.
+Mounted notification pages and badges use the note-aware v3 read contracts.
 Duplicate list/notification invalidations still produce at most one coalesced
 follow-up and no duplicate message or navigation.
 
@@ -421,12 +491,18 @@ template payload.
 
 Cross-aggregate RPCs implement three atomic copies. Save-as-template locks the
 accessible active/archived source list and its selected items, checks the caller's
-template quota, and copies 1-200 names/quantities in current list order. Create-list
-locks the caller-owned template and selection, then creates one private active list
-with 1-200 uncompleted items. Existing-list import first protects the active
+template quota, and copies 1-200 names/quantities in current list order. It copies
+no General Note text or resolved mention. Create-list locks the caller-owned
+template and selection, then creates one private active list with 1-200 uncompleted
+items, a null General Note at note version `1`, no note-update timestamp, and no
+mention row. Existing-list import first protects the active
 destination under the established list authorization/lock, then validates the
 caller-owned template and selected source version; authoritative remaining
 capacity is `200 - current destination count`.
+
+Existing-list import preserves the destination's General Note text, note version,
+note-update timestamp, and mention rows. Template schemas, repository arguments,
+RPC signatures, and item-only models remain unchanged.
 
 Selections must be non-null, unique, complete, caller-owned current source IDs and
 match exact source/destination versions. Copy request IDs bind safe retries without
@@ -466,9 +542,10 @@ The independently generated persistent Split participant UUID is the financial
 identity; it is never copied from or derived from an Auth/profile ID. Its nullable live
 `profile_id` uses `ON DELETE SET NULL`, while allowlisted username and display-name
 snapshots keep membership-removal history understandable. A profile-deletion
-trigger clears both snapshots and the live link in the same Auth-root transaction;
-the participant and integer financial history remain valid without retaining
-deleted profile data or a deletion timestamp. A partial unique key reuses the same
+coordinator clears both snapshots and the live link parent-first in the same
+Auth-root transaction; the participant and integer financial history remain valid
+without retaining deleted profile data or a deletion timestamp. A partial unique
+key reuses the same
 identity for a live profile that leaves and rejoins the list. Acceptance after
 Split enablement materializes or reuses exactly one identity, and ownership
 transfer uses those same identities. Expenses, shares, settlement endpoints and
@@ -572,9 +649,10 @@ onboarding. This keeps export available from both verified incomplete Onboarding
 and completed Profile without exposing it to anonymous or unverified sessions.
 
 The existing `export_own_account_data()` continues to return its unchanged
-schema-version-6 `jsonb` document for legacy clients. The separate
-`export_own_account_data_v7()` reuses that allowlisted base and returns schema
-version `7`. Version `2` preserves all version-1 account/social roots
+schema-version-6 `jsonb` document for legacy clients, and
+`export_own_account_data_v7()` remains unchanged for assignment-aware clients. The
+separate `export_own_account_data_v8()` reuses the corrected v7 allowlisted base and
+returns schema version `8`. Version `2` preserves all version-1 account/social roots
 and adds the deterministic `active_lists` array with active/archived owned lists and
 ordered items. Version `3` adds only caller-relative metadata for lists owned by
 others and excludes their items, owner identity, other participants, and internal
@@ -590,10 +668,15 @@ recorder participant IDs, integer amount, note/reason, reversal link, and server
 times. Version `7` adds to each fully exported caller-owned item one non-null,
 deterministically ordered `assignees` array containing only `profile_id`,
 `username`, `display_name`, `is_owner`, and `assigned_at`; owner sorts first, then
-canonical username/profile ID. `shared_list_access` stays byte-for-byte
-metadata-only: it contains no assignment array, item ID, item name, or assignment
-timestamp. Request IDs, derived balances, and suggested payments are excluded
-because they are respectively private or reproducible. Both public export
+canonical username/profile ID. Version `8` adds to each fully exported caller-owned
+list a nullable General Note object containing text, note version, note-update
+time, and a deterministic current resolved-mention array containing only profile
+ID, current username, and current display name. Removed links leave literal note
+text only. `shared_list_access` stays byte-for-byte
+metadata-only: it contains no assignment array, item data, General Note text,
+mention identity, or corresponding timestamp. Request IDs, derived balances, and
+suggested payments are excluded
+because they are respectively private or reproducible. All public export
 functions are hardened `SECURITY DEFINER` boundaries because they must read the
 caller's approved Auth columns and RPC-only social tables: ownership
 is `postgres`, `search_path` is empty, every object is qualified, default
@@ -601,18 +684,19 @@ execution is revoked, and only the exact parameterless signature is granted to
 `authenticated`. No Auth schema, table privilege, or direct social-table access is
 exposed to Flutter.
 
-Both exports reuse the existing caller-relative privacy contracts. They select only
+All export versions reuse the existing caller-relative privacy contracts. They select only
 outgoing blocks; only active, non-blocked relationship projections; and only
 caller-owned notifications that are unsuppressed, unexpired, and not hidden by a
-block in either direction. List/item/assignment objects use explicit public fields,
-exact integer `quantity_thousandths`, and deterministic list/item/assignment order
+block in either direction. List/item/assignment/mention objects use explicit public
+fields, exact integer `quantity_thousandths`, and deterministic list/item/assignment/
+mention order
 while excluding creation request IDs and internal authorization details. Objects
-are constructed field by field rather than by serializing physical rows. Both
+are constructed field by field rather than by serializing physical rows. The
 functions are stable and read-only: they do not mark
 notifications read, mutate relationships, update Auth, or persist an export job,
 file, audit row, Storage object, signed URL, or background task. The version-6
-operation excludes assignment fields and assignment notifications so an old strict
-parser never receives an unknown schema or notification type.
+operation excludes assignment and mention fields and their notification types so
+an old strict parser never receives an unknown schema or notification type.
 
 An internal transferred-owner access row is excluded from `shared_list_access`, so
 the current owner receives the list only in the full owned-list projection while
@@ -629,9 +713,10 @@ changes. The file service writes pretty UTF-8 JSON to application-scoped
 temporary/cache storage and invokes the Android/iOS native share sheet with a
 privacy-safe UTC filename and JSON MIME type. It never falls back to public shared
 storage or promises guaranteed cache deletion. The legacy operation still requires
-version `6`; the assignment-aware operation requires version `7`. The parser
-retains strict compatibility for versions `1` through `7`, including non-equal
-explicit shares in version `5`/`6`/`7` documents.
+version `6`; the assignment-aware legacy operation requires version `7`; and the
+current operation requires version `8`. The parser retains strict compatibility
+for versions `1` through `8`, including non-equal explicit shares in version
+`5`/`6`/`7`/`8` documents.
 
 ### Permanent account-deletion boundary
 
@@ -667,12 +752,20 @@ Auth Admin deletion of `auth.users` is the single atomic database root. Cascadin
 foreign keys remove the profile, either direction of blocks, either relationship
 participant, notification recipient/actor rows, and notifications whose
 relationship or item disappears, every list owned by the profile and the list's
-items/assignments, and every private category, template, and template item. Before
-a non-owner profile disappears, its current assignments on surviving lists are
-removed with the versioned cleanup described above, while its Split participant
-rows atomically clear profile snapshots and become anonymous; existing expenses,
-shares, settlements, and reversals remain list-owned and mathematically valid.
-Owned-list deletion still cascades all of that list's assignment and Split rows.
+items/assignments/mentions, and every private category, template, and template
+item. Before a non-owner profile disappears, one parent-first coordinator gathers
+every surviving affected list referenced by participant access, item assignment,
+resolved mention, Split participant history, or item `completed_by`, excluding
+caller-owned lists that will cascade in full. It locks lists in UUID order before
+their item/access/assignment/mention/Split children in the global order, removes
+current assignment/mention links, preserves note text, and clears Split participant
+profile snapshots while existing expenses, shares, settlements, and reversals
+remain list-owned and mathematically valid. The prior separate child-first Split
+anonymization trigger and later list-locking assignment cleanup trigger are
+superseded, eliminating the Split-child/list inversion against ordinary
+list-first expense mutations. Recipient capture and transactional Broadcast remain
+inside the same Auth-root transaction. Owned-list deletion still cascades all of
+that list's assignment, mention, and Split rows.
 Snapshot-created or
 imported list rows have no source dependency and remain governed only by their list
 owner. A `BEFORE DELETE` profile trigger reserves only a
@@ -797,20 +890,23 @@ Notifications extend the repository boundary without becoming a second
 relationship, access, or assignment state machine. Legacy clients retain the
 bounded `list_notifications`, unread-count, and caller-owned mark-read contracts.
 Assignment-aware clients use `list_notifications_v2` and
-`get_unread_notification_count_v2`; both generations reuse the same bounded
-caller-owned mark-read operation. Flutter receives a domain model with minimal
+`get_unread_notification_count_v2`; General-Note-aware clients use
+`list_notifications_v3` and `get_unread_notification_count_v3`. All generations
+reuse the same bounded, hardened caller-owned mark-read operation. Flutter receives
+a domain model with minimal
 actor/resource projection and caller-relative presentation; it never reads or
 mutates notification rows directly.
 
 The physical `public.user_notifications` table supports the reviewed
-friend-request, list-access, ownership-transfer, and `list_item_assigned` types. It
+friend-request, list-access, ownership-transfer, `list_item_assigned`, and
+`list_note_mentioned` types. It
 records a generated
 UUID, recipient and actor profile IDs,
 normalized relationship participants, the positive relationship version that
 created the notification, database-owned creation and exact 180-day expiry,
 nullable read time, and nullable permanent suppression time. Profile,
-relationship, list-access, and assignment-item foreign keys cascade only from the
-reviewed account/item/list-deletion roots. A type-specific
+relationship, list-access, assignment-item, and General Note list references
+cascade only from the reviewed account/item/list-deletion roots. A type-specific
 recipient/resource/version boundary makes notification creation
 idempotent without storing copied profile text, email, Auth metadata, or arbitrary
 messages.
@@ -828,9 +924,11 @@ rows and resolves only currently authorized actor/resource fields. A row is acti
 only while the current relationship remains the exact pending version with that
 actor as requester and the caller as recipient; friendship is projected as
 `friends`, and every other visible state is generically `unavailable`. Count uses
-the same visibility boundary. Mark-read accepts only a bounded ID array, updates
-only caller-owned visible rows, and never accepts a caller identity or client
-timestamp.
+the same version-specific visibility boundary. Mark-read accepts only a bounded ID
+array, updates only caller-owned visible rows, and never accepts a caller identity
+or client timestamp. Its note branch repeats v3's recipient/actor access, block,
+suppression, expiry, and context checks; inaccessible, suppressed, blocked,
+foreign, expired, or deleted-context IDs leave `read_at` unchanged.
 
 A real absent-to-present assignment inserts one `list_item_assigned` row for each
 newly assigned recipient other than the authenticated actor, keyed by the resulting
@@ -841,12 +939,30 @@ retains list access. Normal logical expiry is 180 days. Either-direction blockin
 or recipient access loss permanently suppresses the row in the same transaction;
 unblocking/reinvitation never restores it.
 
+A real newly resolved other-user General Note link inserts one
+`list_note_mentioned` row keyed by `(active_list_id, recipient_id, type,
+general_note_version)`. Retained links, repeated tokens, self-resolution,
+unmention, unrelated text changes, exact retry/no-op, cleanup, and rejected work
+insert none. Removing then explicitly resolving in a later note version may create
+one new row. It stores no note text/excerpt or copied actor/list identity; v3
+resolves live names and reports an informational unavailable action with no deep
+link. V3 exposes it only while actor and recipient both retain current list access,
+neither direction is blocked, referenced context exists, and the row is
+unsuppressed/unexpired.
+
+Access loss by either actor or recipient and either-direction blocking set
+`suppressed_at = coalesce(suppressed_at, mutation_time)`. No reinvitation or
+unblocking path clears suppression. A later explicit mention after legitimately
+restored access creates a distinct unsuppressed row at a later note version.
+Profile/list deletion uses the existing cascades.
+
 Legacy notification listing/count functions explicitly exclude
-`list_item_assigned`, so strict older clients never receive an unknown type or badge
-they cannot open. V2 functions include the old types plus the allowlisted assignment
-item/list projection. Assignment notifications are informational only: they add no
-action version, deep link, push payload, archive/preference control, or
-unassignment event.
+`list_item_assigned` and `list_note_mentioned`, so strict older clients never
+receive an unknown type or badge they cannot open. V2 functions include the old
+types plus the allowlisted assignment item/list projection and explicitly exclude
+note mentions. V3 includes both informational types with matching listing/count
+predicates. Neither adds a deep link, push payload, archive/preference control, or
+removal event.
 
 `send_friend_request(uuid,bigint)` creates the notification in the same locked
 transaction only for a real transition into pending. `block_profile(uuid)`
@@ -887,9 +1003,10 @@ Operations that span records or enforce important invariants should be atomic an
 idempotent where retries are possible. The active/shared-list and private-template
 aggregates use exact PostgreSQL RPCs because their validation, locking, version
 checks, capacity enforcement, and writes belong in one short database transaction.
-Split expense allocation, settlement, and reversal operations follow the same
-exact PostgreSQL RPC boundary. Future public/sent-template operations still
-require separate placement decisions.
+General Note text/link replacement and mention notification creation follow that
+same boundary. Split expense allocation, settlement, and reversal operations follow
+the same exact PostgreSQL RPC boundary. Future public/sent-template operations
+still require separate placement decisions.
 
 ## Money boundary
 
@@ -955,6 +1072,18 @@ writes are implemented.
   and version increments, notification deduplication/suppression, legacy v1 item/
   notification/export compatibility, owned-only export v7, and no partial row,
   notification, version, or Realtime output after rejection.
+- General Note tests cover normalization and Unicode limits; owner/member and
+  archived/blocked/access authorization; stable-ID-only token validation; no-op,
+  retry, stale, and simultaneous writers; combined assignment/mention cleanup;
+  notification v1/v2/v3 compatibility and permanent suppression; hardened
+  mark-read; item-only templates; export v8/P-039 privacy; and dirty-draft conflict
+  reconciliation in English/Portuguese across accessibility/theme states.
+- Real-session database races prove note versus removal/block/account deletion in
+  both acquisition orders, forbidden completed-username change, simultaneous note
+  writers, reverse-ordered multi-list cleanup, and expense mutation versus account
+  deletion. The final race includes assignment, mention, Split history, and
+  completion attribution so it proves the former Split-child/list inversion is
+  removed rather than relying on timing alone.
 - Realtime client tests deterministically cover bounded stalled handshakes,
   joined-channel recovery, duplicate recovery signals, diagnostic redaction, and
   the production gateway-to-coordinator-to-registry path through a mounted feature

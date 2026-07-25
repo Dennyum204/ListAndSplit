@@ -16,8 +16,11 @@ provides functional owned/shared Lists, private Templates with personal categori
 existing Community, and existing Profile; notifications remain available from the bell.
 Friend-only list invitations, accepted-member item collaboration, member management,
 multi-member item assignments, and persistent list-access/assignment notifications
-are implemented. Private account-scoped Supabase Broadcast now reconciles connected
-devices through the existing RPC repositories without carrying application data.
+are implemented. Active lists also have one optional shared General Note with
+explicit current-member `@mentions`, persistent mention notifications, and
+draft-preserving conflict reconciliation. Private account-scoped Supabase Broadcast
+reconciles connected devices through the existing RPC repositories without carrying
+application data.
 Private templates support independent list snapshots and atomic selected-item list
 creation/import. List-scoped Split
 supports owner-selected CHF/EUR, exact integer equal and custom expense shares,
@@ -188,6 +191,37 @@ devices:
 Manual refresh must remain a working fallback. Use disposable QA list/item data;
 do not use account deletion merely to exercise assignment cleanup.
 
+### General Note and mention rollout
+
+The General Note migration has not been deployed to a hosted Supabase project, and
+physical two-device QA remains pending. After the reviewed migration is separately
+authorized and applied to a QA environment, test with two current accepted
+participants on one active list and upgraded clients:
+
+1. Create, edit, clear, and reopen the shared note, including multiline and
+   2,000-code-point boundaries; verify the other device updates without a manual
+   refresh.
+2. Explicitly select self and other-member `@mentions`, repeat one token, and type
+   an unresolved token manually. Verify only newly resolved other-member links
+   create one notification and that plain text never becomes a link by itself.
+3. Keep a dirty editor open while the other device changes the note or mention
+   eligibility. Verify the draft remains available, one localized conflict message
+   appears, and recovery is deterministic. Then separately remove caller access,
+   archive, and delete the list; verify the editor closes/exits safely once with
+   the appropriate localized outcome and no duplicate navigation.
+4. Remove, leave, block, unblock, and reinvite. Verify literal note text remains,
+   structured links are removed when access is lost, suppressed historical
+   notifications never reappear, and only a later explicit selection can resolve
+   a new link.
+5. Verify archived notes are readable but not editable, templates never copy note
+   text or links, and an imported template preserves the destination note.
+6. Repeat in English and Portuguese, light and dark themes, large system text, and
+   with a screen reader.
+
+Manual refresh and app resume remain authoritative fallbacks. Use disposable QA
+list/note data; hosted deployment and QA require separate authorization and must
+not be inferred from local automated verification.
+
 For a local client build, use the local API URL and public publishable/anonymous
 key reported by `supabase status` as the two `dart-define` values. Never copy the
 reported `service_role` key into Flutter or source control. Local verification
@@ -236,18 +270,22 @@ blocker's own blocked-user projection. Block creation atomically cancels a pendi
 request or ends a friendship, while unblocking restores no relationship.
 
 Legacy notification clients retain the reviewed `list_notifications` and
-`get_unread_notification_count` contracts and never receive assignment types.
-Current Flutter uses `list_notifications_v2`,
-`get_unread_notification_count_v2`, and the compatible
+`get_unread_notification_count` contracts and never receive assignment or note-
+mention types. Assignment-aware v2 clients likewise never receive note mentions.
+Current Flutter uses `list_notifications_v3`,
+`get_unread_notification_count_v3`, and the compatible hardened
 `mark_notifications_read` boundary; it never reads or writes
 `user_notifications` directly. A real transition into a pending relationship
 version creates one notification atomically, while duplicate and crossed sends
 create none. Listing and badge results exclude expired, suppressed, or
 block-hidden rows, and block creation permanently suppresses existing pair
-notifications in the same transaction.
+notifications in the same transaction. A newly resolved `list_note_mentioned`
+row contains references and the resulting note version, never note text; access
+loss or blocking stores permanent suppression that reinvitation or unblocking
+cannot clear.
 
-Active lists, items, current item assignments, and retained participant access rows
-use only reviewed authenticated RPCs. The tables
+Active lists, items, current item assignments, resolved note mentions, and retained
+participant access rows use only reviewed authenticated RPCs. The tables
 have forced RLS, explicit direct-access rejection policies, and no client table
 grants. Titles and item names are trimmed/check-constrained while duplicates are
 allowed. Quantities are exact positive integer thousandths with stable nullable
@@ -260,17 +298,30 @@ owner/accepted-member set, update list/item versions once, create notifications
 only for newly assigned other users, and preserve legacy item APIs. Capacity is 20
 including the owner and pending invitations. Account-root deletion cascades owned
 lists, items, current assignments, participant rows, and related notifications.
+One optional list-level General Note is normalized and limited to 2,000 Unicode
+code points. Current owner/accepted members may edit it only while active;
+archived lists expose it read-only. Explicit stable-profile-ID mention links are
+server-validated against the saved complete canonical `@username` tokens and
+current unblocked membership. Literal text survives access cleanup, while removed
+links never reactivate automatically.
+Cross-identity writes follow the accepted profile-to-parent-to-ordered-child lock
+hierarchy. One parent-first account-deletion coordinator cleans surviving list
+assignment, mention, Split-history, and completion references, eliminating the
+former Split-child/list lock inversion.
 
 The account lifecycle separates versioned account-data export from permanent
 deletion. Export uses parameterless, allowlist-only RPCs for any authenticated
 email-verified user, including before onboarding, followed by a validated UTF-8
 JSON file in app-scoped temporary cache and the native share sheet. The server
 retains no export file. The existing `export_own_account_data()` remains schema
-version `6` and unchanged for legacy clients. Assignment-aware clients use
-`export_own_account_data_v7()`: version `7` preserves versions `1` through `6` and
-adds deterministic current assignment records only inside fully exported
-caller-owned list items. Shared lists remain caller-relative metadata-only and
-export no items, item names, or assignments. Split allocation and settlement
+version `6` and unchanged for legacy clients, and
+`export_own_account_data_v7()` remains unchanged for assignment-aware legacy
+clients. Current clients use `export_own_account_data_v8()`: version `8` preserves
+versions `1` through `7`, retains deterministic current assignments, and adds
+General Note text plus minimal currently resolved mention identities only inside
+fully exported caller-owned lists. Shared lists remain caller-relative metadata-
+only and export no items, assignments, General Note text, or mention identities.
+Split allocation and settlement
 contracts remain unchanged. Shared owner/participant identity, Split contents,
 request IDs, derived balances/suggestions, and internal authority details remain
 excluded.
@@ -326,8 +377,9 @@ SQL into the Dashboard.
 ## Intentional deferrals
 
 The current slices do not implement unrestricted profile/directory search,
-avatars, public/shared/sent templates, general notes or `@mentions`, notification
-archive/preferences, assignment deep links, or physical cleanup, reporting,
+avatars, public/shared/sent templates, rich-text notes, note history/comments,
+notification archive/preferences, assignment or mention deep links, or physical
+cleanup, reporting,
 percentage/weight/ratio expense allocation,
 automatic custom-share remainder correction, a mathematically minimum settlement
 solver, SQLite caching/offline
@@ -339,6 +391,9 @@ valid event, successful join, or app resume reloads authoritative state through
 repositories. Presence, Broadcast Replay, Postgres Changes, client-originated
 Broadcast, push delivery, and an offline mutation queue remain deliberately absent.
 Remote list metadata and active/archive projection changes reconcile in place;
-remotely archived open detail returns safely to Lists once. Other open product and
-architecture choices are recorded in the project documentation and must be decided
-before their implementation slices.
+remotely archived open detail returns safely to Lists once. Dirty General Note
+drafts are preserved through remote note/version/mention-eligibility conflicts and
+require an explicit recovery choice. Access loss, archive, and deletion use the
+established one-time safe exit behavior. Other open product and architecture
+choices are recorded in the project documentation and must be decided before
+their implementation slices.
