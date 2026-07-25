@@ -642,7 +642,7 @@ class _ResolvedGeneralNoteText extends StatelessWidget {
       color: Theme.of(context).colorScheme.primary,
       fontWeight: FontWeight.w700,
       backgroundColor:
-          Theme.of(context).colorScheme.primaryContainer.withOpacity(0.45),
+          Theme.of(context).colorScheme.primaryContainer.withAlpha(115),
     );
     final spans = <InlineSpan>[];
     var offset = 0;

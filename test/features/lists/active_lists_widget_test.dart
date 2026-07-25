@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show SemanticsFlag;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -576,8 +575,8 @@ void main() {
       contains('Selected mention of Owner, at owner'),
     );
     expect(
-      tester.getSemantics(selectedSemantic).hasFlag(SemanticsFlag.isSelected),
-      isTrue,
+      tester.getSemantics(selectedSemantic),
+      containsSemantics(isSelected: true),
     );
     expect(
       tester
@@ -672,10 +671,10 @@ void main() {
     expect(repository.mutationCalls, 1);
     expect(find.byKey(const Key('generalNoteDialogStatus')), findsOneWidget);
     expect(
-      tester
-          .getSemantics(find.byKey(const Key('generalNoteDialogStatus')))
-          .hasFlag(SemanticsFlag.isLiveRegion),
-      isTrue,
+      tester.getSemantics(
+        find.byKey(const Key('generalNoteDialogStatus')),
+      ),
+      containsSemantics(isLiveRegion: true),
     );
     expect(
       find.descendant(
