@@ -119,6 +119,12 @@ select is(
   2::bigint,
   'copy ledger owner and destination references cascade'
 );
+select has_index(
+  'private',
+  'public_template_copy_requests',
+  'public_template_copy_requests_destination_idx',
+  'copy ledger destination cascades have a covering index'
+);
 
 select is(
   (

@@ -39,6 +39,9 @@ create table private.public_template_copy_requests (
     check (pg_catalog.octet_length(request_fingerprint) = 32)
 );
 
+create index public_template_copy_requests_destination_idx
+on private.public_template_copy_requests (owner_id, copied_template_id);
+
 alter table private.public_template_copy_requests owner to postgres;
 alter table private.public_template_copy_requests enable row level security;
 alter table private.public_template_copy_requests force row level security;
