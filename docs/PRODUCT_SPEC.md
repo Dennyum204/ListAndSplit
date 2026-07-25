@@ -78,17 +78,19 @@ are the evidence of implementation status.
   `5` adds Split expense data nested only under the caller's fully exported owned
   lists; version `6` adds that owned-list Split ledger's immutable settlement and
   one-time reversal history; version `7` adds current item assignments only inside
-  fully exported caller-owned list items; and version `8` adds the General Note
-  text and minimal currently resolved mention identities only inside fully exported
-  caller-owned lists. Equal and custom allocations are represented by their
+  fully exported caller-owned list items; version `8` adds the General Note text
+  and minimal currently resolved mention identities only inside fully exported
+  caller-owned lists; and version `9` adds only `is_public` and nullable
+  `published_at` to caller-owned templates. Equal and custom allocations are represented by their
   explicit integer share rows; no allocation-mode field is introduced. Collections
   are deterministic arrays and are empty rather than null, and export versions `1`
-  through `8` remain compatible.
+  through `9` remain compatible.
 - The existing parameterless `export_own_account_data()` remains unchanged at
   schema version `6` for legacy clients, and
   `export_own_account_data_v7()` remains unchanged for assignment-aware clients.
   General-Note-aware clients call the separate parameterless
-  `export_own_account_data_v8()`. Versions `7` and `8` add no assignment, item,
+  `export_own_account_data_v8()`. Public-template-aware clients call the separate
+  parameterless `export_own_account_data_v9()`. Versions `7`, `8`, and `9` add no assignment, item,
   General Note, mention, or participant identity to `shared_list_access`; lists
   owned by another user remain byte-for-byte privacy-minimal metadata under P-039.
 - The export includes nullable onboarding fields faithfully. It includes only the
@@ -120,8 +122,9 @@ are the evidence of implementation status.
   block-hidden notifications, server logs, security records, participant data
   beyond the approved current assignment projection and persistent financial
   identities inside caller-owned lists, shared-list contents or assignments,
-  public/shared-template data, or Split data from a list the caller does not own.
-  Shared-list export remains privacy-minimal metadata.
+  another user's public/shared-template data, copy provenance/request/fingerprint
+  data, or Split data from a list the caller does not own. Shared-list export
+  remains privacy-minimal metadata.
 - Export is generated synchronously on demand and returned to the caller. The
   server retains no export file or export record. The mobile app validates and
   pretty-prints the versioned document, writes it to OS-managed temporary/cache
@@ -346,9 +349,10 @@ are not implemented.
 ### Templates
 
 The product term is **Templates**; the former name **Internal Lists** should not be
-used in new UI or documentation. This slice implements only private personal
-templates. Public, shared, sent, friend-owned, and collaborative templates remain
-future work.
+used in new UI or documentation. Private templates remain personal reusable
+content. The Public Template Foundation adds explicit owner publication,
+block-aware profile-only viewing, and independent recipient-owned copies. Shared,
+sent, friend-feed, and collaborative templates remain future work.
 
 - A template is one account-owned reusable ordered collection of item names and
   quantities. Template items have no completion state, actor attribution, unit,
@@ -415,6 +419,56 @@ requests fail without partial rows, version changes, or Realtime invalidations.
 Destination capacity changes never silently reduce the selection. Exact-capacity
 copies succeed; duplicate-name rows each consume one place.
 
+#### Public Template Foundation
+
+- Existing and new templates are private by default. Only the owner may publish,
+  unpublish, edit, or delete a source. `published_at` is null while private; every
+  real first publication or republication receives a new server timestamp, while
+  ordinary edits preserve the existing timestamp.
+- A real publish/unpublish transition advances the source template version exactly
+  once. Repeating an already-achieved desired state is an idempotent no-op that
+  returns the authoritative state, including a retry after a lost successful
+  response. A stale request that would change state fails with the established
+  stale-write result.
+- Publication requires a nonblank template name of at most 120 Unicode code
+  points. A named zero-item template is publishable. Existing private legacy names
+  are not rewritten; a public template edit must keep the name eligible. Owners
+  always retain the ability to unpublish or delete.
+- A public template appears only in the Public Templates section of its owner's
+  public profile. Every fully onboarded authenticated user, friend or nonfriend,
+  receives the same access when neither account blocks the other. Either-direction
+  blocking suppresses profile, listing, details, copy, and direct-ID access.
+  Missing, private, deleted, incomplete-profile, and block-suppressed resources
+  share one privacy-safe unavailable result.
+- A public listing exposes only owner profile ID, current username/display name,
+  template ID/name/version, item count, and publication time. Public detail adds
+  only ordered item names, exact `quantity_thousandths`, and positions. It exposes
+  no item IDs, categories, normalized values, internal timestamps, quotas,
+  request/fingerprint values, private aggregates, or hidden counts.
+- Public profile pages use bounded 1-50-row keyset pages ordered by
+  `published_at DESC, template_id DESC`, with no total count. Global search,
+  recommendation, ranking, and a friends feed are not introduced.
+- **Save a copy** atomically copies the complete authoritative zero-to-200-item
+  snapshot after rechecking caller/source onboarding, blocks, exact source
+  version, and caller quota. Every destination/template item receives a new UUID;
+  the destination is caller-owned, private, Uncategorized, independently editable,
+  and contains no provenance or source identity. Name, quantities, and order are
+  preserved.
+- One caller/request UUID is bound to a domain-separated one-way fingerprint.
+  An identical completed retry returns the same destination; conflicting reuse
+  fails. Rejected or concurrent source edits, unpublishes, deletes, blocks,
+  account deletions, quota races, or duplicate submissions create no partial
+  template/item/request-ledger row, version change, notification, or committed
+  invalidation.
+- Completed copies are never changed by later source edits, publication/deletion,
+  blocking, friendship, username, or source-account lifecycle. Copy-owner account
+  deletion removes only that owner's copy.
+- Publication/view/copy actions create no persistent notification and no new
+  Realtime topic. Owner changes and copy creation reuse the existing opaque
+  private account invalidation. Arbitrary viewers see source changes through
+  manual refresh, app resume, or action-time authorization rather than global
+  fanout.
+
 ### Community
 
 - Initial discovery is a deliberate exact lookup of one canonical username.
@@ -477,8 +531,9 @@ copies succeed; duplicate-name rows each consume one place.
   introduced; implemented account hard deletion cascades this current row.
 - The relationship row remains the authoritative friendship action state; the
   retained list-access row independently remains authoritative for invitations.
-- A user's public templates can be viewed from that user's profile.
-- The community feed shows recent public templates from accepted friends.
+- A user's public templates can be viewed from that user's block-aware profile.
+- A future community feed may show recent public templates from accepted friends;
+  ranking, pagination, retention, and rollout remain unresolved.
 - Blocking applies the symmetric shared-list separation rules in the active/shared
   list section. Friendship ending alone preserves accepted list membership.
   Reporting, moderation, evidence retention, and appeals remain future work.
@@ -759,8 +814,7 @@ choose them:
 - A support or administrator correction process for immutable usernames, including
   its authorization and audit requirements.
 - Avatar storage, upload validation, privacy, replacement, and deletion lifecycle.
-- Public-template copied visibility/category defaults, attribution and provenance
-  display, and community-feed ranking/retention.
+- Public-template community-feed ranking/retention and broader discovery.
 - Invitation and sent-template expiry, revocation, and idempotent re-acceptance.
 - Notification archive/delete/preferences, later types, push-safe payloads,
   physical cleanup, and account-lifecycle retention beyond the accepted

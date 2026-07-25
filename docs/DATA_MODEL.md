@@ -148,6 +148,13 @@ byte-for-byte P-039 metadata and gains no item, assignment, note, mention, or
 participant identity. Versions `1` through `8` remain strictly readable by the
 General-Note-aware client; the v6 and v7 functions are unchanged.
 
+The separate parameterless `export_own_account_data_v9()` preserves versions `1`
+through `8` and adds only `is_public` plus nullable `published_at` to each
+caller-owned template. The two fields agree exactly. It exports no other user's
+public template and no source identity, provenance, copy request UUID, or
+fingerprint. Versions `1` through `9` remain strictly readable; the v6, v7, and v8
+functions and their exact document shapes are unchanged.
+
 Every nested object is built from an explicit field allowlist. The social arrays
 apply the same directional-block, caller-relative active-relationship, recipient,
 suppression, expiry, and either-direction block filters as their existing RPC
@@ -599,9 +606,51 @@ retries without adding a source foreign key. An exact-capacity copy succeeds;
 overflow, authorization loss, source/destination staleness, or concurrent capacity
 loss rolls back every row, version change, and Realtime message.
 
-Public visibility, saving another account's template, sent-template actions,
-attribution/provenance presentation, and community feed behavior remain future
-aggregates and create no schema in this slice.
+### Public template publication and copy idempotency
+
+Public visibility is one nullable field on the existing source:
+`public.templates.published_at`. Null is private. A real first publication or
+republication stores a server-owned timestamp; ordinary edits preserve it and
+unpublication clears it. A conditional constraint requires a public template name
+to contain 1-120 Unicode code points after the existing canonical trim. A partial
+`(owner_id, published_at DESC, id DESC)` index contains only public rows.
+
+Publication does not broaden direct table access. Existing owner-only/RPC-only
+rules still govern mutation. Narrow public-profile RPCs expose a completed owner's
+profile ID/current username/display name and public template ID/name/version,
+item count, publication time, and ordered item name/quantity/position only. They
+expose no source item identity, category, normalized value, private count, quota,
+request key, fingerprint, or other aggregate. Either-direction block and profile/
+template publication state are rechecked for listing, detail, copy, and direct-ID
+access.
+
+`private.public_template_copy_requests` is not provenance. Its physical fields are:
+
+- destination `owner_id`;
+- caller-generated `request_id`;
+- a 32-byte domain-separated one-way fingerprint of the source ID/version
+  arguments;
+- `copied_template_id`, constrained to a destination owned by that same profile;
+  and
+- a server-owned `created_at`.
+
+`(owner_id, request_id)` is the primary identity. Owner or destination deletion
+cascades the row. The table enables and forces RLS, explicitly rejects direct
+client operations, and grants no API-role table access. It is omitted from account
+export and public RPCs.
+
+Save a copy locks/rechecks completed profile identities, either-direction blocks,
+the destination owner quota, source template/publication/version, and ordered
+source items. It inserts a caller-owned, private, null-category template plus new
+item UUIDs and the ledger row in one transaction. The destination stores no raw
+source ID/profile/username, foreign key, attribution, or visible provenance.
+Identical retry returns the existing copy; conflicting request reuse is invalid.
+Every failed race writes nothing. Later source, relationship, block, username, or
+account lifecycle cannot change a completed copy.
+
+Sent-template actions, public-feed ranking/retention, wider discovery, and
+reporting/takedown records remain future aggregates. Reporting/takedown is a
+release gate for external public-content rollout.
 
 ## Split expense-ledger aggregate
 
@@ -908,8 +957,8 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   owner-list, and current-assignment records.
 - Support/administrator correction and audit rules for immutable usernames.
 - Avatar Storage, validation, replacement, retention, and deletion lifecycle.
-- Public-template visibility/copy placement, sent-template version/provenance,
-  attribution, and offer idempotency.
+- Sent-template version/provenance, attribution, offer idempotency, and public-feed
+  ranking/retention.
 - Later notification-type payload/localization, archive/preferences, physical
   cleanup, account-lifecycle retention, and push-token tables.
 - Offline mutation identifiers, tombstones, cache reconciliation, and conflict

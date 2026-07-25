@@ -134,7 +134,7 @@ Implemented slices:
   schema-version-6 endpoint remains unchanged, and shared lists remain
   metadata-only without item or assignment data.
 
-Current in-review General Note delivery:
+Implemented General Note delivery:
 
 - One optional list-level General Note with active owner/member editing, archived
   read-only display, normalized 2,000-code-point text, explicit stable-profile-ID
@@ -155,14 +155,9 @@ Current in-review General Note delivery:
   →list→ordered-child→notification hierarchy and replaces the prior account-
   deletion Split-child/list inversion with one parent-first coordinator.
 
-Rollout gates for the General Note/mention slice:
-
-- Local automated verification and review of the additive migration must pass
-  before publishing the draft delivery.
-- Hosted migration deployment requires separate explicit authorization and remains
-  pending.
-- Physical two-device QA in English/Portuguese, light/dark, large text, and
-  assistive technology remains pending.
+The General Note/mention slice is merged, deployed to List & Split Dev, and passed
+its required two-phone physical QA. Further environment rollout still requires
+separate authorization.
 
 Mention parsing, representation, eligibility, notification, template, export, and
 online conflict behavior are resolved by P-049/P-050 and A-054 through A-057.
@@ -176,7 +171,7 @@ resolved.
 
 Goal: add reusable content while preserving strict copy independence.
 
-Current private-template slice:
+Current private-template and Public Template Foundation slices:
 
 - Private templates with ordered items, optional single personal category,
   100-template/25-category quotas, and 200 current items per template.
@@ -194,20 +189,34 @@ Current private-template slice:
 - Search across template/item names, one category filter, Recently updated/A-Z/
   Newest created sorts, private account Realtime reconciliation, and account export
   schema version `4`/Auth-root deletion integration.
+- Explicit owner publication/unpublication with private default, versioned
+  desired-state idempotency, public-name eligibility, visible Private/Public state,
+  and owner-only mutation.
+- Block-aware profile-only public-template pages/details for fully onboarded
+  authenticated friends and nonfriends, with strict minimal field allowlists,
+  stable bounded publication-time/UUID keyset pagination, immutable-ID Community
+  routes, manual refresh, and app-resume reconciliation.
+- Atomic Save a copy into a caller-owned private Uncategorized template, with new
+  UUIDs, no provenance, exact source-version/block/quota reauthorization,
+  payload-bound retry idempotency, and complete source independence.
+- Account export schema version `9` adds only caller-owned publication state/time
+  while versions `1` through `8` and their endpoints remain unchanged.
+- Existing private account invalidation is reused only for owner/copier/block
+  accounts. No notification, new topic, public/global fanout, dependency, Edge
+  Function, configuration, or platform change is introduced.
 
 Later candidate slices:
 
-- Public template visibility on profiles.
-- Saving a public template as an independent recipient-owned deep copy.
 - Sending a template to a friend with Accept/Decline and idempotent copy creation.
 - A friends-only feed of recent public templates.
-- Block-aware public profile, template, and feed visibility in both directions.
-- Tests proving that source changes/deletion never mutate snapshots or recipient
-  copies.
+- Reporting/takedown workflow and tooling before any external public-content
+  rollout.
 
-Private category cardinality, copy atomicity, capacity, and versioning are resolved.
-Public copy visibility/category placement and attribution, feed ranking/pagination,
-provenance presentation, and sent-template expiry remain open.
+Private category cardinality, copy atomicity, capacity, versioning, public
+visibility/category placement, no-provenance behavior, and profile presentation
+are resolved. Feed ranking/pagination/retention, sent-template expiry/acceptance,
+and reporting/takedown remain open. O-P13 is a hard gate before external beta or
+production public-content rollout.
 
 ## Phase 4 — Split expense ledger (core scope complete)
 
