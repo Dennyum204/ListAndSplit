@@ -74,9 +74,8 @@ class TemplatesScreen extends ConsumerWidget {
               onSort: (sort) => ref
                   .read(privateTemplatesControllerProvider.notifier)
                   .setSort(sort),
-              onSelected: (template) => context.push(
-                '${AppRoutes.templates}/${template.id}',
-              ),
+              onSelected: (template) =>
+                  context.push(AppRoutes.templateDetail(template.id)),
             ),
           ),
         ),
@@ -406,11 +405,41 @@ class _TemplatesBody extends StatelessWidget {
                     child: Icon(Icons.copy_all_outlined),
                   ),
                   title: Text(template.name, maxLines: 2),
-                  subtitle: Text(
-                    '${template.categoryName ?? localizations.templatesNoCategoryLabel} · '
-                    '${localizations.templatesItemCount(template.itemCount)}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  subtitle: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 10,
+                    runSpacing: 4,
+                    children: [
+                      Text(
+                        '${template.categoryName ?? localizations.templatesNoCategoryLabel} · '
+                        '${localizations.templatesItemCount(template.itemCount)}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Semantics(
+                        label: template.isPublic
+                            ? localizations.templatesPublicLabel
+                            : localizations.templatesPrivateLabel,
+                        child: Row(
+                          key: Key('templatePublication-${template.id}'),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              template.isPublic
+                                  ? Icons.public_rounded
+                                  : Icons.lock_outline_rounded,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              template.isPublic
+                                  ? localizations.templatesPublicLabel
+                                  : localizations.templatesPrivateLabel,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => onSelected(template),
@@ -773,6 +802,10 @@ String _message(
     PrivateTemplatesMessage.saved => localizations.templatesSavedMessage,
     PrivateTemplatesMessage.updated => localizations.templatesUpdatedMessage,
     PrivateTemplatesMessage.deleted => localizations.templatesDeletedMessage,
+    PrivateTemplatesMessage.published =>
+      localizations.templatesPublishedMessage,
+    PrivateTemplatesMessage.unpublished =>
+      localizations.templatesUnpublishedMessage,
     PrivateTemplatesMessage.categoryCreated ||
     PrivateTemplatesMessage.categoryUpdated ||
     PrivateTemplatesMessage.categoryDeleted =>

@@ -250,6 +250,86 @@ void main() {
     expect(repository.mutationCalls, 0);
   });
 
+  testWidgets(
+      'owner publication is explicit, disclosed and visible beyond color',
+      (tester) async {
+    tester.view.physicalSize = const Size(900, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final repository = FakePrivateTemplateRepository();
+    final template = await repository.createTemplate(
+      'Weekend kit',
+      requestId: 'template',
+    );
+
+    await _pump(
+      tester,
+      repository: repository,
+      lists: FakeActiveListRepository(),
+      dark: true,
+      textScale: 2,
+      child: PrivateTemplateDetailScreen(templateId: template.id),
+    );
+
+    expect(find.text('Private'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('templateActionsButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Publish template'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining(
+        'Any signed-in, nonblocked person who reaches your profile',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Saved copies become independent'),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const Key('confirmTemplatePublicationButton')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.templates.single.isPublic, isTrue);
+    expect(repository.templates.single.publishedAt, isNotNull);
+    expect(find.text('Public'), findsOneWidget);
+    expect(find.text('Template published.'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('templateActionsButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit template'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('publicTemplateEditNotice')), findsOneWidget);
+    expect(
+      find.textContaining('Saved changes remain visible'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('templateActionsButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Make private'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Existing saved copies'),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const Key('confirmTemplatePublicationButton')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.templates.single.isPublic, isFalse);
+    expect(repository.templates.single.publishedAt, isNull);
+    expect(find.text('Private'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('selection preview disables zero and overflow confirmations',
       (tester) async {
     final repository = FakePrivateTemplateRepository();
@@ -327,6 +407,8 @@ Future<void> _pump(
   required FakePrivateTemplateRepository repository,
   required FakeActiveListRepository lists,
   required Widget child,
+  bool dark = false,
+  double textScale = 1,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -339,6 +421,15 @@ Future<void> _pump(
         ),
       ],
       child: MaterialApp(
+        theme: ThemeData.light(),
+        darkTheme: ThemeData.dark(),
+        themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+        builder: (context, materialChild) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(textScale),
+          ),
+          child: materialChild!,
+        ),
         localizationsDelegates: const [
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,

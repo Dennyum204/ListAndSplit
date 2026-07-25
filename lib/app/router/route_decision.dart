@@ -32,6 +32,14 @@ abstract final class AppRoutes {
     String templateId,
   ) =>
       '${listTemplateImport(listId)}/$templateId';
+
+  static String templateDetail(String templateId) => '$templates/$templateId';
+
+  static String publicProfile(String profileId) =>
+      '$community/profile/$profileId';
+
+  static String publicTemplate(String profileId, String templateId) =>
+      '${publicProfile(profileId)}/templates/$templateId';
 }
 
 class AppRouteDecision {

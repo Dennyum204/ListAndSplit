@@ -13,6 +13,8 @@ enum PrivateTemplatesMessage {
   saved,
   updated,
   deleted,
+  published,
+  unpublished,
   categoryCreated,
   categoryUpdated,
   categoryDeleted,
@@ -434,7 +436,9 @@ class PrivateTemplateDetailController
   Future<bool> updateTemplate(String name, {String? categoryId}) {
     final detail = state.detail.valueOrNull;
     final normalized = name.trim();
-    if (detail == null || normalized.isEmpty) {
+    if (detail == null ||
+        normalized.isEmpty ||
+        (detail.summary.isPublic && normalized.runes.length > 120)) {
       _setMessage(PrivateTemplatesMessage.invalidInput);
       return Future.value(false);
     }
@@ -459,6 +463,27 @@ class PrivateTemplateDetailController
       ),
       PrivateTemplatesMessage.deleted,
       reload: false,
+    );
+  }
+
+  Future<bool> setPublication(bool isPublic) {
+    final detail = state.detail.valueOrNull;
+    if (detail == null ||
+        (isPublic &&
+            (detail.summary.name.runes.isEmpty ||
+                detail.summary.name.runes.length > 120))) {
+      _setMessage(PrivateTemplatesMessage.invalidInput);
+      return Future.value(false);
+    }
+    return _mutate(
+      () => _repository.setPublication(
+        templateId,
+        isPublic: isPublic,
+        expectedVersion: detail.summary.version,
+      ),
+      isPublic
+          ? PrivateTemplatesMessage.published
+          : PrivateTemplatesMessage.unpublished,
     );
   }
 

@@ -32,6 +32,8 @@ import 'package:list_and_split/features/split/presentation/list_split_screen.dar
 import 'package:list_and_split/features/templates/presentation/templates_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_detail_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_import_screen.dart';
+import 'package:list_and_split/features/templates/presentation/public_template_detail_screen.dart';
+import 'package:list_and_split/features/templates/presentation/public_template_profile_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _listsNavigatorKey = GlobalKey<NavigatorState>();
@@ -225,6 +227,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'blocked',
                     builder: (context, state) => const BlockedUsersScreen(),
+                  ),
+                  GoRoute(
+                    path: 'profile/:profileId',
+                    builder: (context, state) => PublicTemplateProfileScreen(
+                      profileId: state.pathParameters['profileId']!,
+                    ),
+                    routes: [
+                      GoRoute(
+                        path: 'templates/:templateId',
+                        builder: (context, state) => PublicTemplateDetailScreen(
+                          profileId: state.pathParameters['profileId']!,
+                          templateId: state.pathParameters['templateId']!,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

@@ -44,7 +44,9 @@ class PrivateTemplateSummary {
     required this.itemCount,
     required this.createdAt,
     required this.updatedAt,
-  });
+    this.isPublic = false,
+    this.publishedAt,
+  }) : assert(isPublic == (publishedAt != null));
 
   final String id;
   final String? categoryId;
@@ -53,6 +55,24 @@ class PrivateTemplateSummary {
   final int version;
   final int itemCount;
   final DateTime createdAt;
+  final DateTime updatedAt;
+  final bool isPublic;
+  final DateTime? publishedAt;
+}
+
+class TemplatePublicationResult {
+  const TemplatePublicationResult({
+    required this.templateId,
+    required this.version,
+    required this.isPublic,
+    required this.publishedAt,
+    required this.updatedAt,
+  }) : assert(isPublic == (publishedAt != null));
+
+  final String templateId;
+  final int version;
+  final bool isPublic;
+  final DateTime? publishedAt;
   final DateTime updatedAt;
 }
 

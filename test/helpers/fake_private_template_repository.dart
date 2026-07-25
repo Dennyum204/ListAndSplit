@@ -119,6 +119,8 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
           categoryId: null,
           itemCount: template.itemCount,
           createdAt: template.createdAt,
+          isPublic: template.isPublic,
+          publishedAt: template.publishedAt,
         );
       }
     }
@@ -160,6 +162,8 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
       version: current.version + 1,
       itemCount: current.itemCount,
       createdAt: current.createdAt,
+      isPublic: current.isPublic,
+      publishedAt: current.publishedAt,
     );
     templates[index] = result;
     return result;
@@ -174,6 +178,39 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
     if (failure != null) throw failure!;
     templates.removeWhere((entry) => entry.id == templateId);
     itemsByTemplate.remove(templateId);
+  }
+
+  @override
+  Future<TemplatePublicationResult> setPublication(
+    String templateId, {
+    required bool isPublic,
+    required int expectedVersion,
+  }) async {
+    mutationCalls += 1;
+    if (failure != null) throw failure!;
+    final index = templates.indexWhere((entry) => entry.id == templateId);
+    final current = templates[index];
+    final publishedAt = isPublic ? _now : null;
+    final updated = PrivateTemplateSummary(
+      id: current.id,
+      categoryId: current.categoryId,
+      categoryName: current.categoryName,
+      name: current.name,
+      version: current.version + 1,
+      itemCount: current.itemCount,
+      createdAt: current.createdAt,
+      updatedAt: _now,
+      isPublic: isPublic,
+      publishedAt: publishedAt,
+    );
+    templates[index] = updated;
+    return TemplatePublicationResult(
+      templateId: templateId,
+      version: updated.version,
+      isPublic: isPublic,
+      publishedAt: publishedAt,
+      updatedAt: updated.updatedAt,
+    );
   }
 
   @override
@@ -335,6 +372,8 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
     int version = 1,
     int itemCount = 0,
     DateTime? createdAt,
+    bool isPublic = false,
+    DateTime? publishedAt,
   }) {
     String? categoryName;
     if (categoryId != null) {
@@ -354,6 +393,8 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
       itemCount: itemCount,
       createdAt: createdAt ?? _now,
       updatedAt: _now,
+      isPublic: isPublic,
+      publishedAt: publishedAt,
     );
   }
 
@@ -370,6 +411,8 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
         itemCount: count,
         createdAt: current.createdAt,
         updatedAt: current.updatedAt,
+        isPublic: current.isPublic,
+        publishedAt: current.publishedAt,
       );
 
   void _advanceTemplate(String templateId, int itemCount) {
@@ -384,6 +427,8 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
       itemCount: itemCount,
       createdAt: current.createdAt,
       updatedAt: _now,
+      isPublic: current.isPublic,
+      publishedAt: current.publishedAt,
     );
   }
 }

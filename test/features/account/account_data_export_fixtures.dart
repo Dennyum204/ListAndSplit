@@ -265,6 +265,9 @@ Map<String, dynamic> validAccountDataExportJson({
                 'version': 3,
                 'created_at': '2026-07-19T05:00:00.000Z',
                 'updated_at': '2026-07-19T07:00:00.000Z',
+                if (schemaVersion >= 9) 'is_public': true,
+                if (schemaVersion >= 9)
+                  'published_at': '2026-07-25T19:33:06.000Z',
                 'items': [
                   {
                     'item_id': 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
