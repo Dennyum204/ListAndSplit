@@ -15,7 +15,7 @@ select columns_are(
 );
 select columns_are(
   'public', 'templates',
-  array['id','owner_id','category_id','name','version','creation_request_id','created_at','updated_at'],
+  array['id','owner_id','category_id','name','version','creation_request_id','created_at','updated_at','published_at'],
   'templates expose only reviewed physical columns'
 );
 select columns_are(
