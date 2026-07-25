@@ -39,7 +39,7 @@ void main() {
     expect(result.single.actorDisplayName, 'Beta User');
     expect(result.single.actionStatus, NotificationActionStatus.actionable);
     expect(result.single.expectedRelationshipVersion, 4);
-    expect(calls.single.functionName, 'list_notifications_v2');
+    expect(calls.single.functionName, 'list_notifications_v3');
     expect(calls.single.params, {
       'page_size': 20,
       'before_created_at': null,
@@ -168,6 +168,68 @@ void main() {
     expect(result.single.actionStatus, NotificationActionStatus.unavailable);
   });
 
+  test('maps Note mentions without exposing Note text or action state',
+      () async {
+    response = [
+      _row(
+        notificationType: 'list_note_mentioned',
+        actionStatus: 'unavailable',
+        expectedVersion: null,
+        activeListId: 'list-1',
+        activeListTitle: 'Shared trip',
+        activeListStatus: 'active',
+        generalNoteVersion: 9,
+      ),
+    ];
+
+    final result = await repository.listNotifications(limit: 20);
+
+    expect(result.single.type, InAppNotificationType.listNoteMentioned);
+    expect(result.single.generalNoteVersion, 9);
+    expect(result.single.activeListTitle, 'Shared trip');
+    expect(result.single.activeListItemId, isNull);
+    expect(result.single.actionStatus, NotificationActionStatus.unavailable);
+    expect(response.toString(), isNot(contains('note_text')));
+  });
+
+  test('strict v3 Note parsing rejects excerpts and mismatched context',
+      () async {
+    final valid = _row(
+      notificationType: 'list_note_mentioned',
+      actionStatus: 'unavailable',
+      expectedVersion: null,
+      activeListId: 'list-1',
+      activeListTitle: 'Shared trip',
+      activeListStatus: 'active',
+      generalNoteVersion: 9,
+    );
+    final withExcerpt = Map<String, dynamic>.from(valid)
+      ..['note_text'] = 'private Note text';
+    final withInvitationVersion = Map<String, dynamic>.from(valid)
+      ..['expected_access_version'] = 2;
+    final withAssignment = Map<String, dynamic>.from(valid)
+      ..addAll({
+        'active_list_item_id': 'item-1',
+        'active_list_item_name': 'Sunscreen',
+        'assignment_item_version': 3,
+      });
+    final withMalformedNoteVersion = Map<String, dynamic>.from(valid)
+      ..['general_note_version'] = '9';
+
+    for (final row in [
+      withExcerpt,
+      withInvitationVersion,
+      withAssignment,
+      withMalformedNoteVersion,
+    ]) {
+      response = [row];
+      await expectLater(
+        repository.listNotifications(limit: 20),
+        throwsA(isA<NotificationFailure>()),
+      );
+    }
+  });
+
   test('rejects malformed list and row payloads', () async {
     response = {'notification_id': 'notification-1'};
     await expectLater(
@@ -284,6 +346,32 @@ void main() {
         activeListItemName: 'Sunscreen',
         assignmentItemVersion: 0,
       ),
+      _row(
+        notificationType: 'list_note_mentioned',
+        actionStatus: 'unavailable',
+        expectedVersion: null,
+        activeListId: 'list-1',
+        activeListTitle: 'Shared trip',
+        activeListStatus: 'active',
+      ),
+      _row(
+        notificationType: 'list_member_left',
+        actionStatus: 'unavailable',
+        expectedVersion: null,
+        activeListId: 'list-1',
+        activeListTitle: 'Shared trip',
+        activeListStatus: 'active',
+        generalNoteVersion: 2,
+      ),
+      _row(
+        notificationType: 'list_note_mentioned',
+        actionStatus: 'unavailable',
+        expectedVersion: null,
+        activeListId: 'list-1',
+        activeListTitle: 'Shared trip',
+        activeListStatus: 'active',
+        generalNoteVersion: 0,
+      ),
     ]) {
       response = [row];
       await expectLater(
@@ -297,7 +385,7 @@ void main() {
     response = 12;
 
     expect(await repository.getUnreadCount(), 12);
-    expect(calls.single.functionName, 'get_unread_notification_count_v2');
+    expect(calls.single.functionName, 'get_unread_notification_count_v3');
     expect(calls.single.params, isNull);
   });
 
@@ -354,6 +442,7 @@ Map<String, dynamic> _row({
   String? activeListItemId,
   String? activeListItemName,
   int? assignmentItemVersion,
+  int? generalNoteVersion,
 }) {
   return {
     'notification_id': 'notification-1',
@@ -372,6 +461,7 @@ Map<String, dynamic> _row({
     'active_list_item_id': activeListItemId,
     'active_list_item_name': activeListItemName,
     'assignment_item_version': assignmentItemVersion,
+    'general_note_version': generalNoteVersion,
   };
 }
 

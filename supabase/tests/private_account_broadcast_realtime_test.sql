@@ -87,8 +87,8 @@ select is(
       and not trigger_record.tgisinternal
       and trigger_record.tgname like '%broadcast_invalidation%'
   ),
-  11::bigint,
-  'the reviewed list, participant, notification, relationship, block, profile, category, template, and Split triggers exist'
+  10::bigint,
+  'the reviewed list, participant, notification, relationship, block, profile-update, category, template, and Split Broadcast triggers exist; profile deletion uses its parent-first coordinator'
 );
 
 select ok(
@@ -585,7 +585,7 @@ select pg_temp.clear_broadcasts();
 set local role authenticated;
 set local "request.jwt.claim.sub" = '41000000-0000-4000-8000-000000000001';
 select public.delete_active_list(
-  (select value from realtime_values where label = 'list'), 11
+  (select value from realtime_values where label = 'list'), 13
 );
 reset role;
 select ok(

@@ -1,4 +1,5 @@
 import 'package:list_and_split/features/lists/domain/active_list.dart';
+import 'package:list_and_split/features/lists/domain/general_note.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 
 enum ActiveListFailureCode {
@@ -26,6 +27,7 @@ abstract interface class ActiveListRepository {
   });
 
   Future<ActiveListSummary> getList(String listId);
+  Future<ActiveListGeneralNote> getGeneralNote(String listId);
   Future<List<ActiveListItem>> listItems(String listId);
   Future<List<ActiveListParticipant>> listParticipants(String listId);
   Future<List<ActiveListAccessProfile>> listPendingInvitations(String listId);
@@ -49,6 +51,13 @@ abstract interface class ActiveListRepository {
   });
 
   Future<void> deleteList(String listId, {required int expectedVersion});
+
+  Future<ActiveListGeneralNote> updateGeneralNote(
+    String listId,
+    String text, {
+    required List<String> mentionedProfileIds,
+    required int expectedGeneralNoteVersion,
+  });
 
   Future<ActiveListItem> createItem(
     String listId,

@@ -23,9 +23,12 @@ select columns_are(
     'creation_request_id',
     'created_at',
     'updated_at',
-    'archived_at'
+    'archived_at',
+    'general_note_text',
+    'general_note_version',
+    'general_note_updated_at'
   ],
-  'active lists have only the reviewed columns'
+  'active lists have the reviewed core and additive General Note columns'
 );
 
 select columns_are(

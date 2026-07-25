@@ -199,6 +199,41 @@ void main() {
     expect(find.text('Este item foi-lhe atribuído.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+      'General Note mention is informational, localized, and excerpt-free',
+      (tester) async {
+    final notifications = FakeNotificationRepository()
+      ..notifications = [noteMentionNotification()];
+    await pumpCentre(tester, notifications: notifications);
+
+    expect(
+      find.text('Owner User mentioned you in Shared trip'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Open the list to read the current General Note.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('private Note text'), findsNothing);
+    expect(find.byType(FilledButton), findsNothing);
+    expect(find.byType(OutlinedButton), findsNothing);
+
+    await pumpCentre(
+      tester,
+      notifications: notifications,
+      locale: const Locale('pt'),
+    );
+    expect(
+      find.text('Owner User mencionou-o em Shared trip'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Abra a lista para ler a Nota Geral atual.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> pumpCentre(
@@ -307,5 +342,23 @@ InAppNotification itemAssignmentNotification() {
     activeListItemId: 'item-1',
     activeListItemName: 'Sunscreen',
     assignmentItemVersion: 8,
+  );
+}
+
+InAppNotification noteMentionNotification() {
+  return InAppNotification(
+    id: 'note-n-1',
+    type: InAppNotificationType.listNoteMentioned,
+    createdAt: DateTime.utc(2026, 7, 25, 9, 30),
+    isRead: false,
+    actorProfileId: 'owner-1',
+    actorUsername: 'owner_user',
+    actorDisplayName: 'Owner User',
+    actionStatus: NotificationActionStatus.unavailable,
+    expectedRelationshipVersion: null,
+    activeListId: 'list-1',
+    activeListTitle: 'Shared trip',
+    activeListStatus: 'active',
+    generalNoteVersion: 3,
   );
 }

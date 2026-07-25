@@ -77,6 +77,19 @@ Map<String, dynamic> validAccountDataExportJson({
                 'created_at': '2026-07-19T05:00:00.000Z',
                 'updated_at': '2026-07-19T08:00:00.000Z',
                 'archived_at': null,
+                if (schemaVersion >= 8)
+                  'general_note': {
+                    'text': 'Remember @gamma_user',
+                    'version': 2,
+                    'updated_at': '2026-07-19T07:55:00.000Z',
+                    'mentions': [
+                      {
+                        'profile_id': '33333333-3333-4333-8333-333333333333',
+                        'username': 'gamma_user',
+                        'display_name': 'Gamma User',
+                      },
+                    ],
+                  },
                 if (schemaVersion >= 5)
                   'split': {
                     'settings': {
@@ -210,6 +223,7 @@ Map<String, dynamic> validAccountDataExportJson({
                 'created_at': '2026-07-17T05:00:00.000Z',
                 'updated_at': '2026-07-18T08:00:00.000Z',
                 'archived_at': '2026-07-18T08:00:00.000Z',
+                if (schemaVersion >= 8) 'general_note': null,
                 if (schemaVersion >= 5) 'split': null,
                 'items': <Object?>[],
               },

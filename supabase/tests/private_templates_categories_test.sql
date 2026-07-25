@@ -528,13 +528,33 @@ select lives_ok(
 
 reset role;
 
-insert into public.active_lists(id,owner_id,title,version,creation_request_id)
+insert into public.active_lists(
+  id,
+  owner_id,
+  title,
+  version,
+  creation_request_id,
+  general_note_text,
+  general_note_version,
+  general_note_updated_at
+)
 values (
   '69000000-0000-4000-8000-000000000001',
   '61000000-0000-4000-8000-000000000001',
   'Snapshot source',
   1,
-  '69000000-0000-4000-8000-000000000002'
+  '69000000-0000-4000-8000-000000000002',
+  'Remember @template_owner',
+  7,
+  now()
+);
+insert into public.active_list_note_mentions(
+  list_id,
+  mentioned_profile_id
+)
+values (
+  '69000000-0000-4000-8000-000000000001',
+  '61000000-0000-4000-8000-000000000001'
 );
 insert into public.active_list_items(id,list_id,name,quantity_thousandths,position,creation_request_id,completed_at,completed_by)
 values
@@ -560,6 +580,16 @@ select ok(
     )
   ),
   'save-as-template copies selected completed and open names, quantities, and source order without completion state'
+);
+select ok(
+  not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name in ('templates', 'template_items')
+      and column_name like '%note%'
+  ),
+  'save-as-template keeps template schema item-only with no note or mention snapshot'
 );
 
 select throws_ok(
@@ -598,14 +628,56 @@ select ok(
   ),
   'create-from-template uses authoritative template order and creates independent uncompleted items'
 );
-
 reset role;
-insert into public.active_lists(id,owner_id,title,creation_request_id)
+select ok(
+  (
+    select general_note_text is null
+      and general_note_version = 1
+      and general_note_updated_at is null
+    from public.active_lists
+    where id = (
+      select value_id
+      from template_test_values
+      where label = 'copied-list'
+    )
+  )
+  and not exists (
+    select 1
+    from public.active_list_note_mentions
+    where list_id = (
+      select value_id
+      from template_test_values
+      where label = 'copied-list'
+    )
+  ),
+  'create-from-template starts with null note, version one, null timestamp, and zero links'
+);
+
+insert into public.active_lists(
+  id,
+  owner_id,
+  title,
+  creation_request_id,
+  general_note_text,
+  general_note_version,
+  general_note_updated_at
+)
 values (
   '6a000000-0000-4000-8000-000000000001',
   '61000000-0000-4000-8000-000000000001',
   'Import destination',
-  '6a000000-0000-4000-8000-000000000002'
+  '6a000000-0000-4000-8000-000000000002',
+  'Keep @template_owner',
+  9,
+  now()
+);
+insert into public.active_list_note_mentions(
+  list_id,
+  mentioned_profile_id
+)
+values (
+  '6a000000-0000-4000-8000-000000000001',
+  '61000000-0000-4000-8000-000000000001'
 );
 insert into public.active_list_items(list_id,name,position,creation_request_id)
 select
@@ -638,8 +710,25 @@ select ok(
   ),
   'import preserves authoritative template order even when selection IDs are reversed'
 );
-
 reset role;
+select ok(
+  (
+    select general_note_text = 'Keep @template_owner'
+      and general_note_version = 9
+      and general_note_updated_at is not null
+    from public.active_lists
+    where id = '6a000000-0000-4000-8000-000000000001'
+  )
+  and (
+    select pg_catalog.count(*) = 1
+    from public.active_list_note_mentions
+    where list_id = '6a000000-0000-4000-8000-000000000001'
+      and mentioned_profile_id =
+        '61000000-0000-4000-8000-000000000001'
+  ),
+  'existing-list template import preserves note text, version, timestamp, and links'
+);
+
 delete from realtime.messages;
 set local role authenticated;
 set local "request.jwt.claim.sub" = '61000000-0000-4000-8000-000000000001';

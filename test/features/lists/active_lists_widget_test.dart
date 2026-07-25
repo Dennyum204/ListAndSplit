@@ -8,6 +8,7 @@ import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
+import 'package:list_and_split/features/lists/domain/general_note.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
@@ -309,16 +310,17 @@ void main() {
       find.byKey(const Key('itemAssigneeAvatar-many-third-1')),
       findsNothing,
     );
+    final zeroSummary = find.byKey(const Key('itemAssignees-zero'));
+    expect(
+      tester.getSemantics(zeroSummary).label,
+      contains('Zero. Unassigned.'),
+    );
     final twoSummary = find.byKey(const Key('itemAssignees-two'));
     await tester.ensureVisible(twoSummary);
     await tester.pump();
     expect(
       tester.getSemantics(twoSummary).label,
       contains('Two. Assigned to Owner, Member.'),
-    );
-    expect(
-      tester.getSemantics(find.byKey(const Key('itemAssignees-zero'))).label,
-      contains('Zero. Unassigned.'),
     );
     expect(tester.takeException(), isNull);
     semantics.dispose();
@@ -355,7 +357,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('itemActions-item-1')));
+    final itemActions = find.byKey(const Key('itemActions-item-1'));
+    await tester.scrollUntilVisible(
+      itemActions,
+      240,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('activeListItems')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pump();
+    await tester.tap(itemActions);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Edit').last);
     await tester.pumpAndSettle();
@@ -414,6 +428,772 @@ void main() {
     expect(find.text('Owner (você)'), findsOneWidget);
     expect(tester.takeException(), isNull);
     semantics.dispose();
+  });
+
+  testWidgets(
+      'General Note editor resolves a member mention and saves without rich text',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [
+        _participant(),
+        _participant(
+          profileId: 'member-1',
+          username: 'susana_user',
+          displayName: 'Susana',
+          isOwner: false,
+          accessVersion: 2,
+        ),
+      ];
+    final semantics = tester.ensureSemantics();
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('generalNoteCard')), findsOneWidget);
+    expect(find.byKey(const Key('generalNoteEmpty')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('editGeneralNoteButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('generalNoteField')),
+      'Olá 👋 @Su',
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('generalNoteMention-member-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel('Mention Susana, at susana_user'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('generalNoteMention-member-1')));
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('generalNoteField')))
+          .controller!
+          .text,
+      'Olá 👋 @susana_user ',
+    );
+
+    await tester.tap(find.byKey(const Key('saveGeneralNoteButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('generalNoteField')), findsNothing);
+    expect(repository.noteMentionCalls.single, ['member-1']);
+    expect(repository.noteTextCalls.single, 'Olá 👋 @susana_user');
+    expect(find.byKey(const Key('generalNoteText')), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(
+        RegExp('Resolved mention of Susana, at susana_user'),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets(
+      'General Note suggestions are deterministic and self mentions stay explicitly selected',
+      (tester) async {
+    final owner = _participant();
+    final alpha = _participant(
+      profileId: 'alpha-1',
+      username: 'alpha_user',
+      displayName: 'Alpha',
+      isOwner: false,
+      accessVersion: 2,
+    );
+    final beta = _participant(
+      profileId: 'beta-1',
+      username: 'beta_user',
+      displayName: 'Beta',
+      isOwner: false,
+      accessVersion: 2,
+    );
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [beta, owner, alpha]
+      ..pendingByList['list-1'] = const [
+        ActiveListAccessProfile(
+          profileId: 'pending-1',
+          username: 'aardvark_pending',
+          displayName: 'Pending',
+          accessVersion: 1,
+        ),
+      ];
+    final semantics = tester.ensureSemantics();
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('editGeneralNoteButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('generalNoteField')), '@');
+    await tester.pump();
+
+    final orderedSuggestionKeys = find
+        .descendant(
+          of: find.byKey(const Key('generalNoteMentionSuggestions')),
+          matching: find.byType(ListTile),
+        )
+        .evaluate()
+        .map((element) => (element.widget as ListTile).key)
+        .toList(growable: false);
+    expect(
+      orderedSuggestionKeys,
+      const [
+        Key('generalNoteMention-alpha-1'),
+        Key('generalNoteMention-beta-1'),
+        Key('generalNoteMention-user-1'),
+      ],
+    );
+    expect(
+      find.byKey(const Key('generalNoteMention-pending-1')),
+      findsNothing,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const Key('generalNoteMention-user-1')),
+    );
+    await tester.tap(find.byKey(const Key('generalNoteMention-user-1')));
+    await tester.pump();
+
+    final selectedSemantic = find.byKey(
+      const Key('generalNoteSelectedSemantic-user-1'),
+    );
+    expect(find.text('Owner (@owner)'), findsOneWidget);
+    expect(
+      tester.getSemantics(selectedSemantic).label,
+      contains('Selected mention of Owner, at owner'),
+    );
+    expect(
+      tester.widget<Semantics>(selectedSemantic).properties.selected,
+      isTrue,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const Key('generalNoteSelected-user-1')))
+          .height,
+      greaterThanOrEqualTo(48),
+    );
+
+    final field = find.byKey(const Key('generalNoteField'));
+    final resolvedText = tester.widget<TextField>(field).controller!.text;
+    await tester.tap(find.byKey(const Key('generalNoteSelected-user-1')));
+    await tester.pump();
+
+    expect(find.text('Owner (@owner)'), findsNothing);
+    expect(tester.widget<TextField>(field).controller!.text, resolvedText);
+    await tester.tap(find.byKey(const Key('cancelGeneralNoteButton')));
+    await tester.pumpAndSettle();
+
+    expect(repository.mutationCalls, 0);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets(
+      'resolved repeated mention tokens are all highlighted by stable ID',
+      (tester) async {
+    const mention = ActiveListNoteMention(
+      profileId: 'member-1',
+      username: 'susana_user',
+      displayName: 'Susana',
+    );
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..generalNotesByList['list-1'] = ActiveListGeneralNote(
+        listVersion: 3,
+        text: 'Ask @susana_user, then remind @SUSANA_USER.',
+        version: 2,
+        updatedAt: DateTime.utc(2026, 7, 25, 9),
+        mentions: const [mention],
+      );
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+
+    final richText = tester.widget<SelectableText>(find.byType(SelectableText));
+    final mentionSpans = richText.textSpan!.children!
+        .whereType<TextSpan>()
+        .where(
+          (span) => span.text?.toLowerCase() == '@susana_user',
+        )
+        .toList(growable: false);
+    expect(mentionSpans, hasLength(2));
+    expect(
+      mentionSpans.every((span) => span.style?.fontWeight == FontWeight.w700),
+      isTrue,
+    );
+    expect(
+      find.bySemanticsLabel(
+        RegExp('Resolved mention of Susana, at susana_user'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'General Note failed save stays recoverable, repeated Save is guarded, and Cancel is safe',
+      (tester) async {
+    final repository = FakeActiveListRepository()..activeLists = [_summary()];
+    final semantics = tester.ensureSemantics();
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('editGeneralNoteButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('generalNoteField')),
+      'A draft that must survive',
+    );
+    repository.failure = const ActiveListFailure(ActiveListFailureCode.generic);
+
+    final save = find.byKey(const Key('saveGeneralNoteButton'));
+    await tester.tap(save);
+    await tester.pump();
+    await tester.pump();
+
+    expect(repository.mutationCalls, 1);
+    expect(find.byKey(const Key('generalNoteDialogStatus')), findsOneWidget);
+    expect(
+      tester
+          .widget<Semantics>(
+            find.byKey(const Key('generalNoteDialogStatus')),
+          )
+          .properties
+          .liveRegion,
+      isTrue,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('generalNoteDialogStatus')),
+        matching: find.text('Something went wrong. Please try again.'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('generalNoteField')))
+          .controller!
+          .text,
+      'A draft that must survive',
+    );
+    expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+
+    repository.failure = null;
+    final pendingSave = Completer<void>();
+    repository.generalNoteMutationCompleter = pendingSave;
+    await tester.tap(save);
+    await tester.pump();
+    expect(tester.widget<FilledButton>(save).onPressed, isNull);
+    await tester.tap(save, warnIfMissed: false);
+    await tester.pump();
+    expect(repository.mutationCalls, 2);
+    pendingSave.complete();
+    await tester.pumpAndSettle();
+    expect(repository.mutationCalls, 2);
+    expect(find.byKey(const Key('generalNoteField')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('editGeneralNoteButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('generalNoteField')),
+      'Cancelled draft',
+    );
+    await tester.tap(find.byKey(const Key('cancelGeneralNoteButton')));
+    await tester.pumpAndSettle();
+
+    expect(repository.mutationCalls, 2);
+    expect(find.byKey(const Key('generalNoteField')), findsNothing);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets(
+      'stale General Note Save preserves the draft and offers deterministic recovery',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..generalNotesByList['list-1'] = ActiveListGeneralNote(
+        listVersion: 3,
+        text: 'Original Note',
+        version: 1,
+        updatedAt: DateTime.utc(2026, 7, 25, 9),
+      );
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('editGeneralNoteButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('generalNoteField')),
+      'Unsaved simultaneous edit',
+    );
+
+    await repository.renameList(
+      'list-1',
+      'Groceries',
+      expectedVersion: 3,
+    );
+    repository.generalNotesByList['list-1'] = ActiveListGeneralNote(
+      listVersion: 4,
+      text: 'Remote winning edit',
+      version: 2,
+      updatedAt: DateTime.utc(2026, 7, 25, 10),
+    );
+    await tester.tap(find.byKey(const Key('saveGeneralNoteButton')));
+    await tester.pumpAndSettle();
+
+    expect(repository.noteTextCalls, ['Unsaved simultaneous edit']);
+    expect(find.byKey(const Key('generalNoteConflict')), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('generalNoteField')))
+          .controller!
+          .text,
+      'Unsaved simultaneous edit',
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('saveGeneralNoteButton')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.tap(find.byKey(const Key('useLatestGeneralNoteButton')));
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('generalNoteField')))
+          .controller!
+          .text,
+      'Remote winning edit',
+    );
+    expect(find.byKey(const Key('generalNoteConflict')), findsNothing);
+    await tester.tap(find.byKey(const Key('cancelGeneralNoteButton')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('General Note editor enforces 2000 Unicode code points',
+      (tester) async {
+    final repository = FakeActiveListRepository()..activeLists = [_summary()];
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('editGeneralNoteButton')));
+    await tester.pumpAndSettle();
+    final field = find.byKey(const Key('generalNoteField'));
+    final exact = List.filled(2000, '😀').join();
+    final overflow = '$exact😀';
+
+    await tester.enterText(field, exact);
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(field).controller!.text.runes.length,
+      2000,
+    );
+    expect(find.text('0 characters remaining (maximum 2000)'), findsOneWidget);
+
+    await tester.enterText(field, overflow);
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(field).controller!.text,
+      exact,
+      reason: 'The formatter must reject the 2001st code point atomically.',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'dirty Note draft survives remote Note and eligibility reconciliation',
+      (tester) async {
+    final owner = _participant();
+    final member = _participant(
+      profileId: 'member-1',
+      username: 'susana_user',
+      displayName: 'Susana',
+      isOwner: false,
+      accessVersion: 2,
+    );
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [owner, member]
+      ..generalNotesByList['list-1'] = ActiveListGeneralNote(
+        listVersion: 3,
+        text: 'Original @susana_user',
+        version: 1,
+        updatedAt: DateTime.utc(2026, 7, 25, 9),
+        mentions: const [
+          ActiveListNoteMention(
+            profileId: 'member-1',
+            username: 'susana_user',
+            displayName: 'Susana',
+          ),
+        ],
+      );
+    await _pump(
+      tester,
+      repository: repository,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ActiveListDetailScreen)),
+    );
+
+    await tester.tap(find.byKey(const Key('editGeneralNoteButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('generalNoteField')),
+      'Preserve this @susana_user draft',
+    );
+    await tester.pump();
+
+    repository.failure =
+        const ActiveListFailure(ActiveListFailureCode.transport);
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pump();
+    expect(find.byKey(const Key('generalNoteConflict')), findsNothing);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('generalNoteField')))
+          .controller!
+          .text,
+      'Preserve this @susana_user draft',
+    );
+
+    repository.failure = null;
+    await repository.renameList(
+      'list-1',
+      'Groceries',
+      expectedVersion: 3,
+    );
+    repository
+      ..participantsByList['list-1'] = [owner]
+      ..generalNotesByList['list-1'] = ActiveListGeneralNote(
+        listVersion: 4,
+        text: 'Remote version',
+        version: 2,
+        updatedAt: DateTime.utc(2026, 7, 25, 10),
+      );
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('generalNoteConflict')), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('generalNoteField')))
+          .controller!
+          .text,
+      'Preserve this @susana_user draft',
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('saveGeneralNoteButton')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.tap(find.byKey(const Key('keepGeneralNoteDraftButton')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('saveGeneralNoteButton')));
+    await tester.pumpAndSettle();
+
+    expect(repository.noteMentionCalls.single, isEmpty);
+    expect(
+      repository.generalNotesByList['list-1']!.text,
+      'Preserve this @susana_user draft',
+    );
+    expect(find.byKey(const Key('generalNoteConflict')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'clean Note editor adopts remote state and archived detail is accessible read-only',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..generalNotesByList['list-1'] = ActiveListGeneralNote(
+        listVersion: 3,
+        text: 'Original',
+        version: 1,
+        updatedAt: DateTime.utc(2026, 7, 25, 9),
+      );
+    await _pump(
+      tester,
+      repository: repository,
+      themeMode: ThemeMode.dark,
+      textScale: 2,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ActiveListDetailScreen)),
+    );
+    await tester.tap(find.byKey(const Key('editGeneralNoteButton')));
+    await tester.pumpAndSettle();
+
+    await repository.renameList(
+      'list-1',
+      'Groceries',
+      expectedVersion: 3,
+    );
+    repository.generalNotesByList['list-1'] = ActiveListGeneralNote(
+      listVersion: 4,
+      text: 'Remote clean version',
+      version: 2,
+      updatedAt: DateTime.utc(2026, 7, 25, 10),
+    );
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('generalNoteConflict')), findsNothing);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('generalNoteField')))
+          .controller!
+          .text,
+      'Remote clean version',
+    );
+    await tester.tap(find.text('Cancel').last);
+    await tester.pumpAndSettle();
+
+    final archivedAt = DateTime.utc(2026, 7, 25, 11);
+    final archivedRepository = FakeActiveListRepository()
+      ..archivedLists = [
+        _summary(
+          status: ActiveListStatus.archived,
+          archivedAt: archivedAt,
+          version: 5,
+        ),
+      ]
+      ..generalNotesByList['list-1'] = ActiveListGeneralNote(
+        listVersion: 5,
+        text: 'Remote clean version',
+        version: 2,
+        updatedAt: DateTime.utc(2026, 7, 25, 10),
+      );
+    await _pump(
+      tester,
+      repository: archivedRepository,
+      themeMode: ThemeMode.dark,
+      textScale: 2,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remote clean version'), findsOneWidget);
+    expect(find.byKey(const Key('editGeneralNoteButton')), findsNothing);
+    expect(find.bySemanticsLabel('General Note, read-only'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'Portuguese General Note editor remains usable in dark theme and large text',
+      (tester) async {
+    tester.view.physicalSize = const Size(430, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [
+        _participant(),
+        _participant(
+          profileId: 'member-1',
+          username: 'susana_user',
+          displayName: 'Susana',
+          isOwner: false,
+          accessVersion: 2,
+        ),
+      ];
+    final semantics = tester.ensureSemantics();
+    await _pump(
+      tester,
+      repository: repository,
+      locale: const Locale('pt'),
+      themeMode: ThemeMode.dark,
+      textScale: 1.6,
+      child: const ActiveListDetailScreen(listId: 'list-1'),
+    );
+    await tester.pumpAndSettle();
+
+    final edit = find.byKey(const Key('editGeneralNoteButton'));
+    expect(find.text('Nota Geral'), findsOneWidget);
+    expect(tester.getSize(edit).height, greaterThanOrEqualTo(48));
+    expect(Theme.of(tester.element(edit)).brightness, Brightness.dark);
+    await tester.tap(edit);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Editar Nota Geral'), findsWidgets);
+    expect(
+      find.text(
+        'Use @ para mencionar explicitamente um participante elegível da lista.',
+      ),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const Key('generalNoteField')),
+      '@su',
+    );
+    await tester.pump();
+    expect(
+      find.bySemanticsLabel('Mencionar Susana, arroba susana_user'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets(
+      'access loss or list deletion closes the dirty Note editor and exits once',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary(isOwner: false)];
+    final router = _detailTestRouter();
+    addTearDown(router.dispose);
+    await _pumpRoutedDetail(
+      tester,
+      repository: repository,
+      router: router,
+      userId: 'member-1',
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ActiveListDetailScreen)),
+    );
+    await tester.tap(find.byKey(const Key('editGeneralNoteButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('generalNoteField')),
+      'Unsaved private draft',
+    );
+
+    var listTransitions = 0;
+    var previousPath = router.routeInformationProvider.value.uri.path;
+    void trackRoute() {
+      final nextPath = router.routeInformationProvider.value.uri.path;
+      if (previousPath != '/lists' && nextPath == '/lists') {
+        listTransitions += 1;
+      }
+      previousPath = nextPath;
+    }
+
+    router.routeInformationProvider.addListener(trackRoute);
+    addTearDown(
+      () => router.routeInformationProvider.removeListener(trackRoute),
+    );
+    repository.failure =
+        const ActiveListFailure(ActiveListFailureCode.unavailable);
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+
+    expect(router.routeInformationProvider.value.uri.path, '/lists');
+    expect(find.byKey(const Key('generalNoteField')), findsNothing);
+    expect(find.text('Lists landing'), findsOneWidget);
+    expect(
+      find.text(
+        'You no longer have access to this list. The latest Lists view was loaded.',
+      ),
+      findsOneWidget,
+    );
+    expect(listTransitions, 1);
+
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pump();
+    expect(listTransitions, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'remote archive closes the dirty Note editor and exits without duplicates',
+      (tester) async {
+    final repository = FakeActiveListRepository()..activeLists = [_summary()];
+    final router = _detailTestRouter();
+    addTearDown(router.dispose);
+    await _pumpRoutedDetail(
+      tester,
+      repository: repository,
+      router: router,
+      userId: 'user-1',
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ActiveListDetailScreen)),
+    );
+    await tester.tap(find.byKey(const Key('editGeneralNoteButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('generalNoteField')),
+      'Discard when archived',
+    );
+
+    var listTransitions = 0;
+    var previousPath = router.routeInformationProvider.value.uri.path;
+    void trackRoute() {
+      final nextPath = router.routeInformationProvider.value.uri.path;
+      if (previousPath != '/lists' && nextPath == '/lists') {
+        listTransitions += 1;
+      }
+      previousPath = nextPath;
+    }
+
+    router.routeInformationProvider.addListener(trackRoute);
+    addTearDown(
+      () => router.routeInformationProvider.removeListener(trackRoute),
+    );
+    await repository.setArchived(
+      'list-1',
+      archived: true,
+      expectedVersion: 3,
+    );
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+
+    expect(router.routeInformationProvider.value.uri.path, '/lists');
+    expect(find.byKey(const Key('generalNoteField')), findsNothing);
+    expect(find.text('Lists landing'), findsOneWidget);
+    expect(listTransitions, 1);
+    expect(
+      find.text(
+        'This list was archived elsewhere. It is available under Archived.',
+      ),
+      findsOneWidget,
+    );
+
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pump();
+    expect(listTransitions, 1);
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('remote assignment refresh closes and discards a stale editor',
@@ -660,7 +1440,12 @@ void main() {
     expect(listTransitions, 1);
     expect(find.byKey(const Key('itemNameField')), findsNothing);
     expect(find.text('Lists landing'), findsOneWidget);
-    expect(find.byType(SnackBar), findsNothing);
+    expect(
+      find.text(
+        'This list was archived elsewhere. It is available under Archived.',
+      ),
+      findsOneWidget,
+    );
 
     await container.read(reconciliationRegistryProvider).reconcile();
     await tester.pumpAndSettle();
@@ -1100,13 +1885,18 @@ void main() {
     expect(router.routeInformationProvider.value.uri.path, '/lists');
     expect(find.text('Lists landing'), findsOneWidget);
     expect(listTransitions, 1);
-    expect(find.byType(SnackBar), findsNothing);
+    expect(
+      find.text(
+        'This list was archived elsewhere. It is available under Archived.',
+      ),
+      findsOneWidget,
+    );
 
     await container.read(reconciliationRegistryProvider).reconcile();
     await tester.pumpAndSettle();
 
     expect(listTransitions, 1);
-    expect(find.byType(SnackBar), findsNothing);
+    expect(find.byType(SnackBar), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

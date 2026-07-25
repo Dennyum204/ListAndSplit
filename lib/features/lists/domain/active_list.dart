@@ -1,3 +1,4 @@
+import 'package:list_and_split/features/lists/domain/general_note.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 
 const activeListItemCapacity = 200;
@@ -233,10 +234,13 @@ class ActiveListDetail {
     required this.summary,
     required List<ActiveListItem> items,
     List<ActiveListParticipant> participants = const [],
+    ActiveListGeneralNote? generalNote,
   })  : items = List.unmodifiable(items),
-        participants = List.unmodifiable(participants);
+        participants = List.unmodifiable(participants),
+        generalNote = generalNote ?? const ActiveListGeneralNote.empty();
 
   final ActiveListSummary summary;
   final List<ActiveListItem> items;
   final List<ActiveListParticipant> participants;
+  final ActiveListGeneralNote generalNote;
 }

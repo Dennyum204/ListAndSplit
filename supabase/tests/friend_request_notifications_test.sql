@@ -38,6 +38,7 @@ select is(
     ,'access_version:bigint'
     ,'active_list_item_id:uuid'
     ,'assignment_item_version:bigint'
+    ,'general_note_version:bigint'
   ],
   'notification columns contain only the accepted reference and lifecycle data'
 );
@@ -53,7 +54,7 @@ select is(
   array[
     'relationship_low_id','relationship_high_id','relationship_version',
     'read_at','suppressed_at','active_list_id','access_participant_id','access_version',
-    'active_list_item_id','assignment_item_version'
+    'active_list_item_id','assignment_item_version','general_note_version'
   ]::information_schema.sql_identifier[],
   'type-specific references plus read and suppression timestamps are nullable'
 );
@@ -157,12 +158,14 @@ select is(
     'user_notifications_access_version_key',
     'user_notifications_active_list_idx',
     'user_notifications_item_assignment_version_key',
+    'user_notifications_note_mention_version_key',
+    'user_notifications_note_privacy_cleanup_idx',
     'user_notifications_pair_version_key',
     'user_notifications_pkey',
     'user_notifications_recipient_unread_expiry_idx',
     'user_notifications_recipient_visible_created_idx'
   ]::name[],
-  'only required friend/list/item identity, uniqueness, listing, and badge indexes exist'
+  'only required friend/list/item/note identity, privacy, listing, and badge indexes exist'
 );
 
 select ok(

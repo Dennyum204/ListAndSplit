@@ -134,12 +134,39 @@ Implemented slices:
   schema-version-6 endpoint remains unchanged, and shared lists remain
   metadata-only without item or assignment data.
 
-Remaining candidate slices:
+Current in-review General Note delivery:
 
-- General note editing, member `@mentions`, and mention notifications.
-- Authorization and concurrent-update tests for future notes and mentions.
+- One optional list-level General Note with active owner/member editing, archived
+  read-only display, normalized 2,000-code-point text, explicit stable-profile-ID
+  current-member `@mentions`, persistent mention notifications, private Realtime
+  reconciliation, and draft-preserving note/version/mention-eligibility conflict
+  recovery. Access loss/deletion and remote archive use the established safe
+  one-time exit/read-only behavior.
+- Notification v3 adds mention-aware listing/count while v1/v2 preserve their
+  strict type sets. Stored suppression remains permanent, and the unchanged
+  mark-read public boundary applies note-aware access/privacy predicates.
+- Account export schema version `8` adds General Note text and minimal current
+  resolved mentions only inside caller-owned full lists while preserving versions
+  `1` through `7` and P-039 shared-list metadata privacy.
+- General Note templates remain item-only. Save never copies note/mentions,
+  create-list starts with null note/version `1`/no links, and existing-list import
+  preserves its destination note.
+- The additive note/mention delivery adopts the global profile→pair-when-needed
+  →list→ordered-child→notification hierarchy and replaces the prior account-
+  deletion Split-child/list inversion with one parent-first coordinator.
 
-Required decisions still include mention parsing and offline conflict behavior.
+Rollout gates for the General Note/mention slice:
+
+- Local automated verification and review of the additive migration must pass
+  before publishing the draft delivery.
+- Hosted migration deployment requires separate explicit authorization and remains
+  pending.
+- Physical two-device QA in English/Portuguese, light/dark, large text, and
+  assistive technology remains pending.
+
+Mention parsing, representation, eligibility, notification, template, export, and
+online conflict behavior are resolved by P-049/P-050 and A-054 through A-057.
+Offline mutation/conflict behavior remains open.
 Role lifecycle, ownership transfer, invitation retention/revocation,
 shared-resource blocking, archive/delete, item quantity/order, item-assignment
 permissions/lifecycle/notifications/export, and online assignment concurrency are
@@ -159,6 +186,9 @@ Current private-template slice:
   creating a new active list from a template, and atomic selected-item import into
   an existing active list from either template detail or the already-open active
   list with a fixed destination.
+- Template copies remain item-only: General Note text and resolved mentions are
+  never saved, a newly created list starts with a null version-1 note/no links, and
+  import preserves the existing destination note and links.
 - A non-destructive 200-current-item shopping-list capacity enforced for ordinary
   creation and every copy/import path under existing list locks.
 - Search across template/item names, one category filter, Recently updated/A-Z/
@@ -261,6 +291,9 @@ future, explicit task with environment and cost approval.
   application table's creating migration.
 - Use integer minor units for every monetary path and test conservation of value.
 - Keep repositories as the client data source of truth.
+- Follow the accepted global profile→pair-when-needed→parent→ordered-child
+  →notification/Broadcast lock hierarchy and prove cross-aggregate races with real
+  sessions rather than timing-only tests.
 - Add unit, repository/view-model, widget, database-function, and RLS tests in
   proportion to the slice.
 - Update product, architecture, data-model, roadmap, and decision documentation when
@@ -273,8 +306,8 @@ future, explicit task with environment and cost approval.
 ## Sequencing decisions still open
 
 - Which minimum persistent-notification capability belongs in later
-  action-producing phases beyond the accepted friend-request, list, and item-
-  assignment foundations.
+  action-producing phases beyond the accepted friend-request, list, item-
+  assignment, and General Note mention foundations.
 - When the accepted compile-time configuration should expand into a full
   development/staging/production flavor model.
 - Whether offline read caching can ship safely before offline mutations.
