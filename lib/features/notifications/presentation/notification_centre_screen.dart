@@ -478,6 +478,11 @@ class _NotificationCard extends ConsumerWidget {
             notification.activeListItemName ?? '',
             notification.activeListTitle ?? '',
           ),
+        InAppNotificationType.listNoteMentioned =>
+          localizations.generalNoteMentionNotificationTitle(
+            notification.actorDisplayName,
+            notification.activeListTitle ?? '',
+          ),
       };
 
   String _informationalText(AppLocalizations localizations) =>
@@ -494,6 +499,8 @@ class _NotificationCard extends ConsumerWidget {
           localizations.listOwnershipTransferredInformation,
         InAppNotificationType.listItemAssigned =>
           localizations.listItemAssignedInformation,
+        InAppNotificationType.listNoteMentioned =>
+          localizations.generalNoteMentionNotificationInformation,
         InAppNotificationType.friendRequest ||
         InAppNotificationType.listInvitation =>
           localizations.notificationUnavailableMessage,

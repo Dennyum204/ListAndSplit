@@ -29,6 +29,7 @@ class AccountDataExportDocument {
         activeLists.any(
           (activeList) =>
               activeList.includesSplitField != (schemaVersion >= 5) ||
+              activeList.includesGeneralNoteField != (schemaVersion >= 8) ||
               activeList.items.any(
                 (item) => item.includesAssigneesField != (schemaVersion >= 7),
               ) ||
@@ -56,6 +57,7 @@ class AccountDataExportDocument {
         5 => _schemaFiveRootKeys,
         6 => _schemaSixRootKeys,
         7 => _schemaSevenRootKeys,
+        8 => _schemaEightRootKeys,
         _ => const <String>{},
       },
     );
@@ -108,7 +110,7 @@ class AccountDataExportDocument {
   }
 
   static const supportedProduct = 'list_and_split';
-  static const supportedSchemaVersion = 7;
+  static const supportedSchemaVersion = 8;
   static const supportedSchemaVersions = {
     1,
     2,
@@ -116,6 +118,7 @@ class AccountDataExportDocument {
     4,
     5,
     6,
+    7,
     supportedSchemaVersion,
   };
   static const _schemaOneRootKeys = {
@@ -144,6 +147,7 @@ class AccountDataExportDocument {
   static const _schemaFiveRootKeys = _schemaFourRootKeys;
   static const _schemaSixRootKeys = _schemaFiveRootKeys;
   static const _schemaSevenRootKeys = _schemaSixRootKeys;
+  static const _schemaEightRootKeys = _schemaSevenRootKeys;
 
   final String product;
   final int schemaVersion;
@@ -751,8 +755,11 @@ class AccountActiveListExport {
     required List<AccountActiveListItemExport> items,
     this.split,
     this.includesSplitField = false,
+    this.generalNote,
+    this.includesGeneralNoteField = false,
   }) : items = List.unmodifiable(items) {
-    if (!includesSplitField && split != null) {
+    if ((!includesSplitField && split != null) ||
+        (!includesGeneralNoteField && generalNote != null)) {
       throw const AccountDataExportFailure();
     }
   }
@@ -762,7 +769,15 @@ class AccountActiveListExport {
     int splitSchemaVersion = 0,
   }) {
     final includeSplit = splitSchemaVersion >= 5;
-    _expectExactKeys(json, includeSplit ? _schemaFiveKeys : _legacyKeys);
+    final includeGeneralNote = splitSchemaVersion >= 8;
+    _expectExactKeys(
+      json,
+      includeGeneralNote
+          ? _schemaEightKeys
+          : includeSplit
+              ? _schemaFiveKeys
+              : _legacyKeys,
+    );
     final title = _requiredString(json, 'title');
     if (title != title.trim() || title.length > 80) {
       throw const AccountDataExportFailure();
@@ -795,6 +810,12 @@ class AccountActiveListExport {
             )
           : null,
       includesSplitField: includeSplit,
+      generalNote: includeGeneralNote && json['general_note'] != null
+          ? AccountActiveListGeneralNoteExport.fromJson(
+              _requiredObject(json, 'general_note'),
+            )
+          : null,
+      includesGeneralNoteField: includeGeneralNote,
     );
   }
 
@@ -809,6 +830,7 @@ class AccountActiveListExport {
     'items',
   };
   static const _schemaFiveKeys = {..._legacyKeys, 'split'};
+  static const _schemaEightKeys = {..._schemaFiveKeys, 'general_note'};
 
   final String id;
   final String title;
@@ -820,6 +842,8 @@ class AccountActiveListExport {
   final List<AccountActiveListItemExport> items;
   final AccountListSplitExport? split;
   final bool includesSplitField;
+  final AccountActiveListGeneralNoteExport? generalNote;
+  final bool includesGeneralNoteField;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -831,6 +855,104 @@ class AccountActiveListExport {
         'archived_at': _encodeNullableDateTime(archivedAt),
         'items': items.map((item) => item.toJson()).toList(growable: false),
         if (includesSplitField) 'split': split?.toJson(),
+        if (includesGeneralNoteField) 'general_note': generalNote?.toJson(),
+      };
+}
+
+class AccountActiveListGeneralNoteExport {
+  AccountActiveListGeneralNoteExport({
+    required this.text,
+    required this.version,
+    required this.updatedAt,
+    required List<AccountActiveListGeneralNoteMentionExport> mentions,
+  }) : mentions = List.unmodifiable(mentions) {
+    final profileIds = mentions.map((mention) => mention.profileId).toSet();
+    final usernames = mentions.map((mention) => mention.username).toSet();
+    if (text.isEmpty ||
+        text.trim() != text ||
+        text.contains('\r') ||
+        text.runes.length > 2000 ||
+        profileIds.length != mentions.length ||
+        usernames.length != mentions.length ||
+        mentions.any(
+          (mention) =>
+              !_exportUsernamePattern.hasMatch(mention.username) ||
+              mention.displayName.trim() != mention.displayName ||
+              mention.displayName.runes.isEmpty ||
+              mention.displayName.runes.length > 50 ||
+              !_containsExportMentionToken(text, mention.username),
+        ) ||
+        !_areExportMentionsOrdered(mentions) ||
+        mentions.length > 20) {
+      throw const AccountDataExportFailure();
+    }
+  }
+
+  factory AccountActiveListGeneralNoteExport.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    _expectExactKeys(json, _keys);
+    return AccountActiveListGeneralNoteExport(
+      text: _requiredString(json, 'text'),
+      version: _requiredPositiveInt(json, 'version'),
+      updatedAt: _requiredUtcDateTime(json, 'updated_at'),
+      mentions: _requiredObjects(json, 'mentions')
+          .map(AccountActiveListGeneralNoteMentionExport.fromJson)
+          .toList(growable: false),
+    );
+  }
+
+  static const _keys = {'text', 'version', 'updated_at', 'mentions'};
+
+  final String text;
+  final int version;
+  final DateTime updatedAt;
+  final List<AccountActiveListGeneralNoteMentionExport> mentions;
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        'version': version,
+        'updated_at': _encodeDateTime(updatedAt),
+        'mentions':
+            mentions.map((mention) => mention.toJson()).toList(growable: false),
+      };
+}
+
+class AccountActiveListGeneralNoteMentionExport {
+  const AccountActiveListGeneralNoteMentionExport({
+    required this.profileId,
+    required this.username,
+    required this.displayName,
+  });
+
+  factory AccountActiveListGeneralNoteMentionExport.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    _expectExactKeys(json, _keys);
+    final username = _requiredString(json, 'username');
+    final displayName = _requiredString(json, 'display_name');
+    if (!_exportUsernamePattern.hasMatch(username) ||
+        displayName.trim() != displayName ||
+        displayName.runes.length > 50) {
+      throw const AccountDataExportFailure();
+    }
+    return AccountActiveListGeneralNoteMentionExport(
+      profileId: _requiredUuid(json, 'profile_id'),
+      username: username,
+      displayName: displayName,
+    );
+  }
+
+  static const _keys = {'profile_id', 'username', 'display_name'};
+
+  final String profileId;
+  final String username;
+  final String displayName;
+
+  Map<String, dynamic> toJson() => {
+        'profile_id': profileId,
+        'username': username,
+        'display_name': displayName,
       };
 }
 
@@ -1447,6 +1569,55 @@ class AccountActiveListItemAssigneeExport {
 final _uuidPattern = RegExp(
   r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
 );
+final _exportUsernamePattern = RegExp(r'^[a-z][a-z0-9_]{2,23}$');
+
+bool _areExportMentionsOrdered(
+  List<AccountActiveListGeneralNoteMentionExport> mentions,
+) {
+  for (var index = 1; index < mentions.length; index += 1) {
+    final previous = mentions[index - 1];
+    final current = mentions[index];
+    final usernameOrder = previous.username.compareTo(current.username);
+    if (usernameOrder > 0 ||
+        (usernameOrder == 0 &&
+            previous.profileId.compareTo(current.profileId) >= 0)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _containsExportMentionToken(String text, String username) {
+  final token = '@$username';
+  for (var start = 0; start <= text.length - token.length; start += 1) {
+    var matches = true;
+    for (var offset = 0; offset < token.length; offset += 1) {
+      final actual = text.codeUnitAt(start + offset);
+      final expected = token.codeUnitAt(offset);
+      final folded = actual >= 0x41 && actual <= 0x5a ? actual + 0x20 : actual;
+      if (folded != expected) {
+        matches = false;
+        break;
+      }
+    }
+    if (!matches) continue;
+    final end = start + token.length;
+    final beforeValid =
+        start == 0 || _isExportMentionBoundary(text.codeUnitAt(start - 1));
+    final afterValid =
+        end == text.length || _isExportMentionBoundary(text.codeUnitAt(end));
+    if (beforeValid && afterValid) return true;
+  }
+  return false;
+}
+
+bool _isExportMentionBoundary(int codeUnit) {
+  return codeUnit != 0x40 &&
+      !((codeUnit >= 0x41 && codeUnit <= 0x5a) ||
+          (codeUnit >= 0x61 && codeUnit <= 0x7a) ||
+          (codeUnit >= 0x30 && codeUnit <= 0x39) ||
+          codeUnit == 0x5f);
+}
 
 void _expectExactKeys(Map<String, dynamic> json, Set<String> expected) {
   if (json.length != expected.length ||

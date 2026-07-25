@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
+import 'package:list_and_split/features/lists/domain/general_note.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_controller.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
@@ -42,6 +44,9 @@ class ActiveListDetailScreen extends ConsumerWidget {
         if (next.message == ActiveListDetailMessage.remotelyArchived &&
             previous?.message != ActiveListDetailMessage.remotelyArchived) {
           context.go(AppRoutes.lists);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(localizations.listRemotelyArchivedMessage)),
+          );
         } else if (next.message == ActiveListDetailMessage.unavailable &&
             previous?.message != ActiveListDetailMessage.unavailable) {
           context.go(AppRoutes.lists);
@@ -388,91 +393,99 @@ class _DetailBody extends ConsumerWidget {
     final localizations = AppLocalizations.of(context);
     final archived = detail.summary.status == ActiveListStatus.archived;
     final completed = detail.items.where((item) => item.isCompleted).length;
+    final header = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (archived)
+          Semantics(
+            liveRegion: true,
+            child: Card(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.archive_outlined),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(localizations.listArchivedBanner)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        FormMessageBanner(
+          message: _detailMessageText(localizations, state.message),
+        ),
+        if (state.message == ActiveListDetailMessage.recoveryFailed ||
+            state.message == ActiveListDetailMessage.refreshFailed)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: FilledButton.tonal(
+                key: const Key('retryListDetailRecoveryButton'),
+                onPressed: state.isMutating
+                    ? null
+                    : () => ref
+                        .read(
+                          activeListDetailControllerProvider(listId).notifier,
+                        )
+                        .load(),
+                child: Text(localizations.tryAgainButton),
+              ),
+            ),
+          ),
+        _GeneralNoteCard(
+          listId: listId,
+          detail: detail,
+          readOnly: archived,
+          isBusy: state.isMutating,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          localizations.listProgress(completed, detail.items.length),
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 6),
+        LinearProgressIndicator(
+          value: detail.items.isEmpty ? 0 : completed / detail.items.length,
+          semanticsLabel:
+              localizations.listProgress(completed, detail.items.length),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (archived)
-            Semantics(
-              liveRegion: true,
-              child: Card(
-                color: Theme.of(context).colorScheme.secondaryContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.archive_outlined),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(localizations.listArchivedBanner)),
-                    ],
-                  ),
-                ),
+      child: detail.items.isEmpty
+          ? ListView(
+              padding: const EdgeInsets.only(bottom: 96),
+              children: [header, _ItemsEmpty(archived: archived)],
+            )
+          : ReorderableListView.builder(
+              key: const Key('activeListItems'),
+              header: header,
+              buildDefaultDragHandles: false,
+              padding: const EdgeInsets.only(bottom: 96),
+              itemCount: detail.items.length,
+              // Keep the callback supported by the Flutter 3.19 floor.
+              // ignore: deprecated_member_use
+              onReorder: archived || state.isMutating
+                  ? (_, __) {}
+                  : (oldIndex, newIndex) => ref
+                      .read(
+                        activeListDetailControllerProvider(listId).notifier,
+                      )
+                      .reorder(oldIndex, newIndex),
+              itemBuilder: (context, index) => _ItemCard(
+                key: ValueKey(detail.items[index].id),
+                listId: listId,
+                item: detail.items[index],
+                index: index,
+                readOnly: archived,
+                isBusy: state.isMutating,
               ),
             ),
-          FormMessageBanner(
-            message: _detailMessageText(localizations, state.message),
-          ),
-          if (state.message == ActiveListDetailMessage.recoveryFailed ||
-              state.message == ActiveListDetailMessage.refreshFailed)
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: FilledButton.tonal(
-                  key: const Key('retryListDetailRecoveryButton'),
-                  onPressed: state.isMutating
-                      ? null
-                      : () => ref
-                          .read(
-                            activeListDetailControllerProvider(listId).notifier,
-                          )
-                          .load(),
-                  child: Text(localizations.tryAgainButton),
-                ),
-              ),
-            ),
-          Text(
-            localizations.listProgress(completed, detail.items.length),
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 6),
-          LinearProgressIndicator(
-            value: detail.items.isEmpty ? 0 : completed / detail.items.length,
-            semanticsLabel:
-                localizations.listProgress(completed, detail.items.length),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: detail.items.isEmpty
-                ? _ItemsEmpty(archived: archived)
-                : ReorderableListView.builder(
-                    key: const Key('activeListItems'),
-                    buildDefaultDragHandles: false,
-                    padding: const EdgeInsets.only(bottom: 96),
-                    itemCount: detail.items.length,
-                    // Keep the callback supported by the Flutter 3.19 floor.
-                    // ignore: deprecated_member_use
-                    onReorder: archived || state.isMutating
-                        ? (_, __) {}
-                        : (oldIndex, newIndex) => ref
-                            .read(
-                              activeListDetailControllerProvider(listId)
-                                  .notifier,
-                            )
-                            .reorder(oldIndex, newIndex),
-                    itemBuilder: (context, index) => _ItemCard(
-                      key: ValueKey(detail.items[index].id),
-                      listId: listId,
-                      item: detail.items[index],
-                      index: index,
-                      readOnly: archived,
-                      isBusy: state.isMutating,
-                    ),
-                  ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -488,6 +501,8 @@ class _DetailBody extends ConsumerWidget {
       ActiveListDetailMessage.itemCreated => localizations.itemCreatedMessage,
       ActiveListDetailMessage.itemUpdated => localizations.itemUpdatedMessage,
       ActiveListDetailMessage.itemDeleted => localizations.itemDeletedMessage,
+      ActiveListDetailMessage.noteSaved =>
+        localizations.generalNoteSavedMessage,
       ActiveListDetailMessage.orderUpdated =>
         localizations.itemOrderUpdatedMessage,
       ActiveListDetailMessage.left => localizations.listLeftMessage,
@@ -511,6 +526,738 @@ class _DetailBody extends ConsumerWidget {
         localizations.operationFailedMessage,
       null => null,
     };
+  }
+}
+
+class _GeneralNoteCard extends StatelessWidget {
+  const _GeneralNoteCard({
+    required this.listId,
+    required this.detail,
+    required this.readOnly,
+    required this.isBusy,
+  });
+
+  final String listId;
+  final ActiveListDetail detail;
+  final bool readOnly;
+  final bool isBusy;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final note = detail.generalNote;
+    final text = note.text;
+    return Card(
+      key: const Key('generalNoteCard'),
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.sticky_note_2_outlined),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    localizations.generalNoteTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                if (readOnly)
+                  Semantics(
+                    container: true,
+                    label: localizations.generalNoteReadOnlyLabel,
+                    child: const Icon(Icons.lock_outline_rounded, size: 20),
+                  ),
+              ],
+            ),
+            if (!readOnly)
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: TextButton.icon(
+                  key: const Key('editGeneralNoteButton'),
+                  onPressed: isBusy
+                      ? null
+                      : () => showDialog<void>(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (_) => _GeneralNoteDialog(
+                              listId: listId,
+                              initialNote: note,
+                            ),
+                          ),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: Text(localizations.generalNoteEditButton),
+                ),
+              ),
+            const SizedBox(height: 8),
+            if (text == null)
+              Text(
+                readOnly
+                    ? localizations.generalNoteEmptyArchivedMessage
+                    : localizations.generalNoteEmptyMessage,
+                key: const Key('generalNoteEmpty'),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 180),
+                child: SingleChildScrollView(
+                  key: const Key('generalNoteScroll'),
+                  child: _ResolvedGeneralNoteText(note: note),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResolvedGeneralNoteText extends StatelessWidget {
+  const _ResolvedGeneralNoteText({required this.note});
+
+  final ActiveListGeneralNote note;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = note.text!;
+    final localizations = AppLocalizations.of(context);
+    final occurrences = generalNoteMentionOccurrences(text, note.mentions);
+    final semantics = occurrences
+        .map(
+          (occurrence) => localizations.generalNoteResolvedMentionSemantic(
+            occurrence.mention.displayName,
+            occurrence.mention.username,
+          ),
+        )
+        .toSet()
+        .join('. ');
+    final regularStyle = Theme.of(context).textTheme.bodyLarge;
+    final mentionStyle = regularStyle?.copyWith(
+      color: Theme.of(context).colorScheme.primary,
+      fontWeight: FontWeight.w700,
+      backgroundColor:
+          Theme.of(context).colorScheme.primaryContainer.withOpacity(0.45),
+    );
+    final spans = <InlineSpan>[];
+    var offset = 0;
+    for (final occurrence in occurrences) {
+      if (occurrence.start < offset) continue;
+      if (occurrence.start > offset) {
+        spans.add(TextSpan(text: text.substring(offset, occurrence.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(occurrence.start, occurrence.end),
+          style: mentionStyle,
+        ),
+      );
+      offset = occurrence.end;
+    }
+    if (offset < text.length) spans.add(TextSpan(text: text.substring(offset)));
+    return Semantics(
+      key: const Key('generalNoteText'),
+      label: semantics.isEmpty ? text : '$text. $semantics',
+      readOnly: true,
+      child: ExcludeSemantics(
+        child: SelectableText.rich(
+          TextSpan(style: regularStyle, children: spans),
+        ),
+      ),
+    );
+  }
+}
+
+class _GeneralNoteDialog extends ConsumerStatefulWidget {
+  const _GeneralNoteDialog({
+    required this.listId,
+    required this.initialNote,
+  });
+
+  final String listId;
+  final ActiveListGeneralNote initialNote;
+
+  @override
+  ConsumerState<_GeneralNoteDialog> createState() => _GeneralNoteDialogState();
+}
+
+class _GeneralNoteDialogState extends ConsumerState<_GeneralNoteDialog> {
+  late final TextEditingController _text;
+  late final FocusNode _focusNode;
+  late ActiveListGeneralNote _baseline;
+  late ActiveListGeneralNote _latest;
+  late Set<String> _resolvedProfileIds;
+  Set<String> _eligibleProfileIds = {};
+  bool _eligibilityInitialized = false;
+  GeneralNoteMentionFragment? _fragment;
+  bool _dirty = false;
+  bool _conflict = false;
+  bool _submitted = false;
+  bool _showValidation = false;
+  bool _closing = false;
+  ModalRoute<void>? _dialogRoute;
+
+  @override
+  void initState() {
+    super.initState();
+    _baseline = widget.initialNote;
+    _latest = widget.initialNote;
+    _resolvedProfileIds = widget.initialNote.mentionedProfileIds;
+    _text = TextEditingController(text: widget.initialNote.text ?? '');
+    _focusNode = FocusNode();
+    _text.addListener(_handleTextOrSelection);
+  }
+
+  @override
+  void dispose() {
+    _text.removeListener(_handleTextOrSelection);
+    _text.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _dialogRoute ??= ModalRoute.of(context);
+    final localizations = AppLocalizations.of(context);
+    final state = ref.watch(activeListDetailControllerProvider(widget.listId));
+    final detail = state.detail.valueOrNull;
+    final participants =
+        detail?.participants ?? const <ActiveListParticipant>[];
+    if (!_eligibilityInitialized) {
+      _eligibleProfileIds =
+          participants.map((participant) => participant.profileId).toSet();
+      _eligibilityInitialized = true;
+    }
+    ref.listen<ActiveListDetailState>(
+      activeListDetailControllerProvider(widget.listId),
+      (_, next) => _handleAuthoritativeChange(next),
+    );
+    final count = generalNoteCodePointLength(_text.text);
+    final overLimit = count > generalNoteMaximumCodePoints;
+    final suggestions = _suggestions(participants);
+    final selectedMentions = _selectedMentions(participants);
+    final recoveryInProgress =
+        state.message == ActiveListDetailMessage.recoveryInProgress;
+    final dialogStatus = _dialogStatus(localizations, state.message);
+    final formEnabled = !state.isMutating &&
+        !_submitted &&
+        !_closing &&
+        !_conflict &&
+        !recoveryInProgress;
+    return AlertDialog(
+      title: Text(localizations.generalNoteEditorTitle),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_conflict)
+                Semantics(
+                  key: const Key('generalNoteConflict'),
+                  liveRegion: true,
+                  child: Card(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(localizations.generalNoteDraftConflictMessage),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            alignment: WrapAlignment.end,
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              OutlinedButton(
+                                key: const Key('keepGeneralNoteDraftButton'),
+                                onPressed: _keepDraftAgainstLatest,
+                                child: Text(
+                                  localizations.generalNoteKeepDraftButton,
+                                ),
+                              ),
+                              FilledButton.tonal(
+                                key: const Key('useLatestGeneralNoteButton'),
+                                onPressed: _useLatest,
+                                child: Text(
+                                  localizations.generalNoteUseLatestButton,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              if (_conflict) const SizedBox(height: 12),
+              if (dialogStatus != null) ...[
+                Semantics(
+                  key: const Key('generalNoteDialogStatus'),
+                  container: true,
+                  liveRegion: true,
+                  child: Card(
+                    color: _isGeneralNoteFailureMessage(state.message)
+                        ? Theme.of(context).colorScheme.errorContainer
+                        : Theme.of(context).colorScheme.secondaryContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(dialogStatus),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              TextField(
+                key: const Key('generalNoteField'),
+                controller: _text,
+                focusNode: _focusNode,
+                autofocus: true,
+                enabled: formEnabled,
+                minLines: 6,
+                maxLines: 12,
+                textCapitalization: TextCapitalization.sentences,
+                keyboardType: TextInputType.multiline,
+                inputFormatters: const [_GeneralNoteCodePointFormatter()],
+                decoration: InputDecoration(
+                  labelText: localizations.generalNoteFieldLabel,
+                  helperText: localizations.generalNoteFieldHelper,
+                  errorText: (_showValidation || overLimit) && overLimit
+                      ? localizations.generalNoteCharacterLimitError
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Semantics(
+                key: const Key('generalNoteRemainingCount'),
+                liveRegion: true,
+                label: localizations.generalNoteRemainingCount(
+                  generalNoteMaximumCodePoints - count,
+                  generalNoteMaximumCodePoints,
+                ),
+                child: ExcludeSemantics(
+                  child: Text(
+                    localizations.generalNoteRemainingCount(
+                      generalNoteMaximumCodePoints - count,
+                      generalNoteMaximumCodePoints,
+                    ),
+                    textAlign: TextAlign.end,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
+              ),
+              if (_fragment != null) ...[
+                const SizedBox(height: 8),
+                Semantics(
+                  container: true,
+                  label: localizations.generalNoteMentionSuggestionsLabel,
+                  child: suggestions.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(localizations.generalNoteNoSuggestions),
+                        )
+                      : Column(
+                          key: const Key('generalNoteMentionSuggestions'),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (final participant in suggestions)
+                              Semantics(
+                                container: true,
+                                button: true,
+                                enabled: formEnabled,
+                                label: localizations
+                                    .generalNoteMentionSuggestionSemantic(
+                                  participant.displayName,
+                                  participant.username,
+                                ),
+                                onTap: formEnabled
+                                    ? () => _selectMention(participant)
+                                    : null,
+                                child: ExcludeSemantics(
+                                  child: ListTile(
+                                    key: Key(
+                                      'generalNoteMention-${participant.profileId}',
+                                    ),
+                                    leading: CircleAvatar(
+                                      child: Text(
+                                          _participantInitial(participant)),
+                                    ),
+                                    title: Text(
+                                      _identityName(
+                                        displayName: participant.displayName,
+                                        username: participant.username,
+                                      ),
+                                    ),
+                                    subtitle: Text('@${participant.username}'),
+                                    onTap: formEnabled
+                                        ? () => _selectMention(participant)
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                ),
+              ],
+              if (selectedMentions.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Semantics(
+                  container: true,
+                  label: localizations.generalNoteSelectedMentionsLabel,
+                  child: Wrap(
+                    key: const Key('generalNoteSelectedMentions'),
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final participant in selectedMentions)
+                        Semantics(
+                          key: Key(
+                            'generalNoteSelectedSemantic-${participant.profileId}',
+                          ),
+                          selected: true,
+                          button: formEnabled,
+                          enabled: formEnabled,
+                          label:
+                              localizations.generalNoteSelectedMentionSemantic(
+                            participant.displayName,
+                            participant.username,
+                          ),
+                          onTap: formEnabled
+                              ? () => _removeResolvedMention(
+                                    participant.profileId,
+                                  )
+                              : null,
+                          child: ExcludeSemantics(
+                            child: InputChip(
+                              key: Key(
+                                'generalNoteSelected-${participant.profileId}',
+                              ),
+                              avatar: CircleAvatar(
+                                child: Text(_participantInitial(participant)),
+                              ),
+                              label: Text(
+                                '${_identityName(
+                                  displayName: participant.displayName,
+                                  username: participant.username,
+                                )} (@${participant.username})',
+                              ),
+                              onSelected: formEnabled
+                                  ? (_) => _removeResolvedMention(
+                                        participant.profileId,
+                                      )
+                                  : null,
+                              onDeleted: formEnabled
+                                  ? () => _removeResolvedMention(
+                                        participant.profileId,
+                                      )
+                                  : null,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: const Key('cancelGeneralNoteButton'),
+          onPressed:
+              state.isMutating || _submitted || _closing ? null : _closeNow,
+          child: Text(localizations.cancelButton),
+        ),
+        FilledButton(
+          key: const Key('saveGeneralNoteButton'),
+          onPressed: formEnabled && !overLimit ? _submit : null,
+          child: state.isMutating || _submitted
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(localizations.generalNoteSaveButton),
+        ),
+      ],
+    );
+  }
+
+  List<ActiveListParticipant> _suggestions(
+    List<ActiveListParticipant> participants,
+  ) {
+    final fragment = _fragment;
+    if (fragment == null) return const [];
+    final candidates = participants
+        .where(
+          (participant) => participant.username.startsWith(fragment.query),
+        )
+        .toList(growable: false)
+      ..sort((left, right) {
+        final usernameOrder = left.username.compareTo(right.username);
+        return usernameOrder != 0
+            ? usernameOrder
+            : left.profileId.compareTo(right.profileId);
+      });
+    return candidates;
+  }
+
+  List<ActiveListParticipant> _selectedMentions(
+    List<ActiveListParticipant> participants,
+  ) {
+    final selected = participants
+        .where(
+          (participant) => _resolvedProfileIds.contains(participant.profileId),
+        )
+        .toList(growable: false)
+      ..sort((left, right) {
+        final usernameOrder = left.username.compareTo(right.username);
+        return usernameOrder != 0
+            ? usernameOrder
+            : left.profileId.compareTo(right.profileId);
+      });
+    return selected;
+  }
+
+  void _handleTextOrSelection() {
+    if (!mounted || _closing) return;
+    final selection = _text.selection;
+    final nextFragment = selection.isValid && selection.isCollapsed
+        ? generalNoteMentionFragmentAt(_text.text, selection.extentOffset)
+        : null;
+    _resolvedProfileIds.removeWhere((profileId) {
+      final participant = _participantFor(profileId);
+      return participant == null ||
+          !containsGeneralNoteMentionToken(
+            _text.text,
+            participant.username,
+          );
+    });
+    final baselineIds = _baseline.mentionedProfileIds;
+    final nextDirty =
+        normalizedGeneralNoteOrNull(_text.text) != _baseline.text ||
+            !setEquals(_resolvedProfileIds, baselineIds);
+    if (_fragment?.start != nextFragment?.start ||
+        _fragment?.end != nextFragment?.end ||
+        _fragment?.query != nextFragment?.query ||
+        _dirty != nextDirty) {
+      setState(() {
+        _fragment = nextFragment;
+        _dirty = nextDirty;
+      });
+    }
+  }
+
+  ActiveListParticipant? _participantFor(String profileId) {
+    final detail = ref
+        .read(activeListDetailControllerProvider(widget.listId))
+        .detail
+        .valueOrNull;
+    if (detail == null) return null;
+    for (final participant in detail.participants) {
+      if (participant.profileId == profileId) return participant;
+    }
+    return null;
+  }
+
+  void _selectMention(ActiveListParticipant participant) {
+    final selection = _text.selection;
+    final insertion = insertGeneralNoteMention(
+      text: _text.text,
+      selectionStart: selection.start,
+      selectionEnd: selection.end,
+      username: participant.username,
+    );
+    if (insertion == null) return;
+    _resolvedProfileIds.add(participant.profileId);
+    _text.value = TextEditingValue(
+      text: insertion.text,
+      selection: TextSelection.collapsed(offset: insertion.caretOffset),
+    );
+    _focusNode.requestFocus();
+    _handleTextOrSelection();
+  }
+
+  void _removeResolvedMention(String profileId) {
+    if (_closing || _submitted || _conflict) return;
+    if (!_resolvedProfileIds.remove(profileId)) return;
+    setState(() {});
+    _handleTextOrSelection();
+    _focusNode.requestFocus();
+  }
+
+  Future<void> _submit() async {
+    if (_submitted || _closing || _conflict) return;
+    if (generalNoteCodePointLength(_text.text) > generalNoteMaximumCodePoints) {
+      setState(() => _showValidation = true);
+      return;
+    }
+    _submitted = true;
+    setState(() {});
+    final outcome = await ref
+        .read(activeListDetailControllerProvider(widget.listId).notifier)
+        .updateGeneralNote(
+          _text.text,
+          mentionedProfileIds: _resolvedProfileIds,
+          expectedGeneralNoteVersion: _baseline.version,
+        );
+    if (!mounted) return;
+    if (outcome == ActiveListMutationOutcome.succeeded) {
+      _closeNow();
+      return;
+    }
+    if (outcome == ActiveListMutationOutcome.unavailable) {
+      _scheduleClose();
+      return;
+    }
+    setState(() => _submitted = false);
+  }
+
+  void _handleAuthoritativeChange(ActiveListDetailState next) {
+    if (_closing) return;
+    if (next.message == ActiveListDetailMessage.unavailable ||
+        next.message == ActiveListDetailMessage.remotelyArchived) {
+      _scheduleClose();
+      return;
+    }
+    final detail = next.detail.valueOrNull;
+    if (detail == null) return;
+    final latest = detail.generalNote;
+    final latestEligible =
+        detail.participants.map((participant) => participant.profileId).toSet();
+    final eligibilityChanged = !setEquals(
+      latestEligible,
+      _eligibleProfileIds,
+    );
+    final authoritativeNoteChanged = latest.version != _baseline.version;
+    _latest = latest;
+    _eligibleProfileIds = latestEligible;
+    if (!eligibilityChanged && !authoritativeNoteChanged) {
+      _baseline = latest;
+      return;
+    }
+    if (!_dirty) {
+      _applyLatest();
+      return;
+    }
+    if (!_conflict) {
+      setState(() => _conflict = true);
+    }
+  }
+
+  void _keepDraftAgainstLatest() {
+    _baseline = _latest;
+    _resolvedProfileIds.retainAll(_eligibleProfileIds);
+    _resolvedProfileIds.removeWhere((profileId) {
+      final participant = _participantFor(profileId);
+      return participant == null ||
+          !containsGeneralNoteMentionToken(
+            _text.text,
+            participant.username,
+          );
+    });
+    setState(() {
+      _conflict = false;
+      _fragment = null;
+      _dirty = normalizedGeneralNoteOrNull(_text.text) != _baseline.text ||
+          !setEquals(
+            _resolvedProfileIds,
+            _baseline.mentionedProfileIds,
+          );
+    });
+    _focusNode.requestFocus();
+  }
+
+  void _useLatest() {
+    _applyLatest();
+    _focusNode.requestFocus();
+  }
+
+  void _applyLatest() {
+    _baseline = _latest;
+    _resolvedProfileIds = _latest.mentionedProfileIds;
+    _text.value = TextEditingValue(
+      text: _latest.text ?? '',
+      selection: TextSelection.collapsed(
+        offset: (_latest.text ?? '').length,
+      ),
+    );
+    setState(() {
+      _conflict = false;
+      _dirty = false;
+      _fragment = null;
+    });
+  }
+
+  void _scheduleClose() {
+    if (_closing) return;
+    _closing = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _popOwnedDialogRoute());
+  }
+
+  void _closeNow() {
+    if (_closing) return;
+    _closing = true;
+    _popOwnedDialogRoute();
+  }
+
+  void _popOwnedDialogRoute() {
+    final route = _dialogRoute;
+    if (!mounted || route == null || !route.isActive) return;
+    final navigator = Navigator.of(context);
+    navigator.popUntil((candidate) => identical(candidate, route));
+    if (route.isCurrent) navigator.pop();
+  }
+
+  String? _dialogStatus(
+    AppLocalizations localizations,
+    ActiveListDetailMessage? message,
+  ) {
+    return switch (message) {
+      ActiveListDetailMessage.recoveryInProgress =>
+        localizations.listRecoveryInProgressMessage,
+      ActiveListDetailMessage.recoveryFailed =>
+        localizations.listRecoveryFailedMessage,
+      ActiveListDetailMessage.refreshFailed =>
+        localizations.listRefreshFailedMessage,
+      ActiveListDetailMessage.operationFailed =>
+        localizations.operationFailedMessage,
+      ActiveListDetailMessage.invalidInput =>
+        localizations.listInvalidInputMessage,
+      _ => null,
+    };
+  }
+}
+
+bool _isGeneralNoteFailureMessage(ActiveListDetailMessage? message) {
+  return message == ActiveListDetailMessage.recoveryFailed ||
+      message == ActiveListDetailMessage.refreshFailed ||
+      message == ActiveListDetailMessage.operationFailed ||
+      message == ActiveListDetailMessage.invalidInput;
+}
+
+class _GeneralNoteCodePointFormatter extends TextInputFormatter {
+  const _GeneralNoteCodePointFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return generalNoteCodePointLength(newValue.text) <=
+            generalNoteMaximumCodePoints
+        ? newValue
+        : oldValue;
   }
 }
 
@@ -1068,7 +1815,8 @@ class _ItemsEmpty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
-    return Center(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

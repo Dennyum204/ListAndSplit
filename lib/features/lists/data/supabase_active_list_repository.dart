@@ -1,5 +1,6 @@
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
+import 'package:list_and_split/features/lists/domain/general_note.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -52,6 +53,22 @@ class SupabaseActiveListRepository implements ActiveListRepository {
         _singleRow(
           await _rpc(
             'get_active_list',
+            params: {'target_list_id': listId},
+          ),
+        ),
+      );
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
+  Future<ActiveListGeneralNote> getGeneralNote(String listId) async {
+    try {
+      return _generalNote(
+        _singleRow(
+          await _rpc(
+            'get_active_list_general_note',
             params: {'target_list_id': listId},
           ),
         ),
@@ -207,6 +224,39 @@ class SupabaseActiveListRepository implements ActiveListRepository {
           'target_list_id': listId,
           'expected_list_version': expectedVersion,
         },
+      );
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
+  Future<ActiveListGeneralNote> updateGeneralNote(
+    String listId,
+    String text, {
+    required List<String> mentionedProfileIds,
+    required int expectedGeneralNoteVersion,
+  }) async {
+    final normalized = normalizeGeneralNoteText(text);
+    final canonicalMentionIds = mentionedProfileIds.toSet().toList()..sort();
+    if (normalized.runes.length > generalNoteMaximumCodePoints ||
+        canonicalMentionIds.length > 20 ||
+        expectedGeneralNoteVersion < 1) {
+      throw const ActiveListFailure(ActiveListFailureCode.invalid);
+    }
+    try {
+      return _generalNote(
+        _singleRow(
+          await _rpc(
+            'update_active_list_general_note',
+            params: {
+              'target_list_id': listId,
+              'new_general_note_text': normalized,
+              'mentioned_profile_ids': canonicalMentionIds,
+              'expected_general_note_version': expectedGeneralNoteVersion,
+            },
+          ),
+        ),
       );
     } catch (error) {
       throw _failure(error);
@@ -573,6 +623,59 @@ class SupabaseActiveListRepository implements ActiveListRepository {
       isOwner: isOwner,
       accessVersion: accessVersion,
     );
+  }
+
+  static ActiveListGeneralNote _generalNote(Map<String, dynamic> json) {
+    if (json.length != 5 ||
+        !json.keys.toSet().containsAll(const {
+          'list_version',
+          'general_note_text',
+          'general_note_version',
+          'general_note_updated_at',
+          'mentions',
+        })) {
+      throw const FormatException('invalid General Note projection');
+    }
+    final rawText = json['general_note_text'];
+    if (rawText != null && rawText is! String) {
+      throw const FormatException('invalid General Note text');
+    }
+    final updatedAt = _nullableDateTime(json['general_note_updated_at']);
+    if (rawText != null && updatedAt == null) {
+      throw const FormatException('invalid General Note timestamp');
+    }
+    return ActiveListGeneralNote(
+      listVersion: _positiveInt(json['list_version']),
+      text: rawText as String?,
+      version: _positiveInt(json['general_note_version']),
+      updatedAt: updatedAt,
+      mentions: _noteMentions(json['mentions']),
+    );
+  }
+
+  static List<ActiveListNoteMention> _noteMentions(Object? value) {
+    if (value is! List || value.length > 20) {
+      throw const FormatException('invalid General Note mentions');
+    }
+    return value.map((entry) {
+      if (entry is! Map) {
+        throw const FormatException('invalid General Note mention');
+      }
+      final json = Map<String, dynamic>.from(entry);
+      if (json.length != 3 ||
+          !json.keys.toSet().containsAll(const {
+            'profile_id',
+            'username',
+            'display_name',
+          })) {
+        throw const FormatException('invalid General Note mention');
+      }
+      return ActiveListNoteMention(
+        profileId: _uuid(json['profile_id']),
+        username: _string(json['username']),
+        displayName: _string(json['display_name']),
+      );
+    }).toList(growable: false);
   }
 
   static ActiveListAccessProfile _accessProfile(Map<String, dynamic> json) =>

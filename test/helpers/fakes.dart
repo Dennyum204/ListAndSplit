@@ -12,6 +12,7 @@ import 'package:list_and_split/features/community/domain/friendship_repository.d
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
+import 'package:list_and_split/features/lists/domain/general_note.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/notifications/domain/in_app_notification.dart';
 import 'package:list_and_split/features/notifications/domain/notification_repository.dart';
@@ -484,9 +485,11 @@ class FakeActiveListRepository implements ActiveListRepository {
   List<ActiveListSummary> archivedLists = [];
   final Map<String, List<ActiveListItem>> itemsByList = {};
   final Map<String, List<ActiveListParticipant>> participantsByList = {};
+  final Map<String, ActiveListGeneralNote> generalNotesByList = {};
   final Map<String, List<ActiveListAccessProfile>> pendingByList = {};
   final Map<String, List<ActiveListAccessProfile>> eligibleByList = {};
   Object? failure;
+  Completer<void>? generalNoteMutationCompleter;
   Completer<ActiveListPage>? pageCompleter;
   Completer<ActiveListSummary>? createCompleter;
   int listCalls = 0;
@@ -495,6 +498,8 @@ class FakeActiveListRepository implements ActiveListRepository {
   final List<String> createRequestIds = [];
   final List<String> itemRequestIds = [];
   final List<List<String>> itemAssigneeCalls = [];
+  final List<List<String>> noteMentionCalls = [];
+  final List<String> noteTextCalls = [];
 
   ActiveListSummary _find(String listId) => [...activeLists, ...archivedLists]
       .firstWhere((entry) => entry.id == listId);
@@ -528,6 +533,19 @@ class FakeActiveListRepository implements ActiveListRepository {
   Future<ActiveListSummary> getList(String listId) async {
     if (failure != null) throw failure!;
     return _find(listId);
+  }
+
+  @override
+  Future<ActiveListGeneralNote> getGeneralNote(String listId) async {
+    if (failure != null) throw failure!;
+    final summary = _find(listId);
+    return generalNotesByList[listId] ??
+        ActiveListGeneralNote(
+          listVersion: summary.version,
+          text: null,
+          version: 1,
+          updatedAt: null,
+        );
   }
 
   @override
@@ -649,6 +667,71 @@ class FakeActiveListRepository implements ActiveListRepository {
     activeLists.removeWhere((entry) => entry.id == listId);
     archivedLists.removeWhere((entry) => entry.id == listId);
     itemsByList.remove(listId);
+    generalNotesByList.remove(listId);
+  }
+
+  @override
+  Future<ActiveListGeneralNote> updateGeneralNote(
+    String listId,
+    String text, {
+    required List<String> mentionedProfileIds,
+    required int expectedGeneralNoteVersion,
+  }) async {
+    mutationCalls += 1;
+    noteTextCalls.add(text);
+    noteMentionCalls.add(List.unmodifiable(mentionedProfileIds));
+    if (failure != null) throw failure!;
+    await generalNoteMutationCompleter?.future;
+    final current = await getGeneralNote(listId);
+    if (current.version != expectedGeneralNoteVersion) {
+      throw const ActiveListFailure(ActiveListFailureCode.stale);
+    }
+    final normalized = normalizedGeneralNoteOrNull(text);
+    final participants = participantsByList[listId] ?? const [];
+    final mentionedIds = mentionedProfileIds.toSet();
+    final mentions = participants
+        .where((participant) => mentionedIds.contains(participant.profileId))
+        .map(
+          (participant) => ActiveListNoteMention(
+            profileId: participant.profileId,
+            username: participant.username,
+            displayName: participant.displayName,
+          ),
+        )
+        .toList(growable: false)
+      ..sort((left, right) {
+        final usernameOrder = left.username.compareTo(right.username);
+        return usernameOrder != 0
+            ? usernameOrder
+            : left.profileId.compareTo(right.profileId);
+      });
+    if (mentions.length != mentionedIds.length ||
+        mentions.any(
+          (mention) => !containsGeneralNoteMentionToken(text, mention.username),
+        )) {
+      throw const ActiveListFailure(ActiveListFailureCode.invalid);
+    }
+    final unchanged = normalized == current.text &&
+        mentionedIds.length == current.mentions.length &&
+        current.mentions
+            .every((mention) => mentionedIds.contains(mention.profileId));
+    if (unchanged) return current;
+    final summary = _find(listId);
+    final now = summary.updatedAt.add(const Duration(seconds: 1));
+    final updatedSummary = summary.copyWith(
+      version: summary.version + 1,
+      updatedAt: now,
+    );
+    _replace(updatedSummary);
+    final updated = ActiveListGeneralNote(
+      listVersion: updatedSummary.version,
+      text: normalized,
+      version: current.version + 1,
+      updatedAt: normalized == null ? null : now,
+      mentions: mentions,
+    );
+    generalNotesByList[listId] = updated;
+    return updated;
   }
 
   @override

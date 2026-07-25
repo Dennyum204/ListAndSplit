@@ -26,7 +26,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
     try {
       final rows = _rows(
         await _rpc(
-          'list_notifications_v2',
+          'list_notifications_v3',
           params: {
             'page_size': limit,
             'before_created_at': before?.createdAt.toIso8601String(),
@@ -45,7 +45,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
   @override
   Future<int> getUnreadCount() async {
     try {
-      final response = await _rpc('get_unread_notification_count_v2');
+      final response = await _rpc('get_unread_notification_count_v3');
       if (response is! int || response < 0) {
         throw const NotificationFailure();
       }
@@ -79,6 +79,10 @@ class SupabaseNotificationRepository implements NotificationRepository {
 
   InAppNotification _mapNotification(Map<String, dynamic> json) {
     try {
+      if (json.length != _notificationProjectionKeys.length ||
+          !json.keys.toSet().containsAll(_notificationProjectionKeys)) {
+        throw const FormatException();
+      }
       final status = _mapActionStatus(json['action_status']! as String);
       final expectedVersion = json['expected_relationship_version'] as int?;
       final type = _mapType(json['notification_type']! as String);
@@ -88,6 +92,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
       final isListAction = type == InAppNotificationType.listInvitation &&
           status == NotificationActionStatus.actionable;
       final isAssignment = type == InAppNotificationType.listItemAssigned;
+      final isNoteMention = type == InAppNotificationType.listNoteMentioned;
       final isListType = type != InAppNotificationType.friendRequest;
       final activeListId = json['active_list_id'] as String?;
       final activeListTitle = json['active_list_title'] as String?;
@@ -95,6 +100,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
       final activeListItemId = json['active_list_item_id'] as String?;
       final activeListItemName = json['active_list_item_name'] as String?;
       final assignmentItemVersion = json['assignment_item_version'] as int?;
+      final generalNoteVersion = json['general_note_version'] as int?;
       if ((isFriendAction != (expectedVersion != null)) ||
           (expectedVersion != null && expectedVersion <= 0) ||
           (isListAction != (expectedAccessVersion != null)) ||
@@ -122,6 +128,8 @@ class SupabaseNotificationRepository implements NotificationRepository {
           (activeListItemId != null && activeListItemName == null) ||
           ((activeListItemId == null) != (assignmentItemVersion == null)) ||
           (assignmentItemVersion != null && assignmentItemVersion <= 0) ||
+          (isNoteMention != (generalNoteVersion != null)) ||
+          (generalNoteVersion != null && generalNoteVersion <= 0) ||
           (activeListItemName != null &&
               (activeListItemName.isEmpty ||
                   activeListItemName.trim() != activeListItemName ||
@@ -154,6 +162,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
         activeListItemId: activeListItemId,
         activeListItemName: activeListItemName,
         assignmentItemVersion: assignmentItemVersion,
+        generalNoteVersion: generalNoteVersion,
       );
     } catch (_) {
       throw const NotificationFailure();
@@ -172,6 +181,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
         'list_ownership_transferred' =>
           InAppNotificationType.listOwnershipTransferred,
         'list_item_assigned' => InAppNotificationType.listItemAssigned,
+        'list_note_mentioned' => InAppNotificationType.listNoteMentioned,
         _ => throw const NotificationFailure(),
       };
 
@@ -182,4 +192,24 @@ class SupabaseNotificationRepository implements NotificationRepository {
         'unavailable' => NotificationActionStatus.unavailable,
         _ => throw const NotificationFailure(),
       };
+
+  static const _notificationProjectionKeys = {
+    'notification_id',
+    'notification_type',
+    'created_at',
+    'is_read',
+    'actor_profile_id',
+    'actor_username',
+    'actor_display_name',
+    'action_status',
+    'expected_relationship_version',
+    'active_list_id',
+    'active_list_title',
+    'active_list_status',
+    'expected_access_version',
+    'active_list_item_id',
+    'active_list_item_name',
+    'assignment_item_version',
+    'general_note_version',
+  };
 }

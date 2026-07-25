@@ -88,6 +88,159 @@ void main() {
     expect(owned.callerAccessVersion, isNull);
   });
 
+  test('reads the dedicated General Note projection strictly', () async {
+    response = [
+      _noteRow(text: 'Ask @MEMBER_USER'),
+    ];
+
+    final note = await repository.getGeneralNote(
+      '11111111-1111-4111-8111-111111111111',
+    );
+
+    expect(calls.single.functionName, 'get_active_list_general_note');
+    expect(calls.single.params, {
+      'target_list_id': '11111111-1111-4111-8111-111111111111',
+    });
+    expect(note.text, 'Ask @MEMBER_USER');
+    expect(note.version, 2);
+    expect(note.mentions.single.username, 'member_user');
+  });
+
+  test('normalizes Note writes and canonicalizes resolved IDs', () async {
+    response = [_noteRow()];
+
+    final note = await repository.updateGeneralNote(
+      '11111111-1111-4111-8111-111111111111',
+      ' \r\nAsk @member_user\r ',
+      mentionedProfileIds: const [
+        '99999999-9999-4999-8999-999999999999',
+        '88888888-8888-4888-8888-888888888888',
+        '99999999-9999-4999-8999-999999999999',
+      ],
+      expectedGeneralNoteVersion: 1,
+    );
+
+    expect(note.listVersion, 3);
+    expect(calls.single.functionName, 'update_active_list_general_note');
+    expect(calls.single.params, {
+      'target_list_id': '11111111-1111-4111-8111-111111111111',
+      'new_general_note_text': 'Ask @member_user',
+      'mentioned_profile_ids': [
+        '88888888-8888-4888-8888-888888888888',
+        '99999999-9999-4999-8999-999999999999',
+      ],
+      'expected_general_note_version': 1,
+    });
+  });
+
+  test('rejects malformed Note projections and over-limit writes', () async {
+    response = [
+      _noteRow()..['general_note_updated_at'] = null,
+    ];
+    await expectLater(
+      repository.getGeneralNote(
+        '11111111-1111-4111-8111-111111111111',
+      ),
+      throwsA(isA<ActiveListFailure>()),
+    );
+
+    response = [
+      _noteRow()..['private_note'] = 'must not be exposed',
+    ];
+    await expectLater(
+      repository.getGeneralNote(
+        '11111111-1111-4111-8111-111111111111',
+      ),
+      throwsA(isA<ActiveListFailure>()),
+    );
+
+    final malformedMentionRows = [
+      _noteRow(
+        mentions: const [
+          {
+            'profile_id': '99999999-9999-4999-8999-999999999999',
+            'username': 'member_user',
+            'display_name': 'Member User',
+          },
+          {
+            'profile_id': '88888888-8888-4888-8888-888888888888',
+            'username': 'member_user',
+            'display_name': 'Another Member',
+          },
+        ],
+      ),
+      _noteRow(
+        mentions: const [
+          {
+            'profile_id': '99999999-9999-4999-8999-999999999999',
+            'username': 'Member_User',
+            'display_name': 'Member User',
+          },
+        ],
+      ),
+      _noteRow(
+        mentions: const [
+          {
+            'profile_id': '99999999-9999-4999-8999-999999999999',
+            'username': 'member_user',
+            'display_name': ' Member User',
+          },
+        ],
+      ),
+      _noteRow(
+        mentions: [
+          {
+            'profile_id': '99999999-9999-4999-8999-999999999999',
+            'username': 'member_user',
+            'display_name': List.filled(51, 'x').join(),
+          },
+        ],
+      ),
+      _noteRow(
+        text: 'Ask @member_user and @alpha_user',
+        mentions: const [
+          {
+            'profile_id': '99999999-9999-4999-8999-999999999999',
+            'username': 'member_user',
+            'display_name': 'Member User',
+          },
+          {
+            'profile_id': '88888888-8888-4888-8888-888888888888',
+            'username': 'alpha_user',
+            'display_name': 'Alpha User',
+          },
+        ],
+      ),
+    ];
+    for (final row in malformedMentionRows) {
+      response = [row];
+      await expectLater(
+        repository.getGeneralNote(
+          '11111111-1111-4111-8111-111111111111',
+        ),
+        throwsA(isA<ActiveListFailure>()),
+      );
+    }
+
+    calls.clear();
+    await expectLater(
+      repository.updateGeneralNote(
+        '11111111-1111-4111-8111-111111111111',
+        List.filled(2001, 'a').join(),
+        mentionedProfileIds: const [],
+        expectedGeneralNoteVersion: 1,
+      ),
+      throwsA(
+        isA<ActiveListFailure>().having(
+          (failure) => failure.code,
+          'code',
+          ActiveListFailureCode.invalid,
+        ),
+      ),
+    );
+    expect(calls, isEmpty);
+  });
+
   test('maps participant, invitation, pending, and eligible projections',
       () async {
     const listId = '11111111-1111-4111-8111-111111111111';
@@ -642,6 +795,25 @@ Map<String, dynamic> _itemRow({
       'created_at': '2026-07-20T08:00:00.000Z',
       'updated_at': '2026-07-20T09:00:00.000Z',
       'assignees': assignees,
+    };
+
+Map<String, dynamic> _noteRow({
+  String text = 'Ask @member_user',
+  List<Map<String, dynamic>>? mentions,
+}) =>
+    {
+      'list_version': 3,
+      'general_note_text': text,
+      'general_note_version': 2,
+      'general_note_updated_at': '2026-07-25T09:00:00.000Z',
+      'mentions': mentions ??
+          [
+            {
+              'profile_id': '99999999-9999-4999-8999-999999999999',
+              'username': 'member_user',
+              'display_name': 'Member User',
+            },
+          ],
     };
 
 Map<String, dynamic> _assigneeRow({

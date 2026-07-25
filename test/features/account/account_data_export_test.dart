@@ -236,6 +236,112 @@ void main() {
       expect(document.toJson(), json);
     });
 
+    test('maps schema-v8 owned General Notes without widening shared metadata',
+        () {
+      final json = validAccountDataExportJson(schemaVersion: 8);
+      final document = AccountDataExportDocument.fromJson(json);
+
+      expect(document.schemaVersion, 8);
+      final owned = document.activeLists.first;
+      expect(owned.includesGeneralNoteField, isTrue);
+      expect(owned.generalNote!.text, 'Remember @gamma_user');
+      expect(owned.generalNote!.version, 2);
+      expect(owned.generalNote!.mentions.single.username, 'gamma_user');
+      expect(document.activeLists.last.includesGeneralNoteField, isTrue);
+      expect(document.activeLists.last.generalNote, isNull);
+      expect(
+        document.sharedListAccess.single.toJson(),
+        isNot(contains('general_note')),
+      );
+      expect(document.toJson(), json);
+    });
+
+    test('schema-v8 rejects malformed or privacy-expanded General Notes', () {
+      Map<String, dynamic> noteOf(Map<String, dynamic> root) =>
+          ((root['active_lists'] as List).first
+              as Map<String, dynamic>)['general_note'] as Map<String, dynamic>;
+      List<dynamic> mutableMentions(Map<String, dynamic> root) {
+        final note = noteOf(root);
+        final result = List<dynamic>.from(note['mentions'] as List);
+        note['mentions'] = result;
+        return result;
+      }
+
+      final missingToken = validAccountDataExportJson(schemaVersion: 8);
+      noteOf(missingToken)['text'] = 'No resolved token';
+
+      final paddedDisplay = validAccountDataExportJson(schemaVersion: 8);
+      final paddedDisplayMention = (noteOf(paddedDisplay)['mentions'] as List)
+          .single as Map<String, dynamic>;
+      paddedDisplayMention['display_name'] = ' Gamma User ';
+
+      final longDisplay = validAccountDataExportJson(schemaVersion: 8);
+      final longDisplayMention = (noteOf(longDisplay)['mentions'] as List)
+          .single as Map<String, dynamic>;
+      longDisplayMention['display_name'] = List.filled(51, 'x').join();
+
+      final duplicateId = validAccountDataExportJson(schemaVersion: 8);
+      final duplicateIdMentions = mutableMentions(duplicateId);
+      duplicateIdMentions.add(
+        Map<String, dynamic>.from(duplicateIdMentions.single as Map)
+          ..['username'] = 'alpha_user',
+      );
+      noteOf(duplicateId)['text'] = 'Remember @alpha_user and @gamma_user';
+
+      final duplicateUsername = validAccountDataExportJson(schemaVersion: 8);
+      final duplicateUsernameMentions = mutableMentions(duplicateUsername);
+      duplicateUsernameMentions.add(
+        Map<String, dynamic>.from(duplicateUsernameMentions.single as Map)
+          ..['profile_id'] = '22222222-2222-4222-8222-222222222222',
+      );
+
+      final wrongOrder = validAccountDataExportJson(schemaVersion: 8);
+      final wrongOrderMentions = mutableMentions(wrongOrder);
+      wrongOrderMentions.insert(0, {
+        'profile_id': '22222222-2222-4222-8222-222222222222',
+        'username': 'zeta_user',
+        'display_name': 'Zeta User',
+      });
+      noteOf(wrongOrder)['text'] = 'Ask @zeta_user and @gamma_user';
+
+      final sharedLeak = validAccountDataExportJson(schemaVersion: 8);
+      final sharedAccess = List<dynamic>.from(
+        sharedLeak['shared_list_access'] as List,
+      );
+      sharedLeak['shared_list_access'] = sharedAccess;
+      sharedAccess[0] = Map<String, dynamic>.from(sharedAccess.single as Map)
+        ..['general_note'] = null;
+
+      for (final json in [
+        missingToken,
+        paddedDisplay,
+        longDisplay,
+        duplicateId,
+        duplicateUsername,
+        wrongOrder,
+        sharedLeak,
+      ]) {
+        expect(
+          () => AccountDataExportDocument.fromJson(json),
+          throwsA(isA<AccountDataExportFailure>()),
+        );
+      }
+    });
+
+    test('keeps schema-v1 through v7 export shapes byte-for-byte compatible',
+        () {
+      for (var version = 1; version <= 7; version += 1) {
+        final json = validAccountDataExportJson(schemaVersion: version);
+        final document = AccountDataExportDocument.fromJson(json);
+
+        expect(document.toJson(), json, reason: 'schema v$version');
+        expect(
+          document.activeLists.every((list) => !list.includesGeneralNoteField),
+          isTrue,
+        );
+      }
+    });
+
     test('keeps schema-v6 item and root shapes unchanged', () {
       final json = validAccountDataExportJson(schemaVersion: 6);
       final item = (((json['active_lists'] as List).first

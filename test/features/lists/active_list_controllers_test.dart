@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
+import 'package:list_and_split/features/lists/domain/general_note.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_controller.dart';
 import 'package:list_and_split/features/lists/presentation/active_lists_controller.dart';
@@ -816,6 +817,145 @@ void main() {
       );
       expect(controller.state.isMutating, isFalse);
     }
+  });
+
+  test('detail load and Realtime reconciliation include General Note state',
+      () async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [_participant()]
+      ..generalNotesByList['list-1'] = ActiveListGeneralNote(
+        listVersion: 1,
+        text: 'Original',
+        version: 1,
+        updatedAt: DateTime.utc(2026, 7, 25, 9),
+      );
+    final controller = ActiveListDetailController(repository, 'list-1');
+    addTearDown(controller.dispose);
+
+    await controller.load();
+    expect(controller.state.detail.requireValue.generalNote.text, 'Original');
+
+    repository.generalNotesByList['list-1'] = ActiveListGeneralNote(
+      listVersion: 2,
+      text: 'Remote update',
+      version: 2,
+      updatedAt: DateTime.utc(2026, 7, 25, 10),
+    );
+    await controller.reconcile();
+    await controller.reconcile();
+
+    expect(
+      controller.state.detail.requireValue.generalNote.text,
+      'Remote update',
+    );
+    expect(controller.state.detail.requireValue.generalNote.version, 2);
+  });
+
+  test('failed Note reconciliation preserves cache and later converges',
+      () async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..generalNotesByList['list-1'] = ActiveListGeneralNote(
+        listVersion: 1,
+        text: 'Cached Note',
+        version: 1,
+        updatedAt: DateTime.utc(2026, 7, 25, 9),
+      );
+    final controller = ActiveListDetailController(repository, 'list-1');
+    addTearDown(controller.dispose);
+    await controller.load();
+
+    repository.failure =
+        const ActiveListFailure(ActiveListFailureCode.transport);
+    await controller.reconcile();
+    expect(
+      controller.state.detail.requireValue.generalNote.text,
+      'Cached Note',
+    );
+
+    repository
+      ..failure = null
+      ..generalNotesByList['list-1'] = ActiveListGeneralNote(
+        listVersion: 2,
+        text: 'Recovered Note',
+        version: 2,
+        updatedAt: DateTime.utc(2026, 7, 25, 10),
+      );
+    await controller.reconcile();
+    expect(
+      controller.state.detail.requireValue.generalNote.text,
+      'Recovered Note',
+    );
+  });
+
+  test('General Note update validates explicit mentions and canonicalizes IDs',
+      () async {
+    final owner = _participant();
+    final member = _participant(
+      profileId: 'member-1',
+      username: 'member_user',
+      displayName: 'Member',
+      isOwner: false,
+      accessVersion: 2,
+    );
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..participantsByList['list-1'] = [owner, member];
+    final controller = ActiveListDetailController(repository, 'list-1');
+    addTearDown(controller.dispose);
+    await controller.load();
+
+    final outcome = await controller.updateGeneralNote(
+      ' \r\nAsk @MEMBER_USER\r ',
+      mentionedProfileIds: {member.profileId},
+      expectedGeneralNoteVersion: 1,
+    );
+    await _flushAsync();
+
+    expect(outcome, ActiveListMutationOutcome.succeeded);
+    expect(repository.noteTextCalls.single, 'Ask @MEMBER_USER');
+    expect(repository.noteMentionCalls.single, [member.profileId]);
+    expect(
+      controller
+          .state.detail.requireValue.generalNote.mentions.single.profileId,
+      member.profileId,
+    );
+
+    final callsBeforeInvalid = repository.mutationCalls;
+    expect(
+      await controller.updateGeneralNote(
+        'Typed @removed_user',
+        mentionedProfileIds: {'removed-profile'},
+        expectedGeneralNoteVersion: 2,
+      ),
+      ActiveListMutationOutcome.invalid,
+    );
+    expect(repository.mutationCalls, callsBeforeInvalid);
+  });
+
+  test('archived General Note is read-only before transport', () async {
+    final archivedAt = DateTime.utc(2026, 7, 25, 10);
+    final repository = FakeActiveListRepository()
+      ..archivedLists = [
+        _summary(
+          status: ActiveListStatus.archived,
+          archivedAt: archivedAt,
+        ),
+      ];
+    final controller = ActiveListDetailController(repository, 'list-1');
+    addTearDown(controller.dispose);
+    await controller.load();
+
+    final outcome = await controller.updateGeneralNote(
+      'Cannot save',
+      mentionedProfileIds: const {},
+      expectedGeneralNoteVersion: 1,
+    );
+
+    expect(outcome, ActiveListMutationOutcome.failed);
+    expect(controller.state.message, ActiveListDetailMessage.archivedReadOnly);
+    expect(repository.mutationCalls, 0);
   });
 }
 

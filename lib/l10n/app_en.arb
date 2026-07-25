@@ -857,6 +857,7 @@
   "listLeaveDescription": "You will lose access. The owner may invite you again later.",
   "listLeftMessage": "You left the list.",
   "listAccessRevokedMessage": "You no longer have access to this list. The latest Lists view was loaded.",
+  "listRemotelyArchivedMessage": "This list was archived elsewhere. It is available under Archived.",
   "listInvitationAcceptButton": "Accept",
   "listInvitationDeclineButton": "Decline",
   "listInvitationAcceptedMessage": "List invitation accepted.",
@@ -1082,5 +1083,58 @@
       "listCount": {"type": "int"},
       "participantCount": {"type": "int"}
     }
-  }
+  },
+  "generalNoteTitle": "General Note",
+  "generalNoteEmptyMessage": "No General Note yet. Add shared context for everyone on this list.",
+  "generalNoteEmptyArchivedMessage": "No General Note was added before this list became read-only.",
+  "generalNoteEditButton": "Edit General Note",
+  "generalNoteReadOnlyLabel": "General Note, read-only",
+  "generalNoteEditorTitle": "Edit General Note",
+  "generalNoteFieldLabel": "General Note",
+  "generalNoteFieldHelper": "Use @ to explicitly mention an eligible list participant.",
+  "generalNoteRemainingCount": "{remaining} characters remaining (maximum {maximum})",
+  "@generalNoteRemainingCount": {
+    "placeholders": {
+      "remaining": {"type": "int"},
+      "maximum": {"type": "int"}
+    }
+  },
+  "generalNoteCharacterLimitError": "Use no more than 2,000 Unicode characters.",
+  "generalNoteMentionSuggestionsLabel": "Mention suggestions",
+  "generalNoteMentionSuggestionSemantic": "Mention {displayName}, at {username}",
+  "@generalNoteMentionSuggestionSemantic": {
+    "placeholders": {
+      "displayName": {"type": "String"},
+      "username": {"type": "String"}
+    }
+  },
+  "generalNoteResolvedMentionSemantic": "Resolved mention of {displayName}, at {username}",
+  "@generalNoteResolvedMentionSemantic": {
+    "placeholders": {
+      "displayName": {"type": "String"},
+      "username": {"type": "String"}
+    }
+  },
+  "generalNoteSelectedMentionsLabel": "Selected mentions",
+  "generalNoteSelectedMentionSemantic": "Selected mention of {displayName}, at {username}. Activate to remove the resolved mention and keep its text.",
+  "@generalNoteSelectedMentionSemantic": {
+    "placeholders": {
+      "displayName": {"type": "String"},
+      "username": {"type": "String"}
+    }
+  },
+  "generalNoteNoSuggestions": "No eligible participant matches.",
+  "generalNoteSaveButton": "Save Note",
+  "generalNoteSavedMessage": "General Note updated.",
+  "generalNoteDraftConflictMessage": "The General Note or eligible participants changed elsewhere. Your draft is preserved. Choose whether to keep your draft against the latest version or load the latest Note.",
+  "generalNoteKeepDraftButton": "Keep my draft",
+  "generalNoteUseLatestButton": "Use latest",
+  "generalNoteMentionNotificationTitle": "{actor} mentioned you in {list}",
+  "@generalNoteMentionNotificationTitle": {
+    "placeholders": {
+      "actor": {"type": "String"},
+      "list": {"type": "String"}
+    }
+  },
+  "generalNoteMentionNotificationInformation": "Open the list to read the current General Note."
 }

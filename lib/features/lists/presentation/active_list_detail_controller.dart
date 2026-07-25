@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
 import 'package:list_and_split/features/lists/domain/creation_request_id.dart';
+import 'package:list_and_split/features/lists/domain/general_note.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 
 enum ActiveListDetailMessage {
@@ -14,6 +15,7 @@ enum ActiveListDetailMessage {
   itemCreated,
   itemUpdated,
   itemDeleted,
+  noteSaved,
   orderUpdated,
   left,
   recoveryInProgress,
@@ -126,6 +128,7 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
         _repository.getList(listId),
         _repository.listItems(listId),
         _repository.listParticipants(listId),
+        _repository.getGeneralNote(listId),
       ]).timeout(_requestTimeout);
       if (!mounted || generation != _loadGeneration) return false;
       final refreshedSummary = results[0] as ActiveListSummary;
@@ -140,6 +143,7 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
             summary: refreshedSummary,
             items: results[1] as List<ActiveListItem>,
             participants: results[2] as List<ActiveListParticipant>,
+            generalNote: results[3] as ActiveListGeneralNote,
           ),
         ),
         message: message,
@@ -275,6 +279,44 @@ class ActiveListDetailController extends StateNotifier<ActiveListDetailState> {
       _pendingItemRequestId = null;
     }
     return created;
+  }
+
+  Future<ActiveListMutationOutcome> updateGeneralNote(
+    String text, {
+    required Set<String> mentionedProfileIds,
+    required int expectedGeneralNoteVersion,
+  }) async {
+    final detail = _startMutable();
+    if (detail == null) return ActiveListMutationOutcome.failed;
+    final normalized = normalizeGeneralNoteText(text);
+    final participantById = {
+      for (final participant in detail.participants)
+        participant.profileId: participant,
+    };
+    final canonicalMentionIds = mentionedProfileIds.toList()..sort();
+    if (normalized.runes.length > generalNoteMaximumCodePoints ||
+        canonicalMentionIds.length > 20 ||
+        expectedGeneralNoteVersion < 1 ||
+        canonicalMentionIds.any((id) => !participantById.containsKey(id)) ||
+        canonicalMentionIds.any(
+          (id) => !containsGeneralNoteMentionToken(
+            normalized,
+            participantById[id]!.username,
+          ),
+        )) {
+      _finish(ActiveListDetailMessage.invalidInput);
+      return ActiveListMutationOutcome.invalid;
+    }
+    return _run(
+      () => _repository.updateGeneralNote(
+        listId,
+        normalized,
+        mentionedProfileIds: canonicalMentionIds,
+        expectedGeneralNoteVersion: expectedGeneralNoteVersion,
+      ),
+      ActiveListDetailMessage.noteSaved,
+      reconcileInvalid: true,
+    );
   }
 
   Future<ActiveListMutationOutcome> updateItem(
