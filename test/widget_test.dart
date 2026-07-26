@@ -19,6 +19,7 @@ import 'package:list_and_split/features/community/presentation/community_provide
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
+import 'package:list_and_split/features/moderation/presentation/public_template_moderation_providers.dart';
 import 'package:list_and_split/features/notifications/domain/in_app_notification.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
@@ -26,6 +27,7 @@ import 'package:list_and_split/features/templates/presentation/private_template_
 
 import 'helpers/fakes.dart';
 import 'helpers/fake_private_template_repository.dart';
+import 'helpers/fake_public_template_moderation_repository.dart';
 
 void main() {
   testWidgets('shows an actionable screen when Supabase config is missing',
@@ -348,6 +350,9 @@ void main() {
         activeListRepositoryProvider.overrideWithValue(
           FakeActiveListRepository(),
         ),
+        publicTemplateModerationRepositoryProvider.overrideWithValue(
+          FakePublicTemplateModerationRepository(),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -394,6 +399,9 @@ void main() {
         ),
         activeListRepositoryProvider.overrideWithValue(
           FakeActiveListRepository(),
+        ),
+        publicTemplateModerationRepositoryProvider.overrideWithValue(
+          FakePublicTemplateModerationRepository(),
         ),
       ],
     );
@@ -448,6 +456,51 @@ void main() {
     expect(usernameField.readOnly, isTrue);
     expect(find.text('fernando_1'), findsOneWidget);
     expect(find.textContaining('permanent after onboarding'), findsWidgets);
+    await auth.close();
+  });
+
+  testWidgets('moderation destination stays hidden without protected access',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      moderation: FakePublicTemplateModerationRepository()..hasAccess = false,
+    );
+
+    await tester.tap(find.byKey(const Key('profileDestination')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('openModerationButton')), findsNothing);
+    await auth.close();
+  });
+
+  testWidgets('protected self-check reveals the moderation destination',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    await _pumpConfiguredApp(
+      tester,
+      auth: auth,
+      profile: FakeProfileRepository(
+        profile: FakeProfileRepository.completeProfile,
+      ),
+      moderation: FakePublicTemplateModerationRepository()..hasAccess = true,
+    );
+
+    await tester.tap(find.byKey(const Key('profileDestination')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('openModerationButton')), findsOneWidget);
+
+    final moderationButton = find.byKey(const Key('openModerationButton'));
+    await tester.ensureVisible(moderationButton);
+    await tester.tap(moderationButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Moderation'), findsWidgets);
+    expect(find.byKey(const Key('moderationQueueEmpty')), findsOneWidget);
+    expect(tester.takeException(), isNull);
     await auth.close();
   });
 
@@ -1238,6 +1291,7 @@ Future<void> _pumpConfiguredApp(
   FakeFriendshipRepository? friendships,
   FakeNotificationRepository? notifications,
   FakeActiveListRepository? lists,
+  FakePublicTemplateModerationRepository? moderation,
 }) async {
   final defaultFriendships = FakeFriendshipRepository()
     ..summaryResult = const FriendshipSummary(
@@ -1276,6 +1330,9 @@ Future<void> _pumpConfiguredApp(
         ),
         privateTemplateRepositoryProvider.overrideWithValue(
           FakePrivateTemplateRepository(),
+        ),
+        publicTemplateModerationRepositoryProvider.overrideWithValue(
+          moderation ?? FakePublicTemplateModerationRepository(),
         ),
       ],
       child: const ListAndSplitApp(),

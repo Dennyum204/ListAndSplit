@@ -388,6 +388,90 @@ void main() {
       }
     });
 
+    test('maps schema-v10 submitted reports without moderation data', () {
+      final json = validAccountDataExportJson(schemaVersion: 10);
+      final document = AccountDataExportDocument.fromJson(json);
+
+      expect(document.schemaVersion, 10);
+      expect(document.submittedPublicTemplateReports, hasLength(2));
+      expect(
+        document.submittedPublicTemplateReports.first.reasonCode,
+        'copyright_trademark',
+      );
+      expect(
+        document.submittedPublicTemplateReports.first.explanation,
+        'This republishes my original work.',
+      );
+      expect(
+        document.submittedPublicTemplateReports.last.explanation,
+        isNull,
+      );
+      expect(
+        document.toJson(),
+        isNot(
+          contains(
+            anyOf(
+              'moderator_id',
+              'moderator_note',
+              'report_status',
+              'content_fingerprint',
+              'reported_snapshot',
+            ),
+          ),
+        ),
+      );
+      expect(document.toJson(), json);
+    });
+
+    test('schema-v10 rejects malformed or privacy-expanded report data', () {
+      Map<String, dynamic> firstReport(Map<String, dynamic> root) =>
+          Map<String, dynamic>.from(
+            (root['submitted_public_template_reports'] as List).first as Map,
+          );
+
+      Map<String, dynamic> mutate(
+        void Function(Map<String, dynamic> report) change,
+      ) {
+        final root = validAccountDataExportJson(schemaVersion: 10);
+        final reports = List<dynamic>.from(
+            root['submitted_public_template_reports'] as List);
+        root['submitted_public_template_reports'] = reports;
+        final report = firstReport(root);
+        reports[0] = report;
+        change(report);
+        return root;
+      }
+
+      final invalidReason = mutate(
+        (report) => report['reason_code'] = 'unsupported',
+      );
+      final missingRequiredExplanation = mutate(
+        (report) => report['explanation'] = null,
+      );
+      final paddedExplanation = mutate(
+        (report) => report['explanation'] = ' padded ',
+      );
+      final oversizedExplanation = mutate(
+        (report) => report['explanation'] = List.filled(501, 'x').join(),
+      );
+      final privateLeak = mutate(
+        (report) => report['moderator_note'] = 'private',
+      );
+
+      for (final json in [
+        invalidReason,
+        missingRequiredExplanation,
+        paddedExplanation,
+        oversizedExplanation,
+        privateLeak,
+      ]) {
+        expect(
+          () => AccountDataExportDocument.fromJson(json),
+          throwsA(isA<AccountDataExportFailure>()),
+        );
+      }
+    });
+
     test('keeps schema-v1 through v8 export shapes byte-for-byte compatible',
         () {
       for (var version = 1; version <= 8; version += 1) {

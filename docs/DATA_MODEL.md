@@ -155,6 +155,15 @@ public template and no source identity, provenance, copy request UUID, or
 fingerprint. Versions `1` through `9` remain strictly readable; the v6, v7, and v8
 functions and their exact document shapes are unchanged.
 
+The separate parameterless `export_own_account_data_v10()` preserves versions `1`
+through `9` and adds one deterministic `submitted_public_template_reports` array.
+Each entry contains only the caller's stable general `reason_code`, nullable
+trimmed explanation, and server submission time. It contains no report/group/
+template/reporter/moderator identifier, lifecycle state, snapshot, fingerprint,
+restriction, decision, private note, allowlist, or access-audit data. Versions `1`
+through `10` remain strictly readable; the v6 through v9 functions and their exact
+document shapes remain unchanged.
+
 Every nested object is built from an explicit field allowlist. The social arrays
 apply the same directional-block, caller-relative active-relationship, recipient,
 suppression, expiry, and either-direction block filters as their existing RPC
@@ -178,11 +187,13 @@ non-owner in another person's list, one parent-first profile-deletion coordinato
 locks surviving affected lists before their children, removes current assignments
 and resolved mention links while preserving literal note text, applies the
 single-bump item/note/list rules, then clears the Split participant's snapshots and
-live profile link while preserving list-owned expense/share/settlement/reversal
-arithmetic. It supersedes the former child-first Split anonymization and later
-list-locking assignment cleanup paths, eliminating their lock-order inversion.
-This removes or
-anonymizes every currently implemented record involving the deleted account in the
+  live profile link while preserving list-owned expense/share/settlement/reversal
+  arithmetic. It supersedes the former child-first Split anonymization and later
+  list-locking assignment cleanup paths, eliminating their lock-order inversion.
+  Public-template moderation foreign keys use `ON DELETE SET NULL`, immediately
+  anonymizing reporter, source-owner, and moderator identity without destroying
+  open evidence or an active restriction. This removes or anonymizes every
+  currently implemented record involving the deleted account in the
 same root transaction, while unrelated rows, including lists created or filled
 from template snapshots, remain unchanged.
 
@@ -648,9 +659,71 @@ Identical retry returns the existing copy; conflicting request reuse is invalid.
 Every failed race writes nothing. Later source, relationship, block, username, or
 account lifecycle cannot change a completed copy.
 
-Sent-template actions, public-feed ranking/retention, wider discovery, and
-reporting/takedown records remain future aggregates. Reporting/takedown is a
-release gate for external public-content rollout.
+### Public template reporting and moderation
+
+The private moderation aggregate comprises:
+
+- `public_template_moderators`, an initially empty Auth-UUID-only allowlist;
+- append-only `public_template_moderator_access_events` for audited administrative
+  grant/revoke requests;
+- `public_template_report_groups`, keyed by an immutable public-template revision
+  and 32-byte content fingerprint and retaining the exact allowlisted public
+  snapshot;
+- `public_template_reports`, retaining every individual reporter/reason/
+  explanation/submission with uniqueness on reporter, template, and revision;
+- one template-keyed `public_template_moderation_restrictions` current enforcement
+  row;
+- append-only `public_template_moderation_events` for dismiss, takedown, restore,
+  and content-deleted decisions; and
+- `public_template_moderation_tombstones`, containing only nonidentifying aggregate
+  counts after detailed retention expiry.
+
+All seven tables are in `private`, force RLS, explicitly reject direct client
+operations, revoke API-role table privileges, and are omitted from Realtime
+publication. Exact hardened RPCs are the only Flutter boundary. Administrative
+allowlist and retention functions are `postgres`-only. Client-visible report and
+moderation functions derive `auth.uid()`, recheck access or allowlist membership,
+have empty `search_path`, fully qualify objects, revoke default/anonymous
+execution, and grant only their exact authenticated signatures.
+
+One report transaction locks the template moderation scope, rechecks the exact
+public revision, block state, caller/non-owner rules, and active restriction, then
+constructs this immutable snapshot:
+
+- trimmed public template name; and
+- ordered objects containing only item name, exact `quantity_thousandths`, and
+  position.
+
+No category, item UUID, username snapshot, email/Auth field, IP/device value,
+private count, saved-copy information, or unrelated content is captured. The
+domain-separated fingerprint is generated from the template ID, revision, and
+canonical snapshot by PostgreSQL. A report row belongs to one matching group;
+every report remains individual even when groups share template/revision content.
+A unique reporter/template/revision key and the moderation-scope lock make
+concurrent duplicate submission converge without duplicate evidence.
+
+Group status is exactly `open`, `dismissed`, `taken_down`, or `content_deleted`.
+Dismiss closes only the selected group. Takedown is template-level: one active
+restriction makes the source private, blocks future publication, closes every open
+group for the template, and appends one decision. Restore deactivates only an
+active restriction and appends a restore event; it does not publish. Group,
+restriction, source-template, and request versions/fingerprints make stale,
+invalid, duplicate, lost-response, and concurrent transitions atomic and
+idempotent. Decision request UUID reuse is payload-bound.
+
+Source update/unpublish/delete triggers record changed/unpublished/deleted state
+without rewriting the snapshot. Deletion closes open groups as `content_deleted`
+and leaves evidence. Auth deletion nulls matching reporter/owner/moderator foreign
+keys. Open groups and active restrictions are never retention candidates. Once a
+template has no open group, no active restriction, and every closure/event is at
+least 24 months old, the private idempotent maintenance function writes only
+aggregate count tombstones and deletes reports, groups, events, and inactive
+restrictions. It is deliberately unscheduled until a separate reviewed cron
+migration.
+
+Sent-template actions, public-feed ranking/retention, and wider discovery remain
+future aggregates. Reporting/takedown remains an external-rollout gate until its
+separate hosted deployment and physical QA complete.
 
 ## Split expense-ledger aggregate
 
@@ -785,9 +858,11 @@ A notification belongs to one recipient. The current
 `public.user_notifications` record contains:
 
 - a database-generated UUID primary key;
-- recipient and actor profile references that cascade through account deletion;
-- a check-constrained friend-request, list-access, ownership-transfer, or
-  `list_item_assigned` or `list_note_mentioned` type;
+- a recipient profile reference that cascades through account deletion and a
+  nullable actor reference for system-authored moderation outcomes;
+- a check-constrained friend-request, list-access, ownership-transfer,
+  `list_item_assigned`, `list_note_mentioned`, `public_template_taken_down`, or
+  `public_template_restored` type;
 - type-specific nullable relationship, participant-access, list, assignment-item,
   or General Note context and the positive authoritative version that caused the
   notification;
@@ -795,12 +870,14 @@ A notification belongs to one recipient. The current
 - nullable database-managed read time; and
 - nullable permanent suppression time.
 
-Named constraints require actor and recipient to differ, enforce each type's exact
-reference shape, require valid normalized relationship ordering and positive
-versions, preserve exact expiry, and prevent read/suppression timestamps from
-preceding creation. Type-specific recipient/resource/version uniqueness prevents
-duplicate creation. The row stores no username, display name, list title, item
-name, email, Auth metadata, arbitrary message, or independent action state.
+Named constraints require non-null actors and actor/recipient separation for
+user-authored types, require a null actor for system-authored moderation outcomes,
+enforce each type's exact reference shape, require valid normalized relationship
+ordering and positive versions, preserve exact expiry, and prevent
+read/suppression timestamps from preceding creation. Type-specific
+recipient/resource/version uniqueness prevents duplicate creation. The row stores
+no username, display name, list title, item name, email, Auth metadata, arbitrary
+message, or independent action state.
 
 Every real transition into a new pending relationship version creates one
 notification for that recipient. A same-requester retry, crossed send into
@@ -857,6 +934,13 @@ mark-read function keeps its signature/limits but repeats the v3 note authorizat
 and privacy checks, leaving inaccessible, suppressed, blocked, foreign, expired, or
 deleted-context IDs unread.
 
+V4 listing/count adds the two system-authored moderation outcomes while preserving
+v1-v3 shapes. Their actor fields are null. The only payload references the
+recipient-owned template, immutable moderation event, safe template-name snapshot,
+and general reason. It contains no reporter, explanation, report count, moderator,
+private note, or queue state. Event uniqueness yields exactly one notification per
+successful takedown/restoration; report and dismiss create none.
+
 Access loss by the mention actor or recipient and either-direction blocking set
 `suppressed_at = coalesce(suppressed_at, mutation_time)`. No operation clears that
 timestamp. Reinvitation/unblocking cannot restore the historical row, although a
@@ -877,12 +961,19 @@ Push tokens and delivery attempts are future infrastructure for FCM/APNs and are
 outside the initial identity/profile schema. Device token ownership, rotation,
 invalidation, and privacy rules must be designed before push implementation.
 
-## Future safety records
+## Public-content safety records
 
 Directional blocking and exact block-aware username discovery preceded friend
-requests in Phase 1. Reporting remains required before public content is
-considered mature. Reporting records, moderation roles, evidence retention,
-appeals, and public-content safety behavior are intentionally not designed here.
+requests in Phase 1. The accepted Public Template safety model is the private
+reporting/moderation aggregate above: individual reports, immutable revision
+snapshots, grouped review, UUID allowlisted moderators, restriction-backed
+takedown/restoration, append-only decisions, 24-month detailed retention, and
+nonidentifying tombstones.
+
+Report withdrawal, reporter follow-up, appeal, user unhide, attachments, automated
+moderation, strikes, administrator/compliance tooling, and broader public-feed
+safety remain outside this first contract. Those capabilities require separate
+product and retention decisions before schema or code is added.
 
 ## Realtime invalidation transport
 
@@ -915,6 +1006,13 @@ General Note update/mention cleanup likewise uses the parent-list fanout; a
 text, mention identity, actor, list, or version enters the payload, and no new
 topic, event, channel, policy, or transport record is added.
 
+Public Template report success invalidates the reporter account. Moderator
+grant/revoke/action, takedown/restoration notification, and source-lifecycle
+changes invalidate only server-derived affected moderators/owners through the same
+opaque contract. No reason, explanation, snapshot, fingerprint, report count,
+moderator, decision, private note, or restriction state enters the payload, and no
+moderation table is in a Realtime publication.
+
 The one `realtime.messages` receive policy compares the requested channel topic
 with `auth.uid()` and restricts the extension to `broadcast`. There is no client
 send or Presence policy and no application table in `supabase_realtime`.
@@ -944,7 +1042,7 @@ anonymous denial unless public read is explicitly intended.
 | Split settings, participants, expenses, shares, settlements, reversals, balances, suggestions | RPC-only current unblocked owner/member reads; owner-only setup; active owner/member expense and settlement mutations; original recorder/current owner reversal |
 | Notifications | Recipient only; related actors do not gain notification-row access |
 | Storage objects | Same ownership/membership rules as the parent application record |
-| Future reports | Strictly limited to the reporter and authorized moderation paths |
+| Public Template reports and moderation | Reporter may submit only through the exact report RPC; only the UUID allowlisted moderator may read/action the private queue; all direct client table access is rejected |
 
 Policies must derive identity from `auth.uid()` and server-owned relationships, not
 from a user ID supplied by the Flutter client. Privileged functions require
@@ -963,4 +1061,5 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   cleanup, account-lifecycle retention, and push-token tables.
 - Offline mutation identifiers, tombstones, cache reconciliation, and conflict
   resolution.
-- Reporting schema and moderation authorization.
+- Appeal, administrator/compliance, and later moderation-automation contracts
+  beyond the accepted Public Template report/review lifecycle.

@@ -152,6 +152,40 @@ class SupabasePublicTemplateRepository implements PublicTemplateRepository {
     }
   }
 
+  @override
+  Future<PublicTemplateReportResult> reportTemplate(
+    String templateId, {
+    required int expectedVersion,
+    required PublicTemplateReportReason reason,
+    String? explanation,
+  }) async {
+    try {
+      final row = _singleRow(
+        await _rpc(
+          'report_public_template',
+          params: {
+            'target_template_id': templateId,
+            'expected_public_revision': expectedVersion,
+            'reason_code': reason.wireValue,
+            'explanation': explanation,
+          },
+        ),
+      );
+      _expectExactKeys(row, _reportKeys);
+      if (_positiveInt(row['reported_revision']) != expectedVersion) {
+        throw const FormatException('invalid public template report');
+      }
+      return PublicTemplateReportResult(
+        reportId: _uuid(row['report_id']),
+        groupId: _uuid(row['report_group_id']),
+        reportedRevision: expectedVersion,
+        createdAt: _dateTime(row['created_at']),
+      );
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
+
   static const _pageKeys = {'profile', 'templates', 'next_cursor'};
   static const _profileKeys = {'profile_id', 'username', 'display_name'};
   static const _summaryKeys = {
@@ -180,6 +214,12 @@ class SupabasePublicTemplateRepository implements PublicTemplateRepository {
     'published_at',
     'created_at',
     'updated_at',
+  };
+  static const _reportKeys = {
+    'report_id',
+    'report_group_id',
+    'reported_revision',
+    'created_at',
   };
 
   static PublicTemplateProfile _profile(Map<String, dynamic> row) {

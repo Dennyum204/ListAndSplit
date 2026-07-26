@@ -281,6 +281,21 @@ Map<String, dynamic> validAccountDataExportJson({
                 ],
               },
             ],
+    if (schemaVersion >= 10)
+      'submitted_public_template_reports': emptyCollections
+          ? <Object?>[]
+          : [
+              {
+                'reason_code': 'copyright_trademark',
+                'explanation': 'This republishes my original work.',
+                'submitted_at': '2026-07-26T06:30:00.000Z',
+              },
+              {
+                'reason_code': 'spam_scam_deceptive',
+                'explanation': null,
+                'submitted_at': '2026-07-26T06:45:00.000Z',
+              },
+            ],
   };
 }
 

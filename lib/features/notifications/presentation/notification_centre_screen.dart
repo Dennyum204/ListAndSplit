@@ -321,10 +321,12 @@ class _NotificationCard extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
-                  child: Text(
-                    notification.actorDisplayName.characters.first
-                        .toUpperCase(),
-                  ),
+                  child: notification.actorDisplayName == null
+                      ? const Icon(Icons.gavel_rounded)
+                      : Text(
+                          notification.actorDisplayName!.characters.first
+                              .toUpperCase(),
+                        ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -339,8 +341,10 @@ class _NotificationCard extends ConsumerWidget {
                                 ),
                       ),
                       const SizedBox(height: 2),
-                      Text('@${notification.actorUsername}'),
-                      const SizedBox(height: 4),
+                      if (notification.actorUsername != null) ...[
+                        Text('@${notification.actorUsername}'),
+                        const SizedBox(height: 4),
+                      ],
                       Text(
                         createdLabel,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -447,7 +451,7 @@ class _NotificationCard extends ConsumerWidget {
   String _title(AppLocalizations localizations) => switch (notification.type) {
         InAppNotificationType.friendRequest =>
           localizations.friendRequestNotificationTitle(
-            notification.actorDisplayName,
+            notification.actorDisplayName!,
           ),
         InAppNotificationType.listInvitation =>
           localizations.listInvitationNotificationTitle(
@@ -480,8 +484,16 @@ class _NotificationCard extends ConsumerWidget {
           ),
         InAppNotificationType.listNoteMentioned =>
           localizations.generalNoteMentionNotificationTitle(
-            notification.actorDisplayName,
+            notification.actorDisplayName!,
             notification.activeListTitle ?? '',
+          ),
+        InAppNotificationType.publicTemplateTakenDown =>
+          localizations.publicTemplateTakenDownNotificationTitle(
+            notification.publicTemplateName ?? '',
+          ),
+        InAppNotificationType.publicTemplateRestored =>
+          localizations.publicTemplateRestoredNotificationTitle(
+            notification.publicTemplateName ?? '',
           ),
       };
 
@@ -501,8 +513,31 @@ class _NotificationCard extends ConsumerWidget {
           localizations.listItemAssignedInformation,
         InAppNotificationType.listNoteMentioned =>
           localizations.generalNoteMentionNotificationInformation,
+        InAppNotificationType.publicTemplateTakenDown =>
+          localizations.publicTemplateTakenDownNotificationInformation(
+            _moderationReason(localizations),
+          ),
+        InAppNotificationType.publicTemplateRestored =>
+          localizations.publicTemplateRestoredNotificationInformation,
         InAppNotificationType.friendRequest ||
         InAppNotificationType.listInvitation =>
           localizations.notificationUnavailableMessage,
+      };
+
+  String _moderationReason(AppLocalizations localizations) =>
+      switch (notification.moderationReasonCode) {
+        'spam_scam_deceptive' => localizations.publicTemplateReportReasonSpam,
+        'hate_harassment_bullying' =>
+          localizations.publicTemplateReportReasonHate,
+        'sexual_content' => localizations.publicTemplateReportReasonSexual,
+        'violence_dangerous' =>
+          localizations.publicTemplateReportReasonViolence,
+        'illegal_regulated' => localizations.publicTemplateReportReasonIllegal,
+        'personal_confidential_information' =>
+          localizations.publicTemplateReportReasonPersonalInformation,
+        'copyright_trademark' =>
+          localizations.publicTemplateReportReasonCopyright,
+        'other' => localizations.publicTemplateReportReasonOther,
+        _ => localizations.publicTemplateReportReasonOther,
       };
 }

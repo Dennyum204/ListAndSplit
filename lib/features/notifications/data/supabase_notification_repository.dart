@@ -26,7 +26,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
     try {
       final rows = _rows(
         await _rpc(
-          'list_notifications_v3',
+          'list_notifications_v4',
           params: {
             'page_size': limit,
             'before_created_at': before?.createdAt.toIso8601String(),
@@ -45,7 +45,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
   @override
   Future<int> getUnreadCount() async {
     try {
-      final response = await _rpc('get_unread_notification_count_v3');
+      final response = await _rpc('get_unread_notification_count_v4');
       if (response is! int || response < 0) {
         throw const NotificationFailure();
       }
@@ -93,7 +93,11 @@ class SupabaseNotificationRepository implements NotificationRepository {
           status == NotificationActionStatus.actionable;
       final isAssignment = type == InAppNotificationType.listItemAssigned;
       final isNoteMention = type == InAppNotificationType.listNoteMentioned;
-      final isListType = type != InAppNotificationType.friendRequest;
+      final isModeration =
+          type == InAppNotificationType.publicTemplateTakenDown ||
+              type == InAppNotificationType.publicTemplateRestored;
+      final isListType =
+          type != InAppNotificationType.friendRequest && !isModeration;
       final activeListId = json['active_list_id'] as String?;
       final activeListTitle = json['active_list_title'] as String?;
       final activeListStatus = json['active_list_status'] as String?;
@@ -101,6 +105,12 @@ class SupabaseNotificationRepository implements NotificationRepository {
       final activeListItemName = json['active_list_item_name'] as String?;
       final assignmentItemVersion = json['assignment_item_version'] as int?;
       final generalNoteVersion = json['general_note_version'] as int?;
+      final actorProfileId = json['actor_profile_id'] as String?;
+      final actorUsername = json['actor_username'] as String?;
+      final actorDisplayName = json['actor_display_name'] as String?;
+      final publicTemplateId = json['public_template_id'] as String?;
+      final publicTemplateName = json['public_template_name'] as String?;
+      final moderationReasonCode = json['moderation_reason_code'] as String?;
       if ((isFriendAction != (expectedVersion != null)) ||
           (expectedVersion != null && expectedVersion <= 0) ||
           (isListAction != (expectedAccessVersion != null)) ||
@@ -130,6 +140,24 @@ class SupabaseNotificationRepository implements NotificationRepository {
           (assignmentItemVersion != null && assignmentItemVersion <= 0) ||
           (isNoteMention != (generalNoteVersion != null)) ||
           (generalNoteVersion != null && generalNoteVersion <= 0) ||
+          (isModeration !=
+              (publicTemplateId != null &&
+                  publicTemplateName != null &&
+                  moderationReasonCode != null)) ||
+          (isModeration !=
+              (actorProfileId == null &&
+                  actorUsername == null &&
+                  actorDisplayName == null)) ||
+          (!isModeration &&
+              (actorProfileId == null ||
+                  actorUsername == null ||
+                  actorDisplayName == null)) ||
+          (publicTemplateName != null &&
+              (publicTemplateName.isEmpty ||
+                  publicTemplateName.trim() != publicTemplateName ||
+                  publicTemplateName.length > 120)) ||
+          (moderationReasonCode != null &&
+              !_moderationReasonCodes.contains(moderationReasonCode)) ||
           (activeListItemName != null &&
               (activeListItemName.isEmpty ||
                   activeListItemName.trim() != activeListItemName ||
@@ -150,9 +178,9 @@ class SupabaseNotificationRepository implements NotificationRepository {
         type: type,
         createdAt: createdAt,
         isRead: json['is_read']! as bool,
-        actorProfileId: json['actor_profile_id']! as String,
-        actorUsername: json['actor_username']! as String,
-        actorDisplayName: json['actor_display_name']! as String,
+        actorProfileId: actorProfileId,
+        actorUsername: actorUsername,
+        actorDisplayName: actorDisplayName,
         actionStatus: status,
         expectedRelationshipVersion: expectedVersion,
         activeListId: activeListId,
@@ -163,6 +191,9 @@ class SupabaseNotificationRepository implements NotificationRepository {
         activeListItemName: activeListItemName,
         assignmentItemVersion: assignmentItemVersion,
         generalNoteVersion: generalNoteVersion,
+        publicTemplateId: publicTemplateId,
+        publicTemplateName: publicTemplateName,
+        moderationReasonCode: moderationReasonCode,
       );
     } catch (_) {
       throw const NotificationFailure();
@@ -182,6 +213,10 @@ class SupabaseNotificationRepository implements NotificationRepository {
           InAppNotificationType.listOwnershipTransferred,
         'list_item_assigned' => InAppNotificationType.listItemAssigned,
         'list_note_mentioned' => InAppNotificationType.listNoteMentioned,
+        'public_template_taken_down' =>
+          InAppNotificationType.publicTemplateTakenDown,
+        'public_template_restored' =>
+          InAppNotificationType.publicTemplateRestored,
         _ => throw const NotificationFailure(),
       };
 
@@ -211,5 +246,19 @@ class SupabaseNotificationRepository implements NotificationRepository {
     'active_list_item_name',
     'assignment_item_version',
     'general_note_version',
+    'public_template_id',
+    'public_template_name',
+    'moderation_reason_code',
+  };
+
+  static const _moderationReasonCodes = {
+    'spam_scam_deceptive',
+    'hate_harassment_bullying',
+    'sexual_content',
+    'violence_dangerous',
+    'illegal_regulated',
+    'personal_confidential_information',
+    'copyright_trademark',
+    'other',
   };
 }

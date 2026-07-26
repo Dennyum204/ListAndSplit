@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+import 'package:list_and_split/features/templates/domain/public_template.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/public_templates_controller.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
@@ -61,6 +62,8 @@ class _PublicTemplateDetailScreenState
               ),
             );
           }
+        case PublicTemplatesMessage.reported:
+        // The submitting flow owns the privacy confirmation and navigation.
         case PublicTemplatesMessage.staleReview:
           _showMessage(localizations.publicTemplatesStaleMessage);
         case PublicTemplatesMessage.capacity:
@@ -83,6 +86,13 @@ class _PublicTemplateDetailScreenState
             icon: const Icon(Icons.refresh_rounded),
             tooltip: localizations.publicTemplatesRefreshTooltip,
           ),
+          if (detail != null && ownUserId != widget.profileId)
+            IconButton(
+              key: const Key('reportPublicTemplateButton'),
+              onPressed: state.isMutating ? null : _confirmReport,
+              icon: const Icon(Icons.flag_outlined),
+              tooltip: localizations.publicTemplateReportAction,
+            ),
           if (detail != null && ownUserId != widget.profileId)
             IconButton(
               key: const Key('blockPublicTemplateOwnerButton'),
@@ -322,6 +332,62 @@ class _PublicTemplateDetailScreenState
     }
   }
 
+  Future<void> _confirmReport() async {
+    final localizations = AppLocalizations.of(context);
+    final draft = await showDialog<_PublicTemplateReportDraft>(
+      context: context,
+      builder: (_) => const _PublicTemplateReportDialog(),
+    );
+    if (draft == null || !mounted) return;
+
+    final reported = await ref
+        .read(publicTemplateDetailControllerProvider(_location).notifier)
+        .reportTemplate(draft.reason, draft.explanation);
+    if (!reported || !mounted) return;
+
+    var resultChosen = false;
+    final shouldBlock = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(localizations.publicTemplateReportSuccessTitle),
+        content: SingleChildScrollView(
+          child: Text(localizations.publicTemplateReportSuccessDescription),
+        ),
+        actions: [
+          TextButton(
+            key: const Key('finishPublicTemplateReportButton'),
+            onPressed: () {
+              if (resultChosen) return;
+              resultChosen = true;
+              Navigator.of(dialogContext).pop(false);
+            },
+            child: Text(localizations.doneButton),
+          ),
+          FilledButton.tonalIcon(
+            key: const Key('blockAfterPublicTemplateReportButton'),
+            onPressed: () {
+              if (resultChosen) return;
+              resultChosen = true;
+              Navigator.of(dialogContext).pop(true);
+            },
+            icon: const Icon(Icons.block_rounded),
+            label: Text(localizations.communityBlockButton),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+
+    if (shouldBlock == true) {
+      final blocked = await ref
+          .read(publicTemplateDetailControllerProvider(_location).notifier)
+          .blockProfile();
+      if (blocked || !mounted) return;
+    }
+    _exitAfterReport(localizations);
+  }
+
   void _exitForUnavailable(
     AppLocalizations localizations,
     PublicTemplateAccessLossGuard accessLossGuard,
@@ -340,12 +406,195 @@ class _PublicTemplateDetailScreenState
     });
   }
 
+  void _exitAfterReport(AppLocalizations localizations) {
+    if (_didExitForUnavailable) return;
+    _didExitForUnavailable = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      context.go(AppRoutes.community);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(localizations.publicTemplateReportSuccessMessage),
+        ),
+      );
+    });
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
   }
 }
+
+class _PublicTemplateReportDraft {
+  const _PublicTemplateReportDraft({
+    required this.reason,
+    required this.explanation,
+  });
+
+  final PublicTemplateReportReason reason;
+  final String? explanation;
+}
+
+class _PublicTemplateReportDialog extends StatefulWidget {
+  const _PublicTemplateReportDialog();
+
+  @override
+  State<_PublicTemplateReportDialog> createState() =>
+      _PublicTemplateReportDialogState();
+}
+
+class _PublicTemplateReportDialogState
+    extends State<_PublicTemplateReportDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _explanation = TextEditingController();
+  PublicTemplateReportReason _reason =
+      PublicTemplateReportReason.spamScamDeceptive;
+  bool _isClosing = false;
+
+  @override
+  void dispose() {
+    _explanation.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(localizations.publicTemplateReportDialogTitle),
+      content: SizedBox(
+        width: 480,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(localizations.publicTemplateReportPrivacyDescription),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<PublicTemplateReportReason>(
+                  key: const Key('publicTemplateReportReason'),
+                  // ignore: deprecated_member_use
+                  value: _reason,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: localizations.publicTemplateReportReasonLabel,
+                  ),
+                  items: [
+                    for (final reason in PublicTemplateReportReason.values)
+                      DropdownMenuItem(
+                        value: reason,
+                        child: Text(
+                          _reportReasonLabel(localizations, reason),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: (reason) {
+                    if (reason != null) setState(() => _reason = reason);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const Key('publicTemplateReportExplanation'),
+                  controller: _explanation,
+                  minLines: 3,
+                  maxLines: 6,
+                  maxLength: 500,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    labelText:
+                        localizations.publicTemplateReportExplanationLabel,
+                    helperText:
+                        localizations.publicTemplateReportExplanationHelper,
+                    alignLabelWithHint: true,
+                  ),
+                  validator: (value) {
+                    final normalized = value?.trim() ?? '';
+                    if (_reason.requiresExplanation && normalized.isEmpty) {
+                      return localizations
+                          .publicTemplateReportExplanationRequired;
+                    }
+                    if (normalized.characters.length > 500) {
+                      return localizations
+                          .publicTemplateReportExplanationTooLong;
+                    }
+                    return null;
+                  },
+                ),
+                if (_reason ==
+                    PublicTemplateReportReason.copyrightTrademark) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    localizations.publicTemplateCopyrightSignalNotice,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: const Key('cancelPublicTemplateReportButton'),
+          onPressed: _isClosing
+              ? null
+              : () {
+                  _isClosing = true;
+                  Navigator.of(context).pop();
+                },
+          child: Text(localizations.cancelButton),
+        ),
+        FilledButton(
+          key: const Key('submitPublicTemplateReportButton'),
+          onPressed: _isClosing ? null : _submit,
+          child: Text(localizations.publicTemplateReportSubmitButton),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    if (_isClosing) return;
+    if (_formKey.currentState?.validate() != true) return;
+    _isClosing = true;
+    final normalized = _explanation.text.trim();
+    Navigator.of(context).pop(
+      _PublicTemplateReportDraft(
+        reason: _reason,
+        explanation: normalized.isEmpty ? null : normalized,
+      ),
+    );
+  }
+}
+
+String _reportReasonLabel(
+  AppLocalizations localizations,
+  PublicTemplateReportReason reason,
+) =>
+    switch (reason) {
+      PublicTemplateReportReason.spamScamDeceptive =>
+        localizations.publicTemplateReportReasonSpam,
+      PublicTemplateReportReason.hateHarassmentBullying =>
+        localizations.publicTemplateReportReasonHate,
+      PublicTemplateReportReason.sexualContent =>
+        localizations.publicTemplateReportReasonSexual,
+      PublicTemplateReportReason.violenceDangerous =>
+        localizations.publicTemplateReportReasonViolence,
+      PublicTemplateReportReason.illegalRegulated =>
+        localizations.publicTemplateReportReasonIllegal,
+      PublicTemplateReportReason.personalConfidentialInformation =>
+        localizations.publicTemplateReportReasonPersonalInformation,
+      PublicTemplateReportReason.copyrightTrademark =>
+        localizations.publicTemplateReportReasonCopyright,
+      PublicTemplateReportReason.other =>
+        localizations.publicTemplateReportReasonOther,
+    };
 
 class _PublicDetailLoadError extends StatelessWidget {
   const _PublicDetailLoadError({required this.onRetry});

@@ -22,6 +22,7 @@ enum PrivateTemplatesMessage {
   imported,
   invalidInput,
   capacity,
+  moderated,
   staleRefreshed,
   unavailable,
   operationFailed,
@@ -468,6 +469,10 @@ class PrivateTemplateDetailController
 
   Future<bool> setPublication(bool isPublic) {
     final detail = state.detail.valueOrNull;
+    if (detail?.summary.isModerated == true && isPublic) {
+      _setMessage(PrivateTemplatesMessage.moderated);
+      return Future.value(false);
+    }
     if (detail == null ||
         (isPublic &&
             (detail.summary.name.runes.isEmpty ||
@@ -761,7 +766,8 @@ class PrivateTemplateDetailController
       final failureMessage = _messageFor(failure);
       state = state.copyWith(isMutating: false, message: failureMessage);
       if (failure.code == PrivateTemplateFailureCode.stale ||
-          failure.code == PrivateTemplateFailureCode.capacity) {
+          failure.code == PrivateTemplateFailureCode.capacity ||
+          failure.code == PrivateTemplateFailureCode.moderated) {
         await load();
       }
       if (mounted) state = state.copyWith(message: failureMessage);
@@ -818,6 +824,7 @@ PrivateTemplatesMessage _messageFor(PrivateTemplateFailure failure) {
       PrivateTemplatesMessage.unavailable,
     PrivateTemplateFailureCode.stale => PrivateTemplatesMessage.staleRefreshed,
     PrivateTemplateFailureCode.capacity => PrivateTemplatesMessage.capacity,
+    PrivateTemplateFailureCode.moderated => PrivateTemplatesMessage.moderated,
     PrivateTemplateFailureCode.transport ||
     PrivateTemplateFailureCode.generic =>
       PrivateTemplatesMessage.operationFailed,

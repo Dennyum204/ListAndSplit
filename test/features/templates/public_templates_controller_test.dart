@@ -145,6 +145,110 @@ void main() {
     controller.dispose();
   });
 
+  test('report sends exact revision and reconciles only after confirmation',
+      () async {
+    final repository = _FakePublicTemplateRepository()
+      ..detail = _detail(version: 4);
+    final controller = _detailController(repository);
+    await controller.load();
+
+    expect(
+      await controller.reportTemplate(
+        PublicTemplateReportReason.copyrightTrademark,
+        'Specific ownership concern.',
+      ),
+      isTrue,
+    );
+
+    expect(repository.reportCalls, hasLength(1));
+    expect(repository.reportCalls.single.templateId, _templateId);
+    expect(repository.reportCalls.single.expectedVersion, 4);
+    expect(
+      repository.reportCalls.single.reason,
+      PublicTemplateReportReason.copyrightTrademark,
+    );
+    expect(
+      repository.reportCalls.single.explanation,
+      'Specific ownership concern.',
+    );
+    expect(controller.state.message, PublicTemplatesMessage.reported);
+    controller.dispose();
+  });
+
+  test('stale report refreshes and inaccessible report stays privacy-safe',
+      () async {
+    final repository = _FakePublicTemplateRepository()
+      ..detail = _detail(version: 4)
+      ..reportFailures.add(
+        const PublicTemplateFailure(PublicTemplateFailureCode.stale),
+      );
+    final controller = _detailController(repository);
+    await controller.load();
+    repository.detail = _detail(version: 5);
+
+    expect(
+      await controller.reportTemplate(
+        PublicTemplateReportReason.spamScamDeceptive,
+        null,
+      ),
+      isFalse,
+    );
+    expect(controller.state.detail.value!.summary.version, 5);
+    expect(controller.state.message, PublicTemplatesMessage.staleReview);
+
+    repository.reportFailures.add(
+      const PublicTemplateFailure(PublicTemplateFailureCode.unavailable),
+    );
+    expect(
+      await controller.reportTemplate(
+        PublicTemplateReportReason.spamScamDeceptive,
+        null,
+      ),
+      isFalse,
+    );
+    expect(controller.state.message, PublicTemplatesMessage.unavailable);
+    controller.dispose();
+  });
+
+  test('rapid report confirmation submits once and blocking stays separate',
+      () async {
+    final completion = Completer<PublicTemplateReportResult>();
+    final repository = _FakePublicTemplateRepository()
+      ..detail = _detail()
+      ..reportHandler = (_, __, ___, ____) => completion.future;
+    final community = _FakeCommunityRepository();
+    final controller = PublicTemplateDetailController(
+      repository,
+      community,
+      _profileId,
+      _templateId,
+      canBlock: true,
+      invalidatePrivateTemplates: () {},
+      invalidateCommunity: () {},
+      invalidateNotifications: () {},
+    );
+    await controller.load();
+
+    final first = controller.reportTemplate(
+      PublicTemplateReportReason.other,
+      'Specific concern.',
+    );
+    final second = controller.reportTemplate(
+      PublicTemplateReportReason.other,
+      'Specific concern.',
+    );
+    expect(await second, isFalse);
+    expect(repository.reportCalls, hasLength(1));
+    expect(community.blockedIds, isEmpty);
+
+    completion.complete(_reportResult());
+    expect(await first, isTrue);
+    expect(community.blockedIds, isEmpty);
+    expect(await controller.blockProfile(), isTrue);
+    expect(community.blockedIds, [_profileId]);
+    controller.dispose();
+  });
+
   test('stale copy refreshes and requires review with a new request ID',
       () async {
     final repository = _FakePublicTemplateRepository()
@@ -259,10 +363,18 @@ class _FakePublicTemplateRepository implements PublicTemplateRepository {
   final Queue<Object> copyFailures = Queue();
   final List<PublicTemplateCursor?> cursors = [];
   final List<String> copyRequestIds = [];
+  final Queue<Object> reportFailures = Queue();
+  final List<_ReportCall> reportCalls = [];
   PublicTemplateDetail? detail;
   Object? getFailure;
   int listCalls = 0;
   Future<PublicTemplateCopyResult> Function(String, int, String)? copyHandler;
+  Future<PublicTemplateReportResult> Function(
+    String,
+    int,
+    PublicTemplateReportReason,
+    String?,
+  )? reportHandler;
 
   @override
   Future<PublicTemplatePage> listProfileTemplates(
@@ -298,6 +410,43 @@ class _FakePublicTemplateRepository implements PublicTemplateRepository {
     }
     return _copyResult();
   }
+
+  @override
+  Future<PublicTemplateReportResult> reportTemplate(
+    String templateId, {
+    required int expectedVersion,
+    required PublicTemplateReportReason reason,
+    String? explanation,
+  }) async {
+    reportCalls.add(
+      _ReportCall(
+        templateId,
+        expectedVersion,
+        reason,
+        explanation,
+      ),
+    );
+    if (reportFailures.isNotEmpty) throw reportFailures.removeFirst();
+    final handler = reportHandler;
+    if (handler != null) {
+      return handler(templateId, expectedVersion, reason, explanation);
+    }
+    return _reportResult(expectedVersion: expectedVersion);
+  }
+}
+
+class _ReportCall {
+  const _ReportCall(
+    this.templateId,
+    this.expectedVersion,
+    this.reason,
+    this.explanation,
+  );
+
+  final String templateId;
+  final int expectedVersion;
+  final PublicTemplateReportReason reason;
+  final String? explanation;
 }
 
 class _FakeCommunityRepository implements CommunityRepository {
@@ -358,6 +507,14 @@ PublicTemplateCopyResult _copyResult() => PublicTemplateCopyResult(
         createdAt: DateTime.utc(2026, 7, 25, 20),
         updatedAt: DateTime.utc(2026, 7, 25, 20),
       ),
+    );
+
+PublicTemplateReportResult _reportResult({int expectedVersion = 1}) =>
+    PublicTemplateReportResult(
+      reportId: '66666666-6666-4666-8666-666666666666',
+      groupId: '77777777-7777-4777-8777-777777777777',
+      reportedRevision: expectedVersion,
+      createdAt: DateTime.utc(2026, 7, 26),
     );
 
 const _profile = PublicTemplateProfile(

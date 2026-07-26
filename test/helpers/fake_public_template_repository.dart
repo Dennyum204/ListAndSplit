@@ -10,15 +10,22 @@ class FakePublicTemplateRepository implements PublicTemplateRepository {
   final List<PublicTemplateCursor?> cursors = [];
   final List<String> copiedTemplateIds = [];
   final List<String> copyRequestIds = [];
+  final List<String> reportedTemplateIds = [];
+  final List<int> reportedTemplateVersions = [];
+  final List<PublicTemplateReportReason> reportReasons = [];
+  final List<String?> reportExplanations = [];
 
   Object? listFailure;
   Object? detailFailure;
   Object? copyFailure;
+  Object? reportFailure;
   Completer<PublicTemplateCopyResult>? copyCompleter;
+  Completer<PublicTemplateReportResult>? reportCompleter;
   PublicTemplateCopyResult? copyResult;
   int listCalls = 0;
   int detailCalls = 0;
   int copyCalls = 0;
+  int reportCalls = 0;
 
   void queuePage(String profileId, PublicTemplatePage page) {
     pagesByProfile.putIfAbsent(profileId, Queue.new).add(page);
@@ -72,5 +79,28 @@ class FakePublicTemplateRepository implements PublicTemplateRepository {
       throw const PublicTemplateFailure(PublicTemplateFailureCode.generic);
     }
     return result;
+  }
+
+  @override
+  Future<PublicTemplateReportResult> reportTemplate(
+    String templateId, {
+    required int expectedVersion,
+    required PublicTemplateReportReason reason,
+    String? explanation,
+  }) async {
+    reportCalls += 1;
+    reportedTemplateIds.add(templateId);
+    reportedTemplateVersions.add(expectedVersion);
+    reportReasons.add(reason);
+    reportExplanations.add(explanation);
+    if (reportFailure != null) throw reportFailure!;
+    final pending = reportCompleter;
+    if (pending != null) return pending.future;
+    return PublicTemplateReportResult(
+      reportId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      groupId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      reportedRevision: expectedVersion,
+      createdAt: DateTime.utc(2026, 7, 26),
+    );
   }
 }

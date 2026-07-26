@@ -234,6 +234,48 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  for (final configuration in [
+    (
+      locale: const Locale('en'),
+      takenDown: '“Public kit” was removed by moderation',
+      restored: '“Public kit” may be published again',
+      detail:
+          'Moderation removed this template from public access. General reason: Other.',
+    ),
+    (
+      locale: const Locale('pt'),
+      takenDown: '“Public kit” foi removido pela moderação',
+      restored: '“Public kit” pode voltar a ser publicado',
+      detail:
+          'A moderação removeu este modelo do acesso público. Motivo geral: Outro.',
+    ),
+  ]) {
+    testWidgets(
+        'system moderation notices stay localized and actor-free '
+        '(${configuration.locale.languageCode})', (tester) async {
+      final notifications = FakeNotificationRepository()
+        ..notifications = [
+          moderationNotification(InAppNotificationType.publicTemplateTakenDown),
+          moderationNotification(InAppNotificationType.publicTemplateRestored),
+        ];
+      await pumpCentre(
+        tester,
+        notifications: notifications,
+        locale: configuration.locale,
+      );
+
+      expect(find.text(configuration.takenDown), findsOneWidget);
+      expect(find.text(configuration.restored), findsOneWidget);
+      expect(find.text(configuration.detail), findsOneWidget);
+      expect(find.textContaining('@'), findsNothing);
+      expect(find.textContaining('reporter'), findsNothing);
+      expect(find.textContaining('moderator'), findsNothing);
+      expect(find.byType(FilledButton), findsNothing);
+      expect(find.byType(OutlinedButton), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
 
 Future<void> pumpCentre(
@@ -360,5 +402,22 @@ InAppNotification noteMentionNotification() {
     activeListTitle: 'Shared trip',
     activeListStatus: 'active',
     generalNoteVersion: 3,
+  );
+}
+
+InAppNotification moderationNotification(InAppNotificationType type) {
+  return InAppNotification(
+    id: 'moderation-${type.name}',
+    type: type,
+    createdAt: DateTime.utc(2026, 7, 26, 9),
+    isRead: false,
+    actorProfileId: null,
+    actorUsername: null,
+    actorDisplayName: null,
+    actionStatus: NotificationActionStatus.unavailable,
+    expectedRelationshipVersion: null,
+    publicTemplateId: 'template-1',
+    publicTemplateName: 'Public kit',
+    moderationReasonCode: 'other',
   );
 }

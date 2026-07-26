@@ -8,6 +8,7 @@ enum PrivateTemplateFailureCode {
   retryConflict,
   archived,
   capacity,
+  moderated,
   transport,
   generic,
 }

@@ -39,7 +39,7 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
     try {
       return _rows(
         await _rpc(
-          'list_private_templates_v2',
+          'list_private_templates_v3',
           params: {
             'search_query': search,
             'category_filter': categoryId,
@@ -47,7 +47,7 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
             'sort_mode': sort.wireValue,
           },
         ),
-      ).map((row) => _summaryV2(row)).toList(growable: false);
+      ).map((row) => _summaryV3(row)).toList(growable: false);
     } catch (error) {
       throw _failure(error);
     }
@@ -57,7 +57,7 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
   Future<PrivateTemplateDetail> getTemplate(String templateId) async {
     try {
       final results = await Future.wait<Object?>([
-        _rpc('get_private_template_v2', params: {
+        _rpc('get_private_template_v3', params: {
           'target_template_id': templateId,
         }),
         _rpc('list_private_template_items', params: {
@@ -75,7 +75,7 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
       }
       final summaryRow = summaryRows.single;
       final items = _rows(results[1]).map(_item).toList(growable: false);
-      final summary = _summaryV2(summaryRow, includesRemainingCapacity: true);
+      final summary = _summaryV3(summaryRow, includesRemainingCapacity: true);
       if (summary.itemCount != items.length) {
         throw const FormatException('inconsistent template item count');
       }
@@ -210,7 +210,7 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
         updatedAt: _dateTime(row['updated_at']),
       );
     } catch (error) {
-      throw _failure(error);
+      throw _failure(error, moderationAware: true);
     }
   }
 
@@ -429,13 +429,13 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
         updatedAt: _dateTime(row['updated_at']),
       );
 
-  static PrivateTemplateSummary _summaryV2(
+  static PrivateTemplateSummary _summaryV3(
     Map<String, dynamic> row, {
     bool includesRemainingCapacity = false,
   }) {
     _expectExactKeys(
       row,
-      includesRemainingCapacity ? _detailV2Keys : _summaryV2Keys,
+      includesRemainingCapacity ? _detailV3Keys : _summaryV3Keys,
     );
     final isPublic = row['is_public'];
     if (isPublic is! bool) {
@@ -444,6 +444,10 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
     final publishedAt = _nullableDateTime(row['published_at']);
     if (isPublic != (publishedAt != null)) {
       throw const FormatException('inconsistent publication state');
+    }
+    final isModerated = row['is_moderated'];
+    if (isModerated is! bool || (isModerated && isPublic)) {
+      throw const FormatException('invalid moderation state');
     }
     return PrivateTemplateSummary(
       id: _uuid(row['template_id']),
@@ -457,10 +461,11 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
       updatedAt: _dateTime(row['updated_at']),
       isPublic: isPublic,
       publishedAt: publishedAt,
+      isModerated: isModerated,
     );
   }
 
-  static const _summaryV2Keys = {
+  static const _summaryV3Keys = {
     'template_id',
     'category_id',
     'category_name',
@@ -469,11 +474,12 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
     'item_count',
     'is_public',
     'published_at',
+    'is_moderated',
     'created_at',
     'updated_at',
   };
-  static const _detailV2Keys = {
-    ..._summaryV2Keys,
+  static const _detailV3Keys = {
+    ..._summaryV3Keys,
     'remaining_capacity',
   };
   static const _publicationKeys = {
@@ -521,13 +527,19 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
     }
   }
 
-  static PrivateTemplateFailure _failure(Object error) {
+  static PrivateTemplateFailure _failure(
+    Object error, {
+    bool moderationAware = false,
+  }) {
     if (error is PrivateTemplateFailure) return error;
     if (error is PostgrestException) {
       return PrivateTemplateFailure(
         switch (error.code) {
           '22023' => PrivateTemplateFailureCode.invalid,
-          'P0002' || '42501' => PrivateTemplateFailureCode.unavailable,
+          'P0002' => PrivateTemplateFailureCode.unavailable,
+          '42501' => moderationAware
+              ? PrivateTemplateFailureCode.moderated
+              : PrivateTemplateFailureCode.unavailable,
           '40001' => PrivateTemplateFailureCode.stale,
           '23505' => PrivateTemplateFailureCode.retryConflict,
           '55000' => PrivateTemplateFailureCode.archived,

@@ -418,7 +418,7 @@ class NotificationCentreController
     );
     try {
       await mutation(
-        notification.actorProfileId,
+        notification.actorProfileId!,
         expectedVersion: version,
       );
       if (!mounted) return false;

@@ -39,7 +39,7 @@ void main() {
     expect(result.single.actorDisplayName, 'Beta User');
     expect(result.single.actionStatus, NotificationActionStatus.actionable);
     expect(result.single.expectedRelationshipVersion, 4);
-    expect(calls.single.functionName, 'list_notifications_v3');
+    expect(calls.single.functionName, 'list_notifications_v4');
     expect(calls.single.params, {
       'page_size': 20,
       'before_created_at': null,
@@ -192,7 +192,7 @@ void main() {
     expect(response.toString(), isNot(contains('note_text')));
   });
 
-  test('strict v3 Note parsing rejects excerpts and mismatched context',
+  test('strict v4 Note parsing rejects excerpts and mismatched context',
       () async {
     final valid = _row(
       notificationType: 'list_note_mentioned',
@@ -221,6 +221,78 @@ void main() {
       withInvitationVersion,
       withAssignment,
       withMalformedNoteVersion,
+    ]) {
+      response = [row];
+      await expectLater(
+        repository.listNotifications(limit: 20),
+        throwsA(isA<NotificationFailure>()),
+      );
+    }
+  });
+
+  test('maps system moderation notices without a visible actor', () async {
+    for (final entry in const {
+      'public_template_taken_down':
+          InAppNotificationType.publicTemplateTakenDown,
+      'public_template_restored': InAppNotificationType.publicTemplateRestored,
+    }.entries) {
+      response = [
+        _row(
+          notificationType: entry.key,
+          actionStatus: 'unavailable',
+          expectedVersion: null,
+          actorProfileId: null,
+          actorUsername: null,
+          actorDisplayName: null,
+          publicTemplateId: 'template-1',
+          publicTemplateName: 'Beach trip',
+          moderationReasonCode: 'spam_scam_deceptive',
+        ),
+      ];
+
+      final result = await repository.listNotifications(limit: 20);
+
+      expect(result.single.type, entry.value);
+      expect(result.single.actorProfileId, isNull);
+      expect(result.single.actorUsername, isNull);
+      expect(result.single.actorDisplayName, isNull);
+      expect(result.single.publicTemplateId, 'template-1');
+      expect(result.single.publicTemplateName, 'Beach trip');
+      expect(result.single.moderationReasonCode, 'spam_scam_deceptive');
+      expect(response.toString(), isNot(contains('reporter')));
+      expect(response.toString(), isNot(contains('moderator_note')));
+    }
+  });
+
+  test('rejects moderation notices with actor or private queue metadata',
+      () async {
+    final valid = _row(
+      notificationType: 'public_template_taken_down',
+      actionStatus: 'unavailable',
+      expectedVersion: null,
+      actorProfileId: null,
+      actorUsername: null,
+      actorDisplayName: null,
+      publicTemplateId: 'template-1',
+      publicTemplateName: 'Beach trip',
+      moderationReasonCode: 'other',
+    );
+    final withActor = Map<String, dynamic>.from(valid)
+      ..['actor_profile_id'] = 'moderator-1';
+    final withNote = Map<String, dynamic>.from(valid)
+      ..['moderator_note'] = 'private';
+    final missingReason = Map<String, dynamic>.from(valid)
+      ..['moderation_reason_code'] = null;
+    final legacyWithModeration = _row()
+      ..['public_template_id'] = 'template-1'
+      ..['public_template_name'] = 'Beach trip'
+      ..['moderation_reason_code'] = 'other';
+
+    for (final row in [
+      withActor,
+      withNote,
+      missingReason,
+      legacyWithModeration,
     ]) {
       response = [row];
       await expectLater(
@@ -385,7 +457,7 @@ void main() {
     response = 12;
 
     expect(await repository.getUnreadCount(), 12);
-    expect(calls.single.functionName, 'get_unread_notification_count_v3');
+    expect(calls.single.functionName, 'get_unread_notification_count_v4');
     expect(calls.single.params, isNull);
   });
 
@@ -443,15 +515,21 @@ Map<String, dynamic> _row({
   String? activeListItemName,
   int? assignmentItemVersion,
   int? generalNoteVersion,
+  String? actorProfileId = 'profile-2',
+  String? actorUsername = 'beta_user',
+  String? actorDisplayName = 'Beta User',
+  String? publicTemplateId,
+  String? publicTemplateName,
+  String? moderationReasonCode,
 }) {
   return {
     'notification_id': 'notification-1',
     'notification_type': notificationType,
     'created_at': createdAt,
     'is_read': false,
-    'actor_profile_id': 'profile-2',
-    'actor_username': 'beta_user',
-    'actor_display_name': 'Beta User',
+    'actor_profile_id': actorProfileId,
+    'actor_username': actorUsername,
+    'actor_display_name': actorDisplayName,
     'action_status': actionStatus,
     'expected_relationship_version': expectedVersion,
     'active_list_id': activeListId,
@@ -462,6 +540,9 @@ Map<String, dynamic> _row({
     'active_list_item_name': activeListItemName,
     'assignment_item_version': assignmentItemVersion,
     'general_note_version': generalNoteVersion,
+    'public_template_id': publicTemplateId,
+    'public_template_name': publicTemplateName,
+    'moderation_reason_code': moderationReasonCode,
   };
 }
 

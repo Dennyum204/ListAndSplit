@@ -8,6 +8,7 @@ import 'package:list_and_split/features/templates/domain/public_template_reposit
 
 enum PublicTemplatesMessage {
   copied,
+  reported,
   staleReview,
   unavailable,
   capacity,
@@ -381,6 +382,59 @@ class PublicTemplateDetailController
       }
       _drainReconciliation();
       return null;
+    }
+  }
+
+  Future<bool> reportTemplate(
+    PublicTemplateReportReason reason,
+    String? explanation,
+  ) async {
+    final detail = state.detail.valueOrNull;
+    if (detail == null || state.isMutating || !_canBlock) return false;
+    state = state.copyWith(
+      isMutating: true,
+      clearMessage: true,
+      clearCopiedTemplate: true,
+    );
+    try {
+      await _repository.reportTemplate(
+        templateId,
+        expectedVersion: detail.summary.version,
+        reason: reason,
+        explanation: explanation,
+      );
+      if (!mounted) return false;
+      _reconciliationPending = false;
+      state = state.copyWith(
+        isMutating: false,
+        message: PublicTemplatesMessage.reported,
+      );
+      return true;
+    } on PublicTemplateFailure catch (failure) {
+      if (!mounted) return false;
+      state = state.copyWith(
+        isMutating: false,
+        message: _messageFor(failure),
+      );
+      if (failure.code == PublicTemplateFailureCode.stale) {
+        await load();
+        if (mounted &&
+            state.message != PublicTemplatesMessage.unavailable &&
+            state.detail.valueOrNull != null) {
+          state = state.copyWith(message: PublicTemplatesMessage.staleReview);
+        }
+      }
+      _drainReconciliation();
+      return false;
+    } catch (_) {
+      if (mounted) {
+        state = state.copyWith(
+          isMutating: false,
+          message: PublicTemplatesMessage.operationFailed,
+        );
+      }
+      _drainReconciliation();
+      return false;
     }
   }
 

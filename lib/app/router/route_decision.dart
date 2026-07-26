@@ -15,6 +15,7 @@ abstract final class AppRoutes {
   static const lists = '/lists';
   static const templates = '/templates';
   static const profile = '/profile';
+  static const moderation = '/profile/moderation';
   static const community = '/community';
   static const friendships = '/community/friendships';
   static const blockedUsers = '/community/blocked';
@@ -40,6 +41,8 @@ abstract final class AppRoutes {
 
   static String publicTemplate(String profileId, String templateId) =>
       '${publicProfile(profileId)}/templates/$templateId';
+
+  static String moderationCase(String groupId) => '$moderation/$groupId';
 }
 
 class AppRouteDecision {
@@ -108,7 +111,7 @@ class AppRouteDecision {
     if (currentPath == AppRoutes.foundation ||
         _isPathWithin(currentPath, AppRoutes.lists) ||
         _isPathWithin(currentPath, AppRoutes.templates) ||
-        currentPath == AppRoutes.profile ||
+        _isPathWithin(currentPath, AppRoutes.profile) ||
         _isPathWithin(currentPath, AppRoutes.community) ||
         currentPath == AppRoutes.notifications) {
       return null;

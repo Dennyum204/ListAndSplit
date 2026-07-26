@@ -121,6 +121,7 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
           createdAt: template.createdAt,
           isPublic: template.isPublic,
           publishedAt: template.publishedAt,
+          isModerated: template.isModerated,
         );
       }
     }
@@ -164,6 +165,7 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
       createdAt: current.createdAt,
       isPublic: current.isPublic,
       publishedAt: current.publishedAt,
+      isModerated: current.isModerated,
     );
     templates[index] = result;
     return result;
@@ -190,6 +192,9 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
     if (failure != null) throw failure!;
     final index = templates.indexWhere((entry) => entry.id == templateId);
     final current = templates[index];
+    if (current.isModerated && isPublic) {
+      throw const PrivateTemplateFailure(PrivateTemplateFailureCode.invalid);
+    }
     final publishedAt = isPublic ? _now : null;
     final updated = PrivateTemplateSummary(
       id: current.id,
@@ -202,6 +207,7 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
       updatedAt: _now,
       isPublic: isPublic,
       publishedAt: publishedAt,
+      isModerated: current.isModerated,
     );
     templates[index] = updated;
     return TemplatePublicationResult(
@@ -374,6 +380,7 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
     DateTime? createdAt,
     bool isPublic = false,
     DateTime? publishedAt,
+    bool isModerated = false,
   }) {
     String? categoryName;
     if (categoryId != null) {
@@ -395,6 +402,7 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
       updatedAt: _now,
       isPublic: isPublic,
       publishedAt: publishedAt,
+      isModerated: isModerated,
     );
   }
 
@@ -413,6 +421,7 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
         updatedAt: current.updatedAt,
         isPublic: current.isPublic,
         publishedAt: current.publishedAt,
+        isModerated: current.isModerated,
       );
 
   void _advanceTemplate(String templateId, int itemCount) {
@@ -429,6 +438,7 @@ class FakePrivateTemplateRepository implements PrivateTemplateRepository {
       updatedAt: _now,
       isPublic: current.isPublic,
       publishedAt: current.publishedAt,
+      isModerated: current.isModerated,
     );
   }
 }

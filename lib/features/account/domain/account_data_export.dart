@@ -16,13 +16,17 @@ class AccountDataExportDocument {
     List<AccountSharedListAccessExport> sharedListAccess = const [],
     List<AccountTemplateCategoryExport> templateCategories = const [],
     List<AccountPrivateTemplateExport> templates = const [],
+    List<AccountSubmittedPublicTemplateReport> submittedPublicTemplateReports =
+        const [],
   })  : outgoingBlocks = List.unmodifiable(outgoingBlocks),
         activeRelationships = List.unmodifiable(activeRelationships),
         visibleNotifications = List.unmodifiable(visibleNotifications),
         activeLists = List.unmodifiable(activeLists),
         sharedListAccess = List.unmodifiable(sharedListAccess),
         templateCategories = List.unmodifiable(templateCategories),
-        templates = List.unmodifiable(templates) {
+        templates = List.unmodifiable(templates),
+        submittedPublicTemplateReports =
+            List.unmodifiable(submittedPublicTemplateReports) {
     if (product != supportedProduct ||
         !supportedSchemaVersions.contains(schemaVersion) ||
         authIdentity.id != profile.id ||
@@ -40,7 +44,8 @@ class AccountDataExportDocument {
         templates.any(
           (template) =>
               template.includesPublicationField != (schemaVersion >= 9),
-        )) {
+        ) ||
+        (schemaVersion < 10 && submittedPublicTemplateReports.isNotEmpty)) {
       throw const AccountDataExportFailure();
     }
   }
@@ -63,6 +68,7 @@ class AccountDataExportDocument {
         7 => _schemaSevenRootKeys,
         8 => _schemaEightRootKeys,
         9 => _schemaNineRootKeys,
+        10 => _schemaTenRootKeys,
         _ => const <String>{},
       },
     );
@@ -116,11 +122,16 @@ class AccountDataExportDocument {
                 ),
               )
               .toList(growable: false),
+      submittedPublicTemplateReports: schemaVersion < 10
+          ? const []
+          : _requiredObjects(json, 'submitted_public_template_reports')
+              .map(AccountSubmittedPublicTemplateReport.fromJson)
+              .toList(growable: false),
     );
   }
 
   static const supportedProduct = 'list_and_split';
-  static const supportedSchemaVersion = 9;
+  static const supportedSchemaVersion = 10;
   static const supportedSchemaVersions = {
     1,
     2,
@@ -130,6 +141,7 @@ class AccountDataExportDocument {
     6,
     7,
     8,
+    9,
     supportedSchemaVersion,
   };
   static const _schemaOneRootKeys = {
@@ -160,6 +172,10 @@ class AccountDataExportDocument {
   static const _schemaSevenRootKeys = _schemaSixRootKeys;
   static const _schemaEightRootKeys = _schemaSevenRootKeys;
   static const _schemaNineRootKeys = _schemaEightRootKeys;
+  static const _schemaTenRootKeys = {
+    ..._schemaNineRootKeys,
+    'submitted_public_template_reports',
+  };
 
   final String product;
   final int schemaVersion;
@@ -173,6 +189,8 @@ class AccountDataExportDocument {
   final List<AccountSharedListAccessExport> sharedListAccess;
   final List<AccountTemplateCategoryExport> templateCategories;
   final List<AccountPrivateTemplateExport> templates;
+  final List<AccountSubmittedPublicTemplateReport>
+      submittedPublicTemplateReports;
 
   Map<String, dynamic> toJson() => {
         'product': product,
@@ -205,6 +223,65 @@ class AccountDataExportDocument {
           'templates': templates
               .map((template) => template.toJson())
               .toList(growable: false),
+        if (schemaVersion >= 10)
+          'submitted_public_template_reports': submittedPublicTemplateReports
+              .map((report) => report.toJson())
+              .toList(growable: false),
+      };
+}
+
+class AccountSubmittedPublicTemplateReport {
+  AccountSubmittedPublicTemplateReport({
+    required this.reasonCode,
+    required this.explanation,
+    required this.submittedAt,
+  }) {
+    if (!_reasonCodes.contains(reasonCode) ||
+        (explanation != null &&
+            (explanation!.trim() != explanation ||
+                explanation!.runes.isEmpty ||
+                explanation!.runes.length > 500)) ||
+        (_requiredExplanationReasons.contains(reasonCode) &&
+            explanation == null)) {
+      throw const AccountDataExportFailure();
+    }
+  }
+
+  factory AccountSubmittedPublicTemplateReport.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    _expectExactKeys(json, _keys);
+    return AccountSubmittedPublicTemplateReport(
+      reasonCode: _requiredString(json, 'reason_code'),
+      explanation: _nullableString(json, 'explanation'),
+      submittedAt: _requiredUtcDateTime(json, 'submitted_at'),
+    );
+  }
+
+  static const _keys = {'reason_code', 'explanation', 'submitted_at'};
+  static const _reasonCodes = {
+    'spam_scam_deceptive',
+    'hate_harassment_bullying',
+    'sexual_content',
+    'violence_dangerous',
+    'illegal_regulated',
+    'personal_confidential_information',
+    'copyright_trademark',
+    'other',
+  };
+  static const _requiredExplanationReasons = {
+    'copyright_trademark',
+    'other',
+  };
+
+  final String reasonCode;
+  final String? explanation;
+  final DateTime submittedAt;
+
+  Map<String, dynamic> toJson() => {
+        'reason_code': reasonCode,
+        'explanation': explanation,
+        'submitted_at': _encodeDateTime(submittedAt),
       };
 }
 

@@ -26,7 +26,7 @@ void main() {
 
   test('lists private templates with exact search, filter and sort arguments',
       () async {
-    responses['list_private_templates_v2'] = [_summaryRow()];
+    responses['list_private_templates_v3'] = [_summaryRow()];
 
     final result = await repository.listTemplates(
       search: 'coffee',
@@ -34,7 +34,7 @@ void main() {
       sort: PrivateTemplateSort.alphabetic,
     );
 
-    expect(calls.single.functionName, 'list_private_templates_v2');
+    expect(calls.single.functionName, 'list_private_templates_v3');
     expect(calls.single.params, {
       'search_query': 'coffee',
       'category_filter': _categoryId,
@@ -44,11 +44,12 @@ void main() {
     expect(result.single.name, 'Weekly shop');
     expect(result.single.itemCount, 2);
     expect(result.single.isPublic, isTrue);
+    expect(result.single.isModerated, isFalse);
     expect(result.single.publishedAt, DateTime.utc(2026, 7, 25, 19, 33, 6));
   });
 
   test('loads strict detail and authoritative remaining capacity', () async {
-    responses['get_private_template_v2'] = [
+    responses['get_private_template_v3'] = [
       _summaryRow()..['remaining_capacity'] = 198,
     ];
     responses['list_private_template_items'] = [
@@ -61,7 +62,7 @@ void main() {
     expect(detail.items.map((item) => item.name), ['Coffee', 'Milk']);
     expect(detail.remainingCapacity, 198);
     expect(calls.map((call) => call.functionName), [
-      'get_private_template_v2',
+      'get_private_template_v3',
       'list_private_template_items',
     ]);
   });
@@ -95,9 +96,9 @@ void main() {
     expect(result.publishedAt, isNull);
   });
 
-  test('rejects publication fields that do not match the strict v2 shape',
+  test('rejects publication fields that do not match the strict v3 shape',
       () async {
-    responses['list_private_templates_v2'] = [
+    responses['list_private_templates_v3'] = [
       _summaryRow()..['private_owner_id'] = _categoryId,
     ];
 
@@ -109,6 +110,57 @@ void main() {
           'code',
           PrivateTemplateFailureCode.transport,
         ),
+      ),
+    );
+  });
+
+  test('maps moderated private source and rejects inconsistent publication',
+      () async {
+    responses['list_private_templates_v3'] = [
+      _summaryRow()
+        ..['is_public'] = false
+        ..['published_at'] = null
+        ..['is_moderated'] = true,
+    ];
+
+    final result = await repository.listTemplates();
+
+    expect(result.single.isModerated, isTrue);
+    expect(result.single.isPublic, isFalse);
+
+    responses['list_private_templates_v3'] = [
+      _summaryRow()..['is_moderated'] = true,
+    ];
+    await expectLater(
+      repository.listTemplates(),
+      throwsA(isA<PrivateTemplateFailure>()),
+    );
+  });
+
+  test('maps publish restriction without exposing backend details', () async {
+    failure = const PostgrestException(
+      message: 'private moderation details',
+      code: '42501',
+    );
+
+    await expectLater(
+      repository.setPublication(
+        _templateId,
+        isPublic: true,
+        expectedVersion: 4,
+      ),
+      throwsA(
+        isA<PrivateTemplateFailure>()
+            .having(
+              (value) => value.code,
+              'code',
+              PrivateTemplateFailureCode.moderated,
+            )
+            .having(
+              (value) => value.toString(),
+              'message',
+              isNot(contains('private moderation details')),
+            ),
       ),
     );
   });
@@ -194,6 +246,7 @@ Map<String, dynamic> _summaryRow() => {
       'item_count': 2,
       'is_public': true,
       'published_at': '2026-07-25T19:33:06.000Z',
+      'is_moderated': false,
       'created_at': '2026-07-21T08:00:00.000Z',
       'updated_at': '2026-07-21T09:00:00.000Z',
     };

@@ -84,9 +84,10 @@ authenticated shell now includes secure shared-list membership and private
 account-scoped Realtime reconciliation.
 Resolve the immutable-username support/admin correction
 path and avatar storage lifecycle before the later slices that encode them.
-Shared-resource ownership/deletion, administrator deletion, moderation/legal
-retention, Storage cleanup, and compliance obligations remain open beyond the
-implemented self-service current-aggregate account lifecycle.
+Shared-resource ownership/deletion and the Public Template v1 moderation/retention
+contract are resolved. Administrator deletion, appeal/compliance, moderation/legal
+retention beyond that contract, Storage cleanup, and broader compliance obligations
+remain open beyond the implemented self-service current-aggregate lifecycle.
 
 ## Phase 2 — Active/shared lists (in progress)
 
@@ -171,7 +172,7 @@ resolved.
 
 Goal: add reusable content while preserving strict copy independence.
 
-Current private-template and Public Template Foundation slices:
+Current private-template and Public Template slices:
 
 - Private templates with ordered items, optional single personal category,
   100-template/25-category quotas, and 200 current items per template.
@@ -201,22 +202,39 @@ Current private-template and Public Template Foundation slices:
   payload-bound retry idempotency, and complete source independence.
 - Account export schema version `9` adds only caller-owned publication state/time
   while versions `1` through `8` and their endpoints remain unchanged.
-- Existing private account invalidation is reused only for owner/copier/block
-  accounts. No notification, new topic, public/global fanout, dependency, Edge
-  Function, configuration, or platform change is introduced.
+- Exact-revision reporting for every authenticated non-owner across eight stable
+  reasons, conditional bounded explanation, immutable public-content snapshots/
+  fingerprints, one report per reporter/template revision, and immediate
+  reporter-only hiding without an implicit block.
+- An initially empty immutable-Auth-UUID moderator allowlist, protected bounded
+  Open/Taken down/Closed review, current-versus-snapshot comparison, dismiss,
+  template-level takedown, and restore without automatic republication.
+- Restricted owners retain private edit/delete/item access while publication is
+  denied. Takedown/restoration create exactly one privacy-safe actor-null owner
+  notification through notification v4; report/dismiss create none.
+- Account export schema version `10` adds only the caller's own submitted report
+  reason, nullable explanation, and date, while versions `1` through `9` and their
+  endpoints remain unchanged.
+- Existing private account invalidation is reused for affected reporters,
+  moderators, and owners. Moderation tables are not published and no new topic,
+  public/global fanout, dependency, Edge Function, configuration, or platform
+  change is introduced.
+- Fully closed inactive evidence has a 24-month retention contract and a private
+  idempotent cleanup to nonidentifying tombstones. Scheduling that cleanup is a
+  separate reviewed hosted rollout step and is not part of the schema migration.
 
 Later candidate slices:
 
 - Sending a template to a friend with Accept/Decline and idempotent copy creation.
 - A friends-only feed of recent public templates.
-- Reporting/takedown workflow and tooling before any external public-content
-  rollout.
 
 Private category cardinality, copy atomicity, capacity, versioning, public
 visibility/category placement, no-provenance behavior, and profile presentation
-are resolved. Feed ranking/pagination/retention, sent-template expiry/acceptance,
-and reporting/takedown remain open. O-P13 is a hard gate before external beta or
-production public-content rollout.
+are resolved. Reporting/takedown/restoration/retention is resolved by P-053/P-054
+and A-060/A-061, closing O-P13. The additive migration, an audited development-only
+moderator grant, client distribution, and two-account-plus-moderator physical QA
+remain explicit gates before external beta or production public-content rollout.
+Feed ranking/pagination/retention and sent-template expiry/acceptance remain open.
 
 ## Phase 4 — Split expense ledger (core scope complete)
 
@@ -271,17 +289,26 @@ Candidate slices:
 This phase requires an explicit sync design. It does not itself authorize creation
 of a Firebase project.
 
-## Phase 6 — Public safety, hardening, and release readiness (planned)
+## Phase 6 — Public safety, hardening, and release readiness (foundation in progress)
 
 Goal: make public/community behavior supportable and prepare a production-quality
 release.
 
-Candidate slices:
+Implemented foundation:
 
-- Extend Phase 1 basic blocking to public content and add content/user reporting
-  with a reviewed moderation workflow.
-- Privacy/retention hardening and abuse-response implementation beyond the Phase 1
-  account lifecycle.
+- Public-content block symmetry plus exact Public Template reporting, private
+  reviewed moderation, restriction-backed takedown/restoration, safe owner
+  outcomes, account-export v10, and 24-month detailed-evidence retention.
+- Explicit default-deny moderation storage, UUID-only allowlisting, audit events,
+  immediate revocation, account-deletion anonymization, and no client/private
+  evidence in Realtime.
+
+Remaining candidate slices:
+
+- Controlled development rollout and physical QA of the accepted safety
+  foundation, followed later by separately reviewed retention scheduling.
+- Appeal, administrator/compliance, legal-retention, evidence-export, and
+  abuse-response behavior beyond the intentionally bounded v1 workflow.
 - Accessibility and localization audits.
 - Security review of RLS, functions, storage, realtime, secrets, and dependency
   supply chain.
@@ -316,8 +343,10 @@ future, explicit task with environment and cost approval.
 
 - Which minimum persistent-notification capability belongs in later
   action-producing phases beyond the accepted friend-request, list, item-
-  assignment, and General Note mention foundations.
+  assignment, General Note mention, and Public Template moderation outcomes.
 - When the accepted compile-time configuration should expand into a full
   development/staging/production flavor model.
 - Whether offline read caching can ship safely before offline mutations.
-- What constitutes the minimum community/safety feature set for an external beta.
+- What additional feed/sent-template/community features, if any, constitute the
+  minimum external beta after the accepted Public Template safety foundation is
+  deployed and physically verified.
