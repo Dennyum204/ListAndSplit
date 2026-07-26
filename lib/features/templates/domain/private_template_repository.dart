@@ -57,6 +57,11 @@ abstract interface class PrivateTemplateRepository {
     String templateId, {
     required int expectedVersion,
   });
+  Future<TemplatePublicationResult> setPublication(
+    String templateId, {
+    required bool isPublic,
+    required int expectedVersion,
+  });
   Future<PrivateTemplateItem> createItem(
     String templateId,
     String name, {

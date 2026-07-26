@@ -39,7 +39,7 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
     try {
       return _rows(
         await _rpc(
-          'list_private_templates',
+          'list_private_templates_v2',
           params: {
             'search_query': search,
             'category_filter': categoryId,
@@ -47,7 +47,7 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
             'sort_mode': sort.wireValue,
           },
         ),
-      ).map(_summary).toList(growable: false);
+      ).map((row) => _summaryV2(row)).toList(growable: false);
     } catch (error) {
       throw _failure(error);
     }
@@ -57,7 +57,7 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
   Future<PrivateTemplateDetail> getTemplate(String templateId) async {
     try {
       final results = await Future.wait<Object?>([
-        _rpc('get_private_template', params: {
+        _rpc('get_private_template_v2', params: {
           'target_template_id': templateId,
         }),
         _rpc('list_private_template_items', params: {
@@ -75,7 +75,7 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
       }
       final summaryRow = summaryRows.single;
       final items = _rows(results[1]).map(_item).toList(growable: false);
-      final summary = _summary(summaryRow);
+      final summary = _summaryV2(summaryRow, includesRemainingCapacity: true);
       if (summary.itemCount != items.length) {
         throw const FormatException('inconsistent template item count');
       }
@@ -172,6 +172,43 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
           PrivateTemplateFailureCode.unavailable,
         );
       }
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
+  Future<TemplatePublicationResult> setPublication(
+    String templateId, {
+    required bool isPublic,
+    required int expectedVersion,
+  }) async {
+    try {
+      final row = _singleRow(
+        await _rpc(
+          'set_template_publication',
+          params: {
+            'target_template_id': templateId,
+            'desired_public': isPublic,
+            'expected_template_version': expectedVersion,
+          },
+        ),
+      );
+      _expectExactKeys(row, _publicationKeys);
+      final publishedAt = _nullableDateTime(row['published_at']);
+      if (_uuid(row['template_id']) != templateId ||
+          row['is_public'] is! bool ||
+          row['is_public'] != isPublic ||
+          isPublic != (publishedAt != null)) {
+        throw const FormatException('invalid publication result');
+      }
+      return TemplatePublicationResult(
+        templateId: templateId,
+        version: _positiveInt(row['version']),
+        isPublic: isPublic,
+        publishedAt: publishedAt,
+        updatedAt: _dateTime(row['updated_at']),
+      );
     } catch (error) {
       throw _failure(error);
     }
@@ -392,6 +429,61 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
         updatedAt: _dateTime(row['updated_at']),
       );
 
+  static PrivateTemplateSummary _summaryV2(
+    Map<String, dynamic> row, {
+    bool includesRemainingCapacity = false,
+  }) {
+    _expectExactKeys(
+      row,
+      includesRemainingCapacity ? _detailV2Keys : _summaryV2Keys,
+    );
+    final isPublic = row['is_public'];
+    if (isPublic is! bool) {
+      throw const FormatException('invalid publication state');
+    }
+    final publishedAt = _nullableDateTime(row['published_at']);
+    if (isPublic != (publishedAt != null)) {
+      throw const FormatException('inconsistent publication state');
+    }
+    return PrivateTemplateSummary(
+      id: _uuid(row['template_id']),
+      categoryId: row['category_id'] == null ? null : _uuid(row['category_id']),
+      categoryName:
+          row['category_name'] == null ? null : _string(row['category_name']),
+      name: _trimmedString(row['name']),
+      version: _positiveInt(row['version']),
+      itemCount: _nonNegativeInt(row['item_count']),
+      createdAt: _dateTime(row['created_at']),
+      updatedAt: _dateTime(row['updated_at']),
+      isPublic: isPublic,
+      publishedAt: publishedAt,
+    );
+  }
+
+  static const _summaryV2Keys = {
+    'template_id',
+    'category_id',
+    'category_name',
+    'name',
+    'version',
+    'item_count',
+    'is_public',
+    'published_at',
+    'created_at',
+    'updated_at',
+  };
+  static const _detailV2Keys = {
+    ..._summaryV2Keys,
+    'remaining_capacity',
+  };
+  static const _publicationKeys = {
+    'template_id',
+    'version',
+    'is_public',
+    'published_at',
+    'updated_at',
+  };
+
   static PrivateTemplateItem _item(Map<String, dynamic> row) =>
       PrivateTemplateItem(
         id: _uuid(row['item_id']),
@@ -417,6 +509,16 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
     final rows = _rows(response);
     if (rows.length != 1) throw const FormatException('expected one row');
     return rows.single;
+  }
+
+  static void _expectExactKeys(
+    Map<String, dynamic> row,
+    Set<String> expected,
+  ) {
+    if (row.length != expected.length ||
+        !row.keys.toSet().containsAll(expected)) {
+      throw const FormatException('unexpected response shape');
+    }
   }
 
   static PrivateTemplateFailure _failure(Object error) {
@@ -491,4 +593,7 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
     }
     return parsed;
   }
+
+  static DateTime? _nullableDateTime(Object? value) =>
+      value == null ? null : _dateTime(value);
 }

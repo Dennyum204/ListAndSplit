@@ -123,6 +123,16 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                 ? null
                 : _submit,
           ),
+          TextButton.icon(
+            key: const Key('previewPublicProfileButton'),
+            onPressed: isBusy
+                ? null
+                : () => context.push(
+                      AppRoutes.publicProfile(widget.profile.id),
+                    ),
+            icon: const Icon(Icons.public_rounded),
+            label: Text(localizations.publicTemplatesPreviewProfileButton),
+          ),
           AccountDataExportAction(
             enabled: !state.isSubmitting && !deletionState.isSubmitting,
           ),

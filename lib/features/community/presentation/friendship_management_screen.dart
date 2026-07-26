@@ -271,6 +271,16 @@ class _RelationshipCard extends ConsumerWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                OutlinedButton.icon(
+                  key: Key('viewFriendProfile-${relationship.id}'),
+                  onPressed: isBusy
+                      ? null
+                      : () => context.push(
+                            AppRoutes.publicProfile(relationship.id),
+                          ),
+                  icon: const Icon(Icons.account_circle_outlined),
+                  label: Text(localizations.publicTemplatesViewProfileButton),
+                ),
                 if (isBusy)
                   SizedBox.square(
                     dimension: 24,

@@ -22,12 +22,16 @@ draft-preserving conflict reconciliation. Private account-scoped Supabase Broadc
 reconciles connected devices through the existing RPC repositories without carrying
 application data.
 Private templates support independent list snapshots and atomic selected-item list
-creation/import. List-scoped Split
+creation/import. Owners can also publish templates explicitly on their block-aware
+public profiles, where any fully onboarded authenticated nonblocked user may inspect
+the live item-only source and save an independent private, Uncategorized copy.
+List-scoped Split
 supports owner-selected CHF/EUR, exact integer equal and custom expense shares,
 derived balances, deterministic settle-up suggestions, immutable full/partial
 settlement records, one-time reversals, historical participants, and the same
-private reconciliation path. Public/shared templates, offline mutation queues,
-push delivery, and payment-provider integration remain planned work.
+private reconciliation path. Shared/sent templates, global/friends feeds, offline
+mutation queues, push delivery, and payment-provider integration remain planned
+work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English/
@@ -193,10 +197,9 @@ do not use account deletion merely to exercise assignment cleanup.
 
 ### General Note and mention rollout
 
-The General Note migration has not been deployed to a hosted Supabase project, and
-physical two-device QA remains pending. After the reviewed migration is separately
-authorized and applied to a QA environment, test with two current accepted
-participants on one active list and upgraded clients:
+The General Note migration is deployed to List & Split Dev and its two-phone
+physical QA passed. For regression QA, use two current accepted participants on
+one active list and upgraded clients:
 
 1. Create, edit, clear, and reopen the shared note, including multiline and
    2,000-code-point boundaries; verify the other device updates without a manual
@@ -219,8 +222,33 @@ participants on one active list and upgraded clients:
    with a screen reader.
 
 Manual refresh and app resume remain authoritative fallbacks. Use disposable QA
-list/note data; hosted deployment and QA require separate authorization and must
-not be inferred from local automated verification.
+list/note data; any further hosted deployment still requires separate
+authorization and must not be inferred from local automated verification.
+
+### Public Template manual QA
+
+After the reviewed public-template migration is separately authorized and applied
+to a QA environment, use two fully onboarded accounts on current clients:
+
+1. Publish named zero-item and populated templates, verify the owner state remains
+   visibly Public after refresh, and confirm ordinary public edits preserve the
+   publication time.
+2. From the other account's exact-search and friendship rows, open the immutable-ID
+   profile/detail routes, page public templates, inspect ordered quantities, and
+   save independent private Uncategorized copies, including a zero-item copy.
+3. Verify duplicate names route by ID, a repeated Save after a simulated uncertain
+   response creates one copy, and stale source review never partially copies data.
+4. Unpublish, delete, block in both directions, unblock, and resume the app. Verify
+   unavailable profile/detail routes exit to Community once, no reverse block or
+   friendship is disclosed, and completed copies never change.
+5. Verify publishing, viewing, copying, and unpublishing create no notification and
+   no public/global Realtime channel; manual refresh and resume remain the
+   authoritative viewer fallbacks.
+6. Repeat in English and Portuguese, light and dark themes, 200% text, and with a
+   screen reader. Confirm publication state is not conveyed only by color.
+
+Do not begin an external public-content rollout until the reporting/takedown gate
+recorded as O-P13 is resolved and implemented.
 
 For a local client build, use the local API URL and public publishable/anonymous
 key reported by `supabase status` as the two `dart-define` values. Never copy the
@@ -316,11 +344,13 @@ JSON file in app-scoped temporary cache and the native share sheet. The server
 retains no export file. The existing `export_own_account_data()` remains schema
 version `6` and unchanged for legacy clients, and
 `export_own_account_data_v7()` remains unchanged for assignment-aware legacy
-clients. Current clients use `export_own_account_data_v8()`: version `8` preserves
-versions `1` through `7`, retains deterministic current assignments, and adds
-General Note text plus minimal currently resolved mention identities only inside
-fully exported caller-owned lists. Shared lists remain caller-relative metadata-
-only and export no items, assignments, General Note text, or mention identities.
+clients, and `export_own_account_data_v8()` remains unchanged for
+General-Note-aware legacy clients. Current clients use
+`export_own_account_data_v9()`: version `9` preserves versions `1` through `8` and
+adds only `is_public` plus nullable `published_at` to caller-owned templates. It
+never exports other users' public templates, provenance, copy request UUIDs, or
+copy fingerprints. Shared lists remain caller-relative metadata-only and export no
+items, assignments, General Note text, or mention identities.
 Split allocation and settlement
 contracts remain unchanged. Shared owner/participant identity, Split contents,
 request IDs, derived balances/suggestions, and internal authority details remain

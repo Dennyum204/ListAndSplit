@@ -12,7 +12,13 @@ import 'package:list_and_split/features/templates/presentation/private_templates
 import 'package:list_and_split/features/templates/presentation/template_selection_dialog.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
-enum _TemplateAction { edit, createList, import, delete }
+enum _TemplateAction {
+  edit,
+  publication,
+  createList,
+  import,
+  delete,
+}
 
 class PrivateTemplateDetailScreen extends ConsumerWidget {
   const PrivateTemplateDetailScreen({required this.templateId, super.key});
@@ -51,6 +57,14 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
                 PopupMenuItem(
                   value: _TemplateAction.edit,
                   child: Text(localizations.templatesEditButton),
+                ),
+                PopupMenuItem(
+                  value: _TemplateAction.publication,
+                  child: Text(
+                    detail.summary.isPublic
+                        ? localizations.templatesUnpublishButton
+                        : localizations.templatesPublishButton,
+                  ),
                 ),
                 PopupMenuItem(
                   enabled: detail.items.isNotEmpty,
@@ -113,6 +127,20 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
                             subtitle: Text(
                               '${localizations.templatesItemCount(loaded.items.length)} · '
                               '${localizations.templatesRemainingCapacity(loaded.remainingCapacity)}',
+                            ),
+                            trailing: Chip(
+                              key: const Key('templateDetailPublicationState'),
+                              avatar: Icon(
+                                loaded.summary.isPublic
+                                    ? Icons.public_rounded
+                                    : Icons.lock_outline_rounded,
+                                size: 18,
+                              ),
+                              label: Text(
+                                loaded.summary.isPublic
+                                    ? localizations.templatesPublicLabel
+                                    : localizations.templatesPrivateLabel,
+                              ),
                             ),
                           ),
                         ),
@@ -211,6 +239,8 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
     switch (action) {
       case _TemplateAction.edit:
         await _showTemplateEditor(context, ref);
+      case _TemplateAction.publication:
+        await _confirmPublication(context, ref);
       case _TemplateAction.createList:
         await _showCreateList(context, ref);
       case _TemplateAction.import:
@@ -235,6 +265,7 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
         initialName: detail.summary.name,
         initialCategoryId: detail.summary.categoryId,
         categories: categories,
+        isPublic: detail.summary.isPublic,
       ),
     );
     if (input != null && context.mounted) {
@@ -249,11 +280,24 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
     WidgetRef ref,
   ) async {
     final localizations = AppLocalizations.of(context);
+    final isPublic = ref
+            .read(privateTemplateDetailControllerProvider(templateId))
+            .detail
+            .valueOrNull
+            ?.summary
+            .isPublic ==
+        true;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(localizations.templatesDeleteDialogTitle),
-        content: Text(localizations.templatesDeleteDialogDescription),
+        content: SingleChildScrollView(
+          child: Text(
+            isPublic
+                ? localizations.templatesDeletePublicDialogDescription
+                : localizations.templatesDeleteDialogDescription,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -271,6 +315,56 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
       await ref
           .read(privateTemplateDetailControllerProvider(templateId).notifier)
           .deleteTemplate();
+    }
+  }
+
+  Future<void> _confirmPublication(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final detail = ref
+        .read(privateTemplateDetailControllerProvider(templateId))
+        .detail
+        .valueOrNull;
+    if (detail == null) return;
+    final localizations = AppLocalizations.of(context);
+    final willPublish = !detail.summary.isPublic;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          willPublish
+              ? localizations.templatesPublishDialogTitle
+              : localizations.templatesUnpublishDialogTitle,
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            willPublish
+                ? localizations.templatesPublishDialogDescription
+                : localizations.templatesUnpublishDialogDescription,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(localizations.cancelButton),
+          ),
+          FilledButton(
+            key: const Key('confirmTemplatePublicationButton'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              willPublish
+                  ? localizations.templatesPublishButton
+                  : localizations.templatesUnpublishButton,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      await ref
+          .read(privateTemplateDetailControllerProvider(templateId).notifier)
+          .setPublication(willPublish);
     }
   }
 
@@ -420,11 +514,13 @@ class _EditTemplateDialog extends StatefulWidget {
     required this.initialName,
     required this.initialCategoryId,
     required this.categories,
+    required this.isPublic,
   });
 
   final String initialName;
   final String? initialCategoryId;
   final List<TemplateCategory> categories;
+  final bool isPublic;
 
   @override
   State<_EditTemplateDialog> createState() => _EditTemplateDialogState();
@@ -456,6 +552,13 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (widget.isPublic) ...[
+              Text(
+                localizations.templatesPublicEditNotice,
+                key: const Key('publicTemplateEditNotice'),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: _nameController,
               decoration: InputDecoration(
@@ -597,6 +700,10 @@ String _detailMessage(
     PrivateTemplatesMessage.saved => localizations.templatesSavedMessage,
     PrivateTemplatesMessage.updated => localizations.templatesUpdatedMessage,
     PrivateTemplatesMessage.deleted => localizations.templatesDeletedMessage,
+    PrivateTemplatesMessage.published =>
+      localizations.templatesPublishedMessage,
+    PrivateTemplatesMessage.unpublished =>
+      localizations.templatesUnpublishedMessage,
     PrivateTemplatesMessage.categoryCreated ||
     PrivateTemplatesMessage.categoryUpdated ||
     PrivateTemplatesMessage.categoryDeleted =>

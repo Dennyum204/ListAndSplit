@@ -36,6 +36,10 @@ class AccountDataExportDocument {
               (activeList.split != null &&
                   activeList.split!.includesSettlementsField !=
                       (schemaVersion >= 6)),
+        ) ||
+        templates.any(
+          (template) =>
+              template.includesPublicationField != (schemaVersion >= 9),
         )) {
       throw const AccountDataExportFailure();
     }
@@ -58,6 +62,7 @@ class AccountDataExportDocument {
         6 => _schemaSixRootKeys,
         7 => _schemaSevenRootKeys,
         8 => _schemaEightRootKeys,
+        9 => _schemaNineRootKeys,
         _ => const <String>{},
       },
     );
@@ -104,13 +109,18 @@ class AccountDataExportDocument {
       templates: schemaVersion < 4
           ? const []
           : _requiredObjects(json, 'templates')
-              .map(AccountPrivateTemplateExport.fromJson)
+              .map(
+                (template) => AccountPrivateTemplateExport.fromJson(
+                  template,
+                  includePublication: schemaVersion >= 9,
+                ),
+              )
               .toList(growable: false),
     );
   }
 
   static const supportedProduct = 'list_and_split';
-  static const supportedSchemaVersion = 8;
+  static const supportedSchemaVersion = 9;
   static const supportedSchemaVersions = {
     1,
     2,
@@ -119,6 +129,7 @@ class AccountDataExportDocument {
     5,
     6,
     7,
+    8,
     supportedSchemaVersion,
   };
   static const _schemaOneRootKeys = {
@@ -148,6 +159,7 @@ class AccountDataExportDocument {
   static const _schemaSixRootKeys = _schemaFiveRootKeys;
   static const _schemaSevenRootKeys = _schemaSixRootKeys;
   static const _schemaEightRootKeys = _schemaSevenRootKeys;
+  static const _schemaNineRootKeys = _schemaEightRootKeys;
 
   final String product;
   final int schemaVersion;
@@ -252,12 +264,32 @@ class AccountPrivateTemplateExport {
     required this.createdAt,
     required this.updatedAt,
     required List<AccountPrivateTemplateItemExport> items,
-  }) : items = List.unmodifiable(items);
+    this.isPublic = false,
+    this.publishedAt,
+    this.includesPublicationField = false,
+  }) : items = List.unmodifiable(items) {
+    if ((!includesPublicationField && (isPublic || publishedAt != null)) ||
+        (includesPublicationField && isPublic != (publishedAt != null))) {
+      throw const AccountDataExportFailure();
+    }
+  }
 
-  factory AccountPrivateTemplateExport.fromJson(Map<String, dynamic> json) {
-    _expectExactKeys(json, _keys);
+  factory AccountPrivateTemplateExport.fromJson(
+    Map<String, dynamic> json, {
+    bool includePublication = false,
+  }) {
+    _expectExactKeys(json, includePublication ? _schemaNineKeys : _legacyKeys);
     final name = _requiredString(json, 'name');
     if (name != name.trim()) throw const AccountDataExportFailure();
+    final isPublic =
+        includePublication ? _requiredBool(json, 'is_public') : false;
+    final publishedAt =
+        includePublication ? _nullableUtcDateTime(json, 'published_at') : null;
+    if (includePublication &&
+        (isPublic != (publishedAt != null) ||
+            (isPublic && (name.runes.isEmpty || name.runes.length > 120)))) {
+      throw const AccountDataExportFailure();
+    }
     return AccountPrivateTemplateExport(
       id: _requiredUuid(json, 'template_id'),
       categoryId: json['category_id'] == null
@@ -270,10 +302,13 @@ class AccountPrivateTemplateExport {
       items: _requiredObjects(json, 'items')
           .map(AccountPrivateTemplateItemExport.fromJson)
           .toList(growable: false),
+      isPublic: isPublic,
+      publishedAt: publishedAt,
+      includesPublicationField: includePublication,
     );
   }
 
-  static const _keys = {
+  static const _legacyKeys = {
     'template_id',
     'category_id',
     'name',
@@ -281,6 +316,11 @@ class AccountPrivateTemplateExport {
     'created_at',
     'updated_at',
     'items',
+  };
+  static const _schemaNineKeys = {
+    ..._legacyKeys,
+    'is_public',
+    'published_at',
   };
 
   final String id;
@@ -290,6 +330,9 @@ class AccountPrivateTemplateExport {
   final DateTime createdAt;
   final DateTime updatedAt;
   final List<AccountPrivateTemplateItemExport> items;
+  final bool isPublic;
+  final DateTime? publishedAt;
+  final bool includesPublicationField;
 
   Map<String, dynamic> toJson() => {
         'template_id': id,
@@ -299,6 +342,9 @@ class AccountPrivateTemplateExport {
         'created_at': _encodeDateTime(createdAt),
         'updated_at': _encodeDateTime(updatedAt),
         'items': items.map((item) => item.toJson()).toList(growable: false),
+        if (includesPublicationField) 'is_public': isPublic,
+        if (includesPublicationField)
+          'published_at': _encodeNullableDateTime(publishedAt),
       };
 }
 

@@ -26,7 +26,7 @@ void main() {
 
   test('lists private templates with exact search, filter and sort arguments',
       () async {
-    responses['list_private_templates'] = [_summaryRow()];
+    responses['list_private_templates_v2'] = [_summaryRow()];
 
     final result = await repository.listTemplates(
       search: 'coffee',
@@ -34,7 +34,7 @@ void main() {
       sort: PrivateTemplateSort.alphabetic,
     );
 
-    expect(calls.single.functionName, 'list_private_templates');
+    expect(calls.single.functionName, 'list_private_templates_v2');
     expect(calls.single.params, {
       'search_query': 'coffee',
       'category_filter': _categoryId,
@@ -43,10 +43,12 @@ void main() {
     });
     expect(result.single.name, 'Weekly shop');
     expect(result.single.itemCount, 2);
+    expect(result.single.isPublic, isTrue);
+    expect(result.single.publishedAt, DateTime.utc(2026, 7, 25, 19, 33, 6));
   });
 
   test('loads strict detail and authoritative remaining capacity', () async {
-    responses['get_private_template'] = [
+    responses['get_private_template_v2'] = [
       _summaryRow()..['remaining_capacity'] = 198,
     ];
     responses['list_private_template_items'] = [
@@ -59,9 +61,56 @@ void main() {
     expect(detail.items.map((item) => item.name), ['Coffee', 'Milk']);
     expect(detail.remainingCapacity, 198);
     expect(calls.map((call) => call.functionName), [
-      'get_private_template',
+      'get_private_template_v2',
       'list_private_template_items',
     ]);
+  });
+
+  test('sets publication with the exact desired-state version contract',
+      () async {
+    responses['set_template_publication'] = [
+      {
+        'template_id': _templateId,
+        'version': 5,
+        'is_public': false,
+        'published_at': null,
+        'updated_at': '2026-07-25T20:00:00.000Z',
+      },
+    ];
+
+    final result = await repository.setPublication(
+      _templateId,
+      isPublic: false,
+      expectedVersion: 4,
+    );
+
+    expect(calls.single.functionName, 'set_template_publication');
+    expect(calls.single.params, {
+      'target_template_id': _templateId,
+      'desired_public': false,
+      'expected_template_version': 4,
+    });
+    expect(result.version, 5);
+    expect(result.isPublic, isFalse);
+    expect(result.publishedAt, isNull);
+  });
+
+  test('rejects publication fields that do not match the strict v2 shape',
+      () async {
+    responses['list_private_templates_v2'] = [
+      _summaryRow()..['private_owner_id'] = _categoryId,
+    ];
+
+    await expectLater(
+      repository.listTemplates(),
+      throwsA(
+        isA<PrivateTemplateFailure>().having(
+          (failure) => failure.code,
+          'code',
+          PrivateTemplateFailureCode.transport,
+        ),
+      ),
+    );
   });
 
   test('imports all selected rows with version and idempotency arrays intact',
@@ -143,6 +192,8 @@ Map<String, dynamic> _summaryRow() => {
       'name': 'Weekly shop',
       'version': 4,
       'item_count': 2,
+      'is_public': true,
+      'published_at': '2026-07-25T19:33:06.000Z',
       'created_at': '2026-07-21T08:00:00.000Z',
       'updated_at': '2026-07-21T09:00:00.000Z',
     };

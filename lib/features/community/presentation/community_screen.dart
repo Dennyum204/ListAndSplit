@@ -214,6 +214,16 @@ class _DiscoveryResultCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                OutlinedButton.icon(
+                  key: const Key('viewPublicProfileButton'),
+                  onPressed: isBusy
+                      ? null
+                      : () => context.push(
+                            AppRoutes.publicProfile(profile.id),
+                          ),
+                  icon: const Icon(Icons.account_circle_outlined),
+                  label: Text(localizations.publicTemplatesViewProfileButton),
+                ),
                 ..._relationshipActions(context, localizations),
                 FilledButton.tonalIcon(
                   key: const Key('blockSearchResultButton'),

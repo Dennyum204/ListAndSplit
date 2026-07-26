@@ -1136,5 +1136,68 @@
       "list": {"type": "String"}
     }
   },
-  "generalNoteMentionNotificationInformation": "Open the list to read the current General Note."
+  "generalNoteMentionNotificationInformation": "Open the list to read the current General Note.",
+  "templatesPublicLabel": "Public",
+  "templatesPrivateLabel": "Private",
+  "templatesPublishedMessage": "Template published.",
+  "templatesUnpublishedMessage": "Template made private.",
+  "templatesPublishButton": "Publish template",
+  "templatesUnpublishButton": "Make private",
+  "templatesPublicEditNotice": "This template is public. Saved changes remain visible to signed-in, nonblocked people until you make it private.",
+  "templatesDeletePublicDialogDescription": "This permanently deletes the public source. Existing saved copies and content already displayed cannot be recalled.",
+  "templatesPublishDialogTitle": "Publish this template?",
+  "templatesPublishDialogDescription": "Any signed-in, nonblocked person who reaches your profile may view this template name and its items.\n\nYour personal category stays private. Saved copies become independent and cannot be recalled. Later edits remain public until you make the template private.",
+  "templatesUnpublishDialogTitle": "Make this template private?",
+  "templatesUnpublishDialogDescription": "The template will stop appearing on your public profile. Existing saved copies and content already displayed cannot be recalled.",
+  "publicTemplatesProfileTitle": "Public profile",
+  "publicTemplatesOperationFailed": "Public templates could not be loaded or updated. Check your connection and try again.",
+  "publicTemplatesRefreshTooltip": "Refresh public templates",
+  "publicTemplatesLoadingLabel": "Loading public templates",
+  "publicTemplatesProfileDescription": "This profile shows only templates the owner currently shares publicly.",
+  "publicTemplatesSectionTitle": "Public Templates",
+  "publicTemplatesEmptyTitle": "No public templates",
+  "publicTemplatesEmptyDescription": "This profile does not currently share any templates.",
+  "publicTemplatesLoadMoreButton": "Load more templates",
+  "publicTemplatesLoadingMoreLabel": "Loading more templates",
+  "publicTemplatesUnavailableMessage": "This profile or template is no longer available.",
+  "publicTemplatesCardSemantics": "{name}, {itemCount} items, published {publishedDate}",
+  "@publicTemplatesCardSemantics": {
+    "placeholders": {
+      "name": {"type": "String"},
+      "itemCount": {"type": "int"},
+      "publishedDate": {"type": "String"}
+    }
+  },
+  "publicTemplatesPublishedAt": "Published {date}",
+  "@publicTemplatesPublishedAt": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+  "publicTemplatesViewProfileButton": "View profile",
+  "publicTemplatesPreviewProfileButton": "Preview public profile",
+  "publicTemplatesDetailTitle": "Public template",
+  "publicTemplatesSaveCopyButton": "Save a copy",
+  "publicTemplatesCopiedMessage": "A private, Uncategorized copy was saved.",
+  "publicTemplatesOpenCopyButton": "Open copy",
+  "publicTemplatesStaleMessage": "The public template changed. Review the latest version before saving a copy.",
+  "publicTemplatesCapacityMessage": "You already have the maximum of 100 templates. Delete one before saving a copy.",
+  "publicTemplatesOwnerSemantics": "Template owner {displayName}, at {username}",
+  "@publicTemplatesOwnerSemantics": {
+    "placeholders": {
+      "displayName": {"type": "String"},
+      "username": {"type": "String"}
+    }
+  },
+  "publicTemplatesDetailEmptyTitle": "This public template is empty",
+  "publicTemplatesDetailEmptyDescription": "You can still save an independent empty copy.",
+  "publicTemplatesItemSemantics": "{name}, quantity {quantity}",
+  "@publicTemplatesItemSemantics": {
+    "placeholders": {
+      "name": {"type": "String"},
+      "quantity": {"type": "String"}
+    }
+  },
+  "publicTemplatesCopyDialogTitle": "Save an independent copy?",
+  "publicTemplatesCopyDialogDescription": "The complete current template will be copied into your private Templates as Uncategorized. Your copy has new identities, is independently owned, and will not follow later source changes."
 }

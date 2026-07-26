@@ -328,15 +328,76 @@ void main() {
       }
     });
 
-    test('keeps schema-v1 through v7 export shapes byte-for-byte compatible',
+    test('maps schema-v9 template publication without widening export data',
         () {
-      for (var version = 1; version <= 7; version += 1) {
+      final json = validAccountDataExportJson(schemaVersion: 9);
+      final document = AccountDataExportDocument.fromJson(json);
+
+      expect(document.schemaVersion, 9);
+      final template = document.templates.single;
+      expect(template.includesPublicationField, isTrue);
+      expect(template.isPublic, isTrue);
+      expect(
+        template.publishedAt,
+        DateTime.utc(2026, 7, 25, 19, 33, 6),
+      );
+      expect(template.toJson(), isNot(contains('source_template_id')));
+      expect(template.toJson(), isNot(contains('copy_request_id')));
+      expect(document.toJson(), json);
+    });
+
+    test('schema-v9 rejects malformed or privacy-expanded publication data',
+        () {
+      Map<String, dynamic> templateOf(Map<String, dynamic> root) {
+        final templates = List<dynamic>.from(root['templates'] as List);
+        root['templates'] = templates;
+        final template = Map<String, dynamic>.from(
+            templates.single as Map<dynamic, dynamic>);
+        templates[0] = template;
+        return template;
+      }
+
+      final missingState = validAccountDataExportJson(schemaVersion: 9);
+      templateOf(missingState).remove('is_public');
+
+      final publicWithoutTimestamp =
+          validAccountDataExportJson(schemaVersion: 9);
+      templateOf(publicWithoutTimestamp)['published_at'] = null;
+
+      final privateWithTimestamp = validAccountDataExportJson(schemaVersion: 9);
+      templateOf(privateWithTimestamp)['is_public'] = false;
+
+      final invalidPublicName = validAccountDataExportJson(schemaVersion: 9);
+      templateOf(invalidPublicName)['name'] = List.filled(121, 'x').join();
+
+      final provenanceLeak = validAccountDataExportJson(schemaVersion: 9);
+      templateOf(provenanceLeak)['source_template_id'] =
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+      for (final json in [
+        missingState,
+        publicWithoutTimestamp,
+        privateWithTimestamp,
+        invalidPublicName,
+        provenanceLeak,
+      ]) {
+        expect(
+          () => AccountDataExportDocument.fromJson(json),
+          throwsA(isA<AccountDataExportFailure>()),
+        );
+      }
+    });
+
+    test('keeps schema-v1 through v8 export shapes byte-for-byte compatible',
+        () {
+      for (var version = 1; version <= 8; version += 1) {
         final json = validAccountDataExportJson(schemaVersion: version);
         final document = AccountDataExportDocument.fromJson(json);
 
         expect(document.toJson(), json, reason: 'schema v$version');
         expect(
-          document.activeLists.every((list) => !list.includesGeneralNoteField),
+          document.templates
+              .every((template) => !template.includesPublicationField),
           isTrue,
         );
       }
@@ -660,9 +721,9 @@ void main() {
       }
     });
 
-    test('continues decoding and round-tripping export schemas 1 through 7',
+    test('continues decoding and round-tripping export schemas 1 through 9',
         () {
-      for (var version = 1; version <= 7; version += 1) {
+      for (var version = 1; version <= 9; version += 1) {
         final json = validAccountDataExportJson(schemaVersion: version);
         final document = AccountDataExportDocument.fromJson(json);
 
@@ -684,7 +745,7 @@ void main() {
     });
 
     test('rejects unsupported schema versions', () {
-      final json = validAccountDataExportJson()..['schema_version'] = 8;
+      final json = validAccountDataExportJson()..['schema_version'] = 10;
 
       expect(
         () => AccountDataExportDocument.fromJson(json),

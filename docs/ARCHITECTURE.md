@@ -526,6 +526,69 @@ reuses the existing parent-list update fanout to every affected accepted account
 No persistent notification, unread-badge write, public channel, or new transport
 contract is introduced.
 
+### Public template database and client boundary
+
+Public templates extend the existing private aggregate rather than creating a
+second template table. Nullable `templates.published_at` is the complete
+publication state. A partial `(owner_id, published_at DESC, id DESC)` index supports
+profile-only keyset pages, and a conditional check applies the 1-120-Unicode-code-
+point name rule only while public. Existing private rows remain null and are never
+rewritten.
+
+Existing private read contracts remain unchanged. Versioned private summary/detail
+RPCs add only `is_public` and nullable `published_at`; owner publication uses one
+desired-state/expected-version RPC. A real transition versions once, first publish
+and republication assign a server time, ordinary public edits preserve it, and an
+already-achieved desired state is a no-op safe for lost-response retry. The
+existing owner-only update/delete boundaries continue to enforce ownership, and
+the public-name check makes an ineligible public rename atomic while never
+preventing unpublication or deletion.
+
+Public profile listing and public detail are exact `postgres`-owned hardened RPCs.
+They derive the caller from `auth.uid()`, require both profiles to be complete,
+recheck either-direction blocks, pin an empty `search_path`, fully qualify every
+object, revoke default/anonymous/service-role execution, and grant only their exact
+signatures to `authenticated`. Missing, private, deleted, incomplete, foreign-
+owner, and block-suppressed resources return the same unavailable shape. Listing
+uses 1-50-row `(published_at, template_id)` descending keyset pages with one extra
+row and no count. Results are constructed from the strict public allowlist; detail
+item rows omit source item IDs.
+
+`private.public_template_copy_requests` is a server-only idempotency ledger keyed
+by destination owner/request UUID. It stores only a 32-byte domain-separated
+one-way source/version fingerprint, the same-owner copied destination ID, and
+server time. Owner/destination deletion cascades it. The table forces RLS, has an
+explicit rejecting client policy, and grants no API-role table access. It never
+enters public output or account export.
+
+Cross-account Save a copy follows the global hierarchy: validate/preflight; lock
+caller/source-owner profiles in UUID order; take the canonical pair advisory lock
+for different accounts; recheck profile completion and both block directions;
+take the destination template-quota lock; lock/recheck the source template and
+ordered items; enforce exact version, publication, 100-template/200-item limits;
+then insert one private null-category destination, new item UUIDs, and the request
+ledger atomically. An identical completed retry returns the existing destination;
+conflicting UUID reuse returns `23505`. Source edit/unpublish/delete/block/account-
+deletion and destination-quota races therefore either serialize to one complete
+copy or write nothing. No source identity/provenance survives in the destination.
+
+Flutter keeps public profile and template DTOs/repositories under the Templates
+feature while routes live in the Community shell branch:
+`/community/profile/:profileId` and its nested
+`templates/:templateId`. Controllers are session keyed, register authoritative
+refresh with the existing reconciliation registry, use immutable IDs, guard
+overlap, and retain one copy request UUID across transport-uncertain retry.
+Profile/detail screens expose only the reviewed read-only fields, refresh/block
+actions, bounded paging, and Save a copy. Access loss exits to Community once with
+one privacy-safe message. The copied-template action may switch to the existing
+private Templates branch only when the user chooses Open copy.
+
+Publication, viewing, and copying create no notification and no new Realtime
+topic. Existing template triggers invalidate only the owner for publication/source
+changes and the copier for destination creation. Blocking already invalidates both
+accounts. Arbitrary viewers reconcile on manual refresh, app resume, or copy-time
+authorization; the architecture makes no global live-public-content promise.
+
 ### Split database and client boundary
 
 `public.active_list_split_settings`, `public.active_list_split_participants`,
@@ -650,9 +713,10 @@ and completed Profile without exposing it to anonymous or unverified sessions.
 
 The existing `export_own_account_data()` continues to return its unchanged
 schema-version-6 `jsonb` document for legacy clients, and
-`export_own_account_data_v7()` remains unchanged for assignment-aware clients. The
-separate `export_own_account_data_v8()` reuses the corrected v7 allowlisted base and
-returns schema version `8`. Version `2` preserves all version-1 account/social roots
+`export_own_account_data_v7()` remains unchanged for assignment-aware clients, and
+`export_own_account_data_v8()` remains unchanged for General-Note-aware clients.
+The separate `export_own_account_data_v9()` reuses the corrected v8 allowlisted
+base and returns schema version `9`. Version `2` preserves all version-1 account/social roots
 and adds the deterministic `active_lists` array with active/archived owned lists and
 ordered items. Version `3` adds only caller-relative metadata for lists owned by
 others and excludes their items, owner identity, other participants, and internal
@@ -672,7 +736,9 @@ canonical username/profile ID. Version `8` adds to each fully exported caller-ow
 list a nullable General Note object containing text, note version, note-update
 time, and a deterministic current resolved-mention array containing only profile
 ID, current username, and current display name. Removed links leave literal note
-text only. `shared_list_access` stays byte-for-byte
+text only. Version `9` adds only `is_public` and nullable `published_at` to each
+caller-owned template; it adds no public template owned by another profile and no
+copy provenance, request UUID, or fingerprint. `shared_list_access` stays byte-for-byte
 metadata-only: it contains no assignment array, item data, General Note text,
 mention identity, or corresponding timestamp. Request IDs, derived balances, and
 suggested payments are excluded
@@ -713,10 +779,11 @@ changes. The file service writes pretty UTF-8 JSON to application-scoped
 temporary/cache storage and invokes the Android/iOS native share sheet with a
 privacy-safe UTC filename and JSON MIME type. It never falls back to public shared
 storage or promises guaranteed cache deletion. The legacy operation still requires
-version `6`; the assignment-aware legacy operation requires version `7`; and the
-current operation requires version `8`. The parser retains strict compatibility
-for versions `1` through `8`, including non-equal explicit shares in version
-`5`/`6`/`7`/`8` documents.
+version `6`; the assignment-aware legacy operation requires version `7`; the
+General-Note-aware legacy operation requires version `8`; and the current operation
+requires version `9`. The parser retains strict compatibility for versions `1`
+through `9`, including non-equal explicit shares in version `5`/`6`/`7`/`8`/`9`
+documents and the exact legacy template shapes through version `8`.
 
 ### Permanent account-deletion boundary
 
@@ -1005,8 +1072,9 @@ aggregates use exact PostgreSQL RPCs because their validation, locking, version
 checks, capacity enforcement, and writes belong in one short database transaction.
 General Note text/link replacement and mention notification creation follow that
 same boundary. Split expense allocation, settlement, and reversal operations follow
-the same exact PostgreSQL RPC boundary. Future public/sent-template operations
-still require separate placement decisions.
+the same exact PostgreSQL RPC boundary. Public-template operations use the reviewed
+PostgreSQL RPC boundary above; future sent-template operations still require a
+separate placement decision.
 
 ## Money boundary
 

@@ -55,6 +55,41 @@ void main() {
     second.dispose();
   });
 
+  test('owner publication is explicit and public-name edits stay bounded',
+      () async {
+    final templates = FakePrivateTemplateRepository();
+    final summary = await templates.createTemplate(
+      'Public kit',
+      requestId: 'template-request',
+    );
+    final controller = PrivateTemplateDetailController(
+      templates,
+      FakeActiveListRepository(),
+      summary.id,
+      invalidateTemplates: () {},
+      invalidateLists: () {},
+      invalidateListDetail: (_) {},
+    );
+    await controller.load();
+    final messages = <PrivateTemplatesMessage?>[];
+    controller.addListener((state) => messages.add(state.message));
+
+    expect(await controller.setPublication(true), isTrue);
+    expect(messages, contains(PrivateTemplatesMessage.published));
+    expect(controller.state.detail.requireValue.summary.isPublic, isTrue);
+    expect(
+      await controller.updateTemplate(List.filled(121, 'x').join()),
+      isFalse,
+    );
+    expect(controller.state.message, PrivateTemplatesMessage.invalidInput);
+    expect(controller.state.detail.requireValue.summary.name, 'Public kit');
+
+    expect(await controller.setPublication(false), isTrue);
+    expect(messages, contains(PrivateTemplatesMessage.unpublished));
+    expect(controller.state.detail.requireValue.summary.isPublic, isFalse);
+    controller.dispose();
+  });
+
   test('preview uses authoritative destination count and blocks overflow',
       () async {
     final templates = FakePrivateTemplateRepository();
