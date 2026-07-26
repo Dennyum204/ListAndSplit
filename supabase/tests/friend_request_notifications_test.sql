@@ -32,15 +32,19 @@ select is(
     'created_at:timestamp with time zone',
     'expires_at:timestamp with time zone',
     'read_at:timestamp with time zone',
-    'suppressed_at:timestamp with time zone'
-    ,'active_list_id:uuid'
-    ,'access_participant_id:uuid'
-    ,'access_version:bigint'
-    ,'active_list_item_id:uuid'
-    ,'assignment_item_version:bigint'
-    ,'general_note_version:bigint'
+    'suppressed_at:timestamp with time zone',
+    'active_list_id:uuid',
+    'access_participant_id:uuid',
+    'access_version:bigint',
+    'active_list_item_id:uuid',
+    'assignment_item_version:bigint',
+    'general_note_version:bigint',
+    'public_template_id:uuid',
+    'public_template_name:text',
+    'moderation_reason_code:text',
+    'moderation_event_id:uuid'
   ],
-  'notification columns contain only the accepted reference and lifecycle data'
+  'notification columns contain only accepted reference, moderation, and lifecycle data'
 );
 
 select is(
@@ -52,11 +56,13 @@ select is(
       and is_nullable = 'YES'
   ),
   array[
-    'relationship_low_id','relationship_high_id','relationship_version',
-    'read_at','suppressed_at','active_list_id','access_participant_id','access_version',
-    'active_list_item_id','assignment_item_version','general_note_version'
+    'actor_id','relationship_low_id','relationship_high_id','relationship_version',
+    'read_at','suppressed_at','active_list_id','access_participant_id',
+    'access_version','active_list_item_id','assignment_item_version',
+    'general_note_version','public_template_id','public_template_name',
+    'moderation_reason_code','moderation_event_id'
   ]::information_schema.sql_identifier[],
-  'type-specific references plus read and suppression timestamps are nullable'
+  'optional actor, type-specific references, and lifecycle timestamps are nullable'
 );
 
 select is(
@@ -158,14 +164,16 @@ select is(
     'user_notifications_access_version_key',
     'user_notifications_active_list_idx',
     'user_notifications_item_assignment_version_key',
+    'user_notifications_moderation_event_key',
     'user_notifications_note_mention_version_key',
     'user_notifications_note_privacy_cleanup_idx',
     'user_notifications_pair_version_key',
     'user_notifications_pkey',
+    'user_notifications_public_template_idx',
     'user_notifications_recipient_unread_expiry_idx',
     'user_notifications_recipient_visible_created_idx'
   ]::name[],
-  'only required friend/list/item/note identity, privacy, listing, and badge indexes exist'
+  'only required friend/list/item/note/moderation privacy, listing, and badge indexes exist'
 );
 
 select ok(

@@ -24,7 +24,11 @@ application data.
 Private templates support independent list snapshots and atomic selected-item list
 creation/import. Owners can also publish templates explicitly on their block-aware
 public profiles, where any fully onboarded authenticated nonblocked user may inspect
-the live item-only source and save an independent private, Uncategorized copy.
+the live item-only source and save an independent private, Uncategorized copy. The
+current source also adds exact-revision reporting, reporter-only hiding, an
+empty-by-default UUID-authorized moderation queue, restriction-backed
+takedown/restoration, safe owner outcomes, and 24-month closed-evidence retention;
+its hosted rollout and physical QA remain separately controlled.
 List-scoped Split
 supports owner-selected CHF/EUR, exact integer equal and custom expense shares,
 derived balances, deterministic settle-up suggestions, immutable full/partial
@@ -227,8 +231,9 @@ authorization and must not be inferred from local automated verification.
 
 ### Public Template manual QA
 
-After the reviewed public-template migration is separately authorized and applied
-to a QA environment, use two fully onboarded accounts on current clients:
+The Public Template Foundation passed its required two-account manual QA. For
+regression QA in an authorized environment, use two fully onboarded accounts on
+current clients:
 
 1. Publish named zero-item and populated templates, verify the owner state remains
    visibly Public after refresh, and confirm ordinary public edits preserve the
@@ -247,8 +252,164 @@ to a QA environment, use two fully onboarded accounts on current clients:
 6. Repeat in English and Portuguese, light and dark themes, 200% text, and with a
    screen reader. Confirm publication state is not conveyed only by color.
 
-Do not begin an external public-content rollout until the reporting/takedown gate
-recorded as O-P13 is resolved and implemented.
+O-P13 is resolved in the source contract, but do not begin an external
+public-content rollout until its additive migration is separately reviewed and
+deployed, a development moderator is explicitly granted, current clients are
+distributed, and the reporting/moderation physical QA below passes.
+
+### Public Template moderation rollout (not yet performed)
+
+Migration `20260726072024_public_template_reporting_moderation.sql` deliberately
+creates an empty moderator allowlist and no retention Cron job. Do not assign a
+real moderator or schedule cleanup as part of ordinary migration deployment. Every
+hosted action below requires a separate authorization and an unambiguous
+development target; Production needs its own independently reviewed target,
+identity, request IDs, rollout, and evidence.
+
+Use this order for a later controlled development rollout:
+
+1. Verify project name/reference, branch/commit, clean migration history, and that
+   this is the only pending migration. Apply only the reviewed migration.
+2. Verify the migration once, all seven private tables/RLS/rejection policies,
+   exact hardened functions/grants, absence from Realtime publication, unchanged
+   application counts, zero moderator rows, and no Cron job named
+   `public-template-moderation-retention-daily`.
+3. Verify the intended completed development Auth UUID out of band. Never use
+   email, username, profile fields, a JWT role claim, or a copied Production UUID
+   as moderator authority.
+4. Through a privileged `postgres` database session, make one audited grant with a
+   stable new request UUID. Provision standard `PGHOST`/`PGPORT`/`PGDATABASE`/
+   `PGUSER`/`PGPASSWORD` variables, `LIST_AND_SPLIT_MODERATOR_AUTH_UUID`, and
+   `LIST_AND_SPLIT_MODERATOR_REQUEST_ID` through the approved secret mechanism
+   rather than command history or repository files. Then run:
+
+   ```powershell
+   $env:PGOPTIONS = "-c app.list_and_split_moderator_uuid=$($env:LIST_AND_SPLIT_MODERATOR_AUTH_UUID) -c app.list_and_split_moderator_request_id=$($env:LIST_AND_SPLIT_MODERATOR_REQUEST_ID)"
+   psql --no-psqlrc --set=ON_ERROR_STOP=1 --command "select private.grant_public_template_moderator(current_setting('app.list_and_split_moderator_uuid')::uuid, 'list-and-split-dev-controlled-bootstrap', current_setting('app.list_and_split_moderator_request_id')::uuid);"
+   ```
+
+   Retry only the identical UUID/operator/request tuple after an uncertain
+   response. Verify an aggregate count and the intended signed-in client's
+   `is_public_template_moderator()` result; do not list or log allowlisted UUIDs.
+   Clear the task-specific and standard PostgreSQL secret environment variables
+   immediately afterwards.
+5. Distribute the matching development client only after the migration and grant
+   checks pass, then complete physical QA. An empty allowlist is the safe
+   fail-closed state and does not block reporting or owner-private template use.
+6. Schedule retention only in a later separately reviewed additive migration. The
+   accepted job is once daily at 03:47 UTC, named
+   `public-template-moderation-retention-daily`, executing as `postgres`:
+
+   ```sql
+   select cron.schedule(
+     'public-template-moderation-retention-daily',
+     '47 3 * * *',
+     'select * from private.maintain_public_template_moderation_retention();'
+   );
+   ```
+
+   That later migration must first unschedule an existing same-name job
+   idempotently, preserve `postgres`-only execute privilege, and test that open
+   groups, active restrictions, and evidence newer than 24 months remain. Verify
+   exactly one active job without exposing evidence:
+
+   ```sql
+   select
+     has_function_privilege(
+       'postgres',
+       'private.maintain_public_template_moderation_retention(timestamptz)',
+       'EXECUTE'
+     ) as postgres_can_execute,
+     not has_function_privilege(
+       'anon',
+       'private.maintain_public_template_moderation_retention(timestamptz)',
+       'EXECUTE'
+     ) as anon_denied,
+     not has_function_privilege(
+       'authenticated',
+       'private.maintain_public_template_moderation_retention(timestamptz)',
+       'EXECUTE'
+     ) as authenticated_denied,
+     not has_function_privilege(
+       'service_role',
+       'private.maintain_public_template_moderation_retention(timestamptz)',
+       'EXECUTE'
+     ) as service_role_denied;
+
+   select jobname, schedule, active, username, database
+   from cron.job
+   where jobname = 'public-template-moderation-retention-daily';
+
+   select status, count(*)
+   from cron.job_run_details
+   where jobid = (
+     select jobid
+     from cron.job
+     where jobname = 'public-template-moderation-retention-daily'
+   )
+   group by status
+   order by status;
+   ```
+
+For controlled revocation, use a fresh stable request UUID and the same protected
+environment mechanism, substituting
+`private.revoke_public_template_moderator(...)` and operator label
+`list-and-split-dev-controlled-revoke`. Revocation is immediately authoritative;
+the current client clears protected state and exits once. Do not delete the access
+audit. If rollout must be backed out, roll the client back first, revoke every
+development moderator, and—only if the later Cron migration was actually applied—
+unschedule it through another reviewed migration. Keep the additive schema and
+retained evidence; never use destructive migration repair or evidence deletion as
+rollback.
+
+Mixed versions are fail-safe: older public reads/copy calls receive the server's
+reporter/restriction filtering, older owner publication attempts are rejected
+while restricted, notification v1-v3 exclude moderation outcomes, and export
+v1-v9 remains unchanged. Older clients have no report or moderator UI, so the
+current client is still required for safety operations and outcome presentation.
+
+### Public Template reporting and moderation physical QA
+
+After the separately authorized development migration, audited moderator grant,
+and client distribution, use a template owner, a different reporter/viewer, and
+the intended moderator. Use disposable Public Templates and, for deletion tests,
+only explicitly authorized disposable identities:
+
+1. Report an exact populated revision with every localized reason. Verify the
+   conditional 500-character explanation rules and copyright notice, cancellation,
+   rapid repeated confirmation, retry, and stale-revision rejection.
+2. Confirm success hides the source only from that reporter across profile, detail,
+   refresh, resume, and copy; another nonblocked viewer still sees it, no owner
+   notification appears, and optional **Block user** remains separate.
+3. Verify the moderator's Settings entry, Open/Taken down/Closed keyset pages,
+   immutable group-ID routing, individual reporters, and snapshot/current
+   changed/unpublished/deleted/restricted indicators.
+4. Dismiss one group and confirm the source remains public with no notification.
+   Create multiple open revision groups, take down one, and confirm all close, the
+   source becomes private, editing/deletion remains available, publication is
+   denied, and exactly one safe actor-free owner notification appears.
+5. Restore the active restriction. Confirm one safe owner notification, no
+   automatic republication, and explicit owner publication works only afterwards.
+   Repeat uncertain-response/retry and concurrent action attempts to confirm one
+   decision and no duplicate notification/navigation/message.
+6. Revoke the moderator while queue/detail is mounted. Confirm cached case/report
+   data clears immediately, the route exits once, the Settings entry disappears,
+   and direct route re-entry is denied without stale private content.
+7. Edit, unpublish, and delete reported sources; verify immutable snapshots remain
+   understandable and deletion closes open evidence. If separately authorized,
+   delete only disposable reporter/owner/moderator identities and verify retained
+   evidence becomes generic without exposing deleted identity.
+8. Verify export v10 contains only the caller's reason, nullable explanation, and
+   submission time, while another account's reports and all moderation evidence,
+   state, identities, notes, restrictions, allowlist, and audit data remain absent.
+9. Exercise an older client alongside the current client: restricted/reporter-
+   hidden sources remain unavailable, old publication cannot bypass restriction,
+   old notification parsers receive no new type, and old export versions remain
+   readable.
+10. Repeat reporting, owner outcomes, queue/detail/actions, revocation, and
+    authoritative refresh in English and Portuguese, light and dark themes, 200%
+    text, screen reader, and two connected devices. Verify private Realtime carries
+    only opaque invalidation and duplicate signals never duplicate UI effects.
 
 For a local client build, use the local API URL and public publishable/anonymous
 key reported by `supabase status` as the two `dart-define` values. Never copy the
@@ -298,10 +459,11 @@ blocker's own blocked-user projection. Block creation atomically cancels a pendi
 request or ends a friendship, while unblocking restores no relationship.
 
 Legacy notification clients retain the reviewed `list_notifications` and
-`get_unread_notification_count` contracts and never receive assignment or note-
-mention types. Assignment-aware v2 clients likewise never receive note mentions.
-Current Flutter uses `list_notifications_v3`,
-`get_unread_notification_count_v3`, and the compatible hardened
+`get_unread_notification_count` contracts and never receive assignment, note-
+mention, or moderation types. Assignment-aware v2 clients likewise never receive
+note mentions or moderation outcomes, and v3 includes notes while excluding
+moderation. Current Flutter uses `list_notifications_v4`,
+`get_unread_notification_count_v4`, and the compatible hardened
 `mark_notifications_read` boundary; it never reads or writes
 `user_notifications` directly. A real transition into a pending relationship
 version creates one notification atomically, while duplicate and crossed sends
@@ -310,7 +472,10 @@ block-hidden rows, and block creation permanently suppresses existing pair
 notifications in the same transaction. A newly resolved `list_note_mentioned`
 row contains references and the resulting note version, never note text; access
 loss or blocking stores permanent suppression that reinvitation or unblocking
-cannot clear.
+cannot clear. System-authored Public Template takedown/restoration rows have no
+actor and expose only the owner's safe template-name snapshot and general reason;
+they never contain reporter, explanation, report count, moderator, private note,
+or queue state.
 
 Active lists, items, current item assignments, resolved note mentions, and retained
 participant access rows use only reviewed authenticated RPCs. The tables
@@ -345,12 +510,16 @@ retains no export file. The existing `export_own_account_data()` remains schema
 version `6` and unchanged for legacy clients, and
 `export_own_account_data_v7()` remains unchanged for assignment-aware legacy
 clients, and `export_own_account_data_v8()` remains unchanged for
-General-Note-aware legacy clients. Current clients use
-`export_own_account_data_v9()`: version `9` preserves versions `1` through `8` and
-adds only `is_public` plus nullable `published_at` to caller-owned templates. It
-never exports other users' public templates, provenance, copy request UUIDs, or
-copy fingerprints. Shared lists remain caller-relative metadata-only and export no
-items, assignments, General Note text, or mention identities.
+General-Note-aware legacy clients, while `export_own_account_data_v9()` remains
+unchanged for public-template-aware legacy clients. Current clients use
+`export_own_account_data_v10()`: version `10` preserves versions `1` through `9`,
+retains v9's caller-owned `is_public`/nullable `published_at`, and adds only the
+caller's own submitted report reason, nullable explanation, and submission time.
+It never exports other users' public templates/reports, target identity, report
+status/group, evidence snapshot/fingerprint, provenance, copy request UUID,
+moderator/private note, decision, restriction, allowlist, or access audit. Shared
+lists remain caller-relative metadata-only and export no items, assignments,
+General Note text, or mention identities.
 Split allocation and settlement
 contracts remain unchanged. Shared owner/participant identity, Split contents,
 request IDs, derived balances/suggestions, and internal authority details remain
@@ -366,7 +535,9 @@ server-only admin client hard-deletes the caller's Auth user. That Auth deletion
 atomically cascades through the current profile, blocks, relationships,
 notifications, owned lists, list items, and each owned list's Split ledger. On a
 surviving list, a deleted non-owner's financial identity and settlement history are
-retained anonymously. A completed username is retained alone
+retained anonymously. Retained Public Template moderation evidence immediately
+nulls matching reporter, owner, or moderator identities while preserving open
+evidence/restrictions and no identity snapshot. A completed username is retained alone
 in a private 30-day
 reservation and expired reservations are physically removed daily at 03:17 UTC.
 No email, Auth/profile identifier, or copied former-user data enters the
@@ -407,9 +578,10 @@ SQL into the Dashboard.
 ## Intentional deferrals
 
 The current slices do not implement unrestricted profile/directory search,
-avatars, public/shared/sent templates, rich-text notes, note history/comments,
-notification archive/preferences, assignment or mention deep links, or physical
-cleanup, reporting,
+avatars, shared/sent templates, a public feed, rich-text notes, note
+history/comments, notification archive/preferences, assignment or mention deep
+links, report withdrawal/unhide/appeal/evidence attachments, automated moderation,
+or scheduled moderation cleanup,
 percentage/weight/ratio expense allocation,
 automatic custom-share remainder correction, a mathematically minimum settlement
 solver, SQLite caching/offline

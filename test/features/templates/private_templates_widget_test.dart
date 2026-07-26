@@ -330,6 +330,56 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+      'moderated owner source remains editable while publication is unavailable',
+      (tester) async {
+    final repository = FakePrivateTemplateRepository();
+    repository.templates.add(
+      PrivateTemplateSummary(
+        id: 'moderated-template',
+        categoryId: null,
+        categoryName: null,
+        name: 'Moderated source',
+        version: 8,
+        itemCount: 0,
+        createdAt: DateTime.utc(2026, 7, 26, 7),
+        updatedAt: DateTime.utc(2026, 7, 26, 8),
+        isModerated: true,
+      ),
+    );
+    repository.itemsByTemplate['moderated-template'] = [];
+
+    await _pump(
+      tester,
+      repository: repository,
+      lists: FakeActiveListRepository(),
+      dark: true,
+      textScale: 2,
+      child: const PrivateTemplateDetailScreen(
+        templateId: 'moderated-template',
+      ),
+    );
+
+    expect(find.text('Removed by moderation'), findsOneWidget);
+    expect(find.byIcon(Icons.gavel_rounded), findsOneWidget);
+    expect(find.byKey(const Key('addTemplateItemButton')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('templateActionsButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit template'), findsOneWidget);
+    expect(find.text('Delete template'), findsOneWidget);
+    expect(find.text('Publish template'), findsOneWidget);
+
+    await tester.tap(find.text('Publish template'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('confirmTemplatePublicationButton')),
+      findsNothing,
+    );
+    expect(repository.mutationCalls, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('selection preview disables zero and overflow confirmations',
       (tester) async {
     final repository = FakePrivateTemplateRepository();

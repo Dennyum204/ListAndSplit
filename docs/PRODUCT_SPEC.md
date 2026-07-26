@@ -80,17 +80,21 @@ are the evidence of implementation status.
   one-time reversal history; version `7` adds current item assignments only inside
   fully exported caller-owned list items; version `8` adds the General Note text
   and minimal currently resolved mention identities only inside fully exported
-  caller-owned lists; and version `9` adds only `is_public` and nullable
-  `published_at` to caller-owned templates. Equal and custom allocations are represented by their
+  caller-owned lists; version `9` adds only `is_public` and nullable
+  `published_at` to caller-owned templates; and version `10` adds only the caller's
+  submitted public-template report reason, nullable explanation, and submission
+  time. Equal and custom allocations are represented by their
   explicit integer share rows; no allocation-mode field is introduced. Collections
   are deterministic arrays and are empty rather than null, and export versions `1`
-  through `9` remain compatible.
+  through `10` remain compatible.
 - The existing parameterless `export_own_account_data()` remains unchanged at
   schema version `6` for legacy clients, and
   `export_own_account_data_v7()` remains unchanged for assignment-aware clients.
   General-Note-aware clients call the separate parameterless
-  `export_own_account_data_v8()`. Public-template-aware clients call the separate
-  parameterless `export_own_account_data_v9()`. Versions `7`, `8`, and `9` add no assignment, item,
+  `export_own_account_data_v8()`. Public-template-aware legacy clients call the
+  parameterless `export_own_account_data_v9()`. Reporting-aware clients call the
+  separate parameterless `export_own_account_data_v10()`. Versions `7` through
+  `10` add no assignment, item,
   General Note, mention, or participant identity to `shared_list_access`; lists
   owned by another user remain byte-for-byte privacy-minimal metadata under P-039.
 - The export includes nullable onboarding fields faithfully. It includes only the
@@ -125,6 +129,9 @@ are the evidence of implementation status.
   another user's public/shared-template data, copy provenance/request/fingerprint
   data, or Split data from a list the caller does not own. Shared-list export
   remains privacy-minimal metadata.
+- Version `10` never exports another reporter, report status or group, content
+  snapshot/fingerprint, moderator identity/note, decision, restriction, allowlist,
+  or access-audit information.
 - Export is generated synchronously on demand and returned to the caller. The
   server retains no export file or export record. The mobile app validates and
   pretty-prints the versioned document, writes it to OS-managed temporary/cache
@@ -168,7 +175,10 @@ are the evidence of implementation status.
   and reversal arithmetic remains valid.
 - Deleting a completed profile reserves only its canonical username for exactly
   30 days from deletion. The private reservation contains no email, Auth user ID,
-  profile ID, display name, or copied user data. Active reservations block
+  profile ID, display name, or copied user data. Public-template report,
+  restriction, and event foreign keys instead anonymize that user's reporter,
+  owner, or moderator identity immediately while retaining still-open evidence and
+  active enforcement. Active reservations block
   onboarding; expired reservations permit a claim and are physically removed once
   daily at 03:17 UTC by migration-managed database Cron. Incomplete profiles
   create no reservation.
@@ -180,9 +190,10 @@ are the evidence of implementation status.
   missing/invalid Auth user signs that device out; transient network failures
   preserve its session.
 - Re-registration after deletion creates a new Auth UUID and restores no profile,
-  blocks, relationships, notifications, or other data. Every future Storage,
-  moderation/legal-retention, or administrator-deletion aggregate must extend this
-  contract before shipping. This product lifecycle is
+  blocks, relationships, notifications, or other data. Public Template v1
+  moderation already follows the anonymization contract above; every future
+  Storage, appeal/compliance, extended moderation/legal-retention, or
+  administrator-deletion aggregate must extend it before shipping. This product lifecycle is
   not a claim of complete legal or regulatory compliance. Hosted deletion QA uses
   separately authorized disposable accounts and must never delete or modify
   Fernando or Susana.
@@ -469,6 +480,65 @@ copies succeed; duplicate-name rows each consume one place.
   manual refresh, app resume, or action-time authorization rather than global
   fanout.
 
+#### Public Template reporting and moderation
+
+- An authenticated non-owner may report only a currently accessible public
+  template at the exact public revision displayed. Private, missing, deleted,
+  blocked, already moderated, self-owned, and stale content is rejected
+  transactionally without disclosing which unavailable condition applies.
+- Stable reasons are spam/scam/deception; hate/harassment/bullying; sexual
+  content; violence/danger; illegal/regulated content; personal/confidential
+  information; copyright/trademark concern; and other. A trimmed plain-text
+  explanation is optional for the first six, required for the last two, and
+  limited to 500 characters. Copyright reporting is explicitly an in-app signal,
+  not a formal legal-notice process; v1 accepts no attachment or evidence upload.
+- The server atomically snapshots exactly the visible template name and ordered
+  item names/quantities, computes a deterministic fingerprint, retains every
+  individual report, and enforces one report per reporter/template revision.
+  Open reports group by immutable template ID plus reported revision/fingerprint;
+  groups are reviewed oldest first.
+- A successful report hides only that template from that reporter in profile,
+  detail, copy, refresh, and resume projections. It does not block the owner,
+  alter friendship, mutate independent copies, notify either party, or expose
+  report status. **Block user** remains a separately confirmed optional action.
+  V1 has no withdrawal, appeal, or unhide screen.
+- Moderation authorization is an initially empty private allowlist of immutable
+  Supabase Auth UUIDs. A protected self-check controls the Settings entry, but
+  every queue read and action rechecks authorization server-side. Revocation is
+  immediate. Email, username, profile fields, client state, and JWT role claims
+  never grant moderator access.
+- The protected queue has Open, Taken down, and Closed bounded keyset views. It
+  compares immutable reported content with the current allowlisted public fields
+  and marks changed, unpublished, deleted, and restricted state. Only moderators
+  can see current reporter profiles, explanations, and private moderator notes;
+  deleted/anonymized identities display generically.
+- **Dismiss** closes one group without changing availability or notifying anyone.
+  **Take down** applies to the template ID: it atomically restricts republication,
+  makes the source private, closes every open group for that template, appends one
+  immutable decision, and creates exactly one owner notification containing only
+  template name and the selected general reason. **Restore** deactivates one
+  active restriction, appends one immutable event, creates one safe owner
+  notification, and permits later publication without republishing automatically.
+  Every action requires confirmation and a trimmed 1-1,000-character private note;
+  takedown also requires the owner-facing general reason.
+- While restricted, the owner retains private read/edit/delete and item management,
+  sees a text-and-icon **Removed by moderation** status, and cannot publish.
+  Editing cannot clear the restriction. Source deletion closes open evidence as
+  Content deleted; evidence survives its source and account identities for the
+  approved retention period.
+- Open evidence is retained until a decision. Active-takedown evidence is retained
+  while enforcement remains active. Fully closed evidence is retained for 24
+  months from closure, then a private privileged idempotent maintenance operation
+  removes identifying identities, explanations, snapshots, fingerprints, notes,
+  and detailed records. Only nonidentifying aggregate decision tombstones may
+  remain. The maintenance operation is implemented but is not scheduled until a
+  separate reviewed hosted rollout step.
+- Takedown/restoration notifications are system-authored and contain no reporter,
+  explanation, report count, moderator identity, or private note. Legacy
+  notification versions exclude the new types. Moderation tables are not published
+  to Realtime; successful reports/actions use only narrow private account
+  invalidations and authoritative RPC refresh.
+
 ### Community
 
 - Initial discovery is a deliberate exact lookup of one canonical username.
@@ -536,7 +606,6 @@ copies succeed; duplicate-name rows each consume one place.
   ranking, pagination, retention, and rollout remain unresolved.
 - Blocking applies the symmetric shared-list separation rules in the active/shared
   list section. Friendship ending alone preserves accepted list membership.
-  Reporting, moderation, evidence retention, and appeals remain future work.
 
 ### Split expense ledger
 
@@ -756,8 +825,9 @@ feature deep-link contracts remain open.
   narrow block-aware contracts that return the approved minimal profile fields.
 - Blocks apply symmetrically to discovery and contact even though each block record
   is directional, and atomically apply the accepted shared-list separation rules.
-- Reporting and moderation are required before the public-content experience is
-  considered mature, but their detailed behavior is not yet designed.
+- Public reporting and moderator takedown/restoration are required before external
+  public-content rollout. Their accepted v1 behavior is implemented locally but
+  still requires separately authorized Dev deployment and physical QA.
 
 ### Reliability and offline direction
 
@@ -783,6 +853,9 @@ feature deep-link contracts remain open.
 - General Note editing, mention suggestions/selections, counters, errors, conflict
   recovery, and read-only state follow the same semantic, scalable-text,
   light/dark, and non-color-only requirements in both supported languages.
+- Public Template report reasons, conditional explanation, confirmations,
+  moderation filters/cases/actions, restriction status, revocation, and owner
+  outcomes follow those requirements, including 200% text and screen-reader use.
 
 ## Explicit non-goals and deferrals
 
@@ -805,6 +878,10 @@ feature deep-link contracts remain open.
   reactions, read receipts, `@everyone`, non-member mention, mention deep link,
   push/email mention delivery, or offline note-mutation queue is introduced by the
   General Note foundation.
+- No public-template report withdrawal, appeal, unhide screen, evidence attachment,
+  automated takedown, account strike/suspension, similarity matching,
+  cross-template enforcement, or moderator-management UI is introduced by the
+  moderation foundation.
 
 ## Open product decisions
 
@@ -818,10 +895,10 @@ choose them:
 - Invitation and sent-template expiry, revocation, and idempotent re-acceptance.
 - Notification archive/delete/preferences, later types, push-safe payloads,
   physical cleanup, and account-lifecycle retention beyond the accepted
-  friend/list/assignment/mention behavior.
-- Reporting scope, moderation workflow, evidence retention, and appeal behavior.
+  friend/list/assignment/mention/Public-Template-moderation behavior.
 - Offline conflict resolution and which operations are permitted while offline.
 - Shared-resource ownership/deletion, administrator-initiated deletion,
-  moderation retention, Storage cleanup, and legal/compliance export obligations
+  appeal/compliance, moderation/legal retention beyond the accepted Public
+  Template v1 contract, Storage cleanup, and legal/compliance export obligations
   beyond the accepted current-aggregate account lifecycle.
 - Which additional locales beyond English and Portuguese ship first.

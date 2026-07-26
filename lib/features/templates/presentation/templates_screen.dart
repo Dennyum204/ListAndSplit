@@ -419,7 +419,10 @@ class _TemplatesBody extends StatelessWidget {
                       Semantics(
                         label: template.isPublic
                             ? localizations.templatesPublicLabel
-                            : localizations.templatesPrivateLabel,
+                            : template.isModerated
+                                ? localizations
+                                    .templatesRemovedByModerationLabel
+                                : localizations.templatesPrivateLabel,
                         child: Row(
                           key: Key('templatePublication-${template.id}'),
                           mainAxisSize: MainAxisSize.min,
@@ -427,14 +430,19 @@ class _TemplatesBody extends StatelessWidget {
                             Icon(
                               template.isPublic
                                   ? Icons.public_rounded
-                                  : Icons.lock_outline_rounded,
+                                  : template.isModerated
+                                      ? Icons.gavel_rounded
+                                      : Icons.lock_outline_rounded,
                               size: 16,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               template.isPublic
                                   ? localizations.templatesPublicLabel
-                                  : localizations.templatesPrivateLabel,
+                                  : template.isModerated
+                                      ? localizations
+                                          .templatesRemovedByModerationLabel
+                                      : localizations.templatesPrivateLabel,
                             ),
                           ],
                         ),
@@ -816,6 +824,8 @@ String _message(
     PrivateTemplatesMessage.invalidInput =>
       localizations.templatesInvalidInputMessage,
     PrivateTemplatesMessage.capacity => localizations.templatesCapacityExceeded,
+    PrivateTemplatesMessage.moderated =>
+      localizations.templatesRemovedByModerationMessage,
     PrivateTemplatesMessage.staleRefreshed =>
       localizations.templatesStaleMessage,
     PrivateTemplatesMessage.unavailable =>

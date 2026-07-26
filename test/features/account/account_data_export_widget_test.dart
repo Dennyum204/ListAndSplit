@@ -7,6 +7,7 @@ import 'package:list_and_split/features/account/presentation/account_data_export
 import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
 import 'package:list_and_split/features/account/presentation/account_deletion_providers.dart';
 import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
+import 'package:list_and_split/features/moderation/presentation/public_template_moderation_providers.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/onboarding_screen.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
@@ -14,6 +15,7 @@ import 'package:list_and_split/features/profile/presentation/profile_screen.dart
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fakes.dart';
+import '../../helpers/fake_public_template_moderation_repository.dart';
 import 'account_data_export_fixtures.dart';
 
 void main() {
@@ -197,6 +199,9 @@ Future<void> _pumpScreen(
         ),
         accountDeletionRepositoryProvider.overrideWithValue(
           FakeAccountDeletionRepository(),
+        ),
+        publicTemplateModerationRepositoryProvider.overrideWithValue(
+          FakePublicTemplateModerationRepository(),
         ),
         ...overrides,
       ],

@@ -14,6 +14,8 @@ enum PublicTemplatesMessage {
   operationFailed,
 }
 
+enum PublicTemplateReportOutcome { submitted, stale, unavailable, failed }
+
 class PublicProfileTemplatesState {
   const PublicProfileTemplatesState({
     required this.page,
@@ -260,11 +262,13 @@ class PublicTemplateDetailController
     required void Function() invalidateCommunity,
     required void Function() invalidateNotifications,
     CreationRequestIdGenerator requestIdGenerator = secureCreationRequestId,
+    Duration requestTimeout = const Duration(seconds: 15),
   })  : _canBlock = canBlock,
         _invalidatePrivateTemplates = invalidatePrivateTemplates,
         _invalidateCommunity = invalidateCommunity,
         _invalidateNotifications = invalidateNotifications,
         _requestIdGenerator = requestIdGenerator,
+        _requestTimeout = requestTimeout,
         super(const PublicTemplateDetailState.loading());
 
   final PublicTemplateRepository _repository;
@@ -276,6 +280,7 @@ class PublicTemplateDetailController
   final void Function() _invalidateCommunity;
   final void Function() _invalidateNotifications;
   final CreationRequestIdGenerator _requestIdGenerator;
+  final Duration _requestTimeout;
   int _generation = 0;
   bool _reconciliationPending = false;
   String? _pendingPayload;
@@ -382,6 +387,64 @@ class PublicTemplateDetailController
       _drainReconciliation();
       return null;
     }
+  }
+
+  Future<PublicTemplateReportOutcome> reportTemplate(
+    PublicTemplateReportReason reason,
+    String? explanation,
+  ) async {
+    final detail = state.detail.valueOrNull;
+    if (detail == null || state.isMutating || !_canBlock) {
+      return PublicTemplateReportOutcome.failed;
+    }
+    state = state.copyWith(
+      isMutating: true,
+      clearMessage: true,
+      clearCopiedTemplate: true,
+    );
+    var outcome = PublicTemplateReportOutcome.failed;
+    try {
+      await _repository
+          .reportTemplate(
+            templateId,
+            expectedVersion: detail.summary.version,
+            reason: reason,
+            explanation: explanation,
+          )
+          .timeout(_requestTimeout);
+      if (!mounted) return PublicTemplateReportOutcome.failed;
+      _reconciliationPending = false;
+      outcome = PublicTemplateReportOutcome.submitted;
+    } on PublicTemplateFailure catch (failure) {
+      if (!mounted) return PublicTemplateReportOutcome.failed;
+      outcome = switch (failure.code) {
+        PublicTemplateFailureCode.stale => PublicTemplateReportOutcome.stale,
+        PublicTemplateFailureCode.unavailable =>
+          PublicTemplateReportOutcome.unavailable,
+        PublicTemplateFailureCode.invalid ||
+        PublicTemplateFailureCode.retryConflict ||
+        PublicTemplateFailureCode.capacity ||
+        PublicTemplateFailureCode.transport ||
+        PublicTemplateFailureCode.generic =>
+          PublicTemplateReportOutcome.failed,
+      };
+      if (outcome == PublicTemplateReportOutcome.stale) {
+        _reconciliationPending = true;
+      } else if (outcome == PublicTemplateReportOutcome.unavailable) {
+        _reconciliationPending = false;
+      }
+    } on TimeoutException {
+      outcome = PublicTemplateReportOutcome.failed;
+    } catch (_) {
+      outcome = PublicTemplateReportOutcome.failed;
+    } finally {
+      if (mounted) {
+        state = state.copyWith(isMutating: false, clearMessage: true);
+      }
+    }
+    if (!mounted) return PublicTemplateReportOutcome.failed;
+    _drainReconciliation();
+    return outcome;
   }
 
   Future<bool> blockProfile() async {

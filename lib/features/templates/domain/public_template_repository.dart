@@ -33,4 +33,11 @@ abstract interface class PublicTemplateRepository {
     required int expectedVersion,
     required String requestId,
   });
+
+  Future<PublicTemplateReportResult> reportTemplate(
+    String templateId, {
+    required int expectedVersion,
+    required PublicTemplateReportReason reason,
+    String? explanation,
+  });
 }

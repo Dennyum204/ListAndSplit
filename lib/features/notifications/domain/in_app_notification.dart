@@ -8,6 +8,8 @@ enum InAppNotificationType {
   listOwnershipTransferred,
   listItemAssigned,
   listNoteMentioned,
+  publicTemplateTakenDown,
+  publicTemplateRestored,
 }
 
 enum NotificationActionStatus { actionable, friends, accepted, unavailable }
@@ -38,15 +40,18 @@ class InAppNotification {
     this.activeListItemName,
     this.assignmentItemVersion,
     this.generalNoteVersion,
+    this.publicTemplateId,
+    this.publicTemplateName,
+    this.moderationReasonCode,
   });
 
   final String id;
   final InAppNotificationType type;
   final DateTime createdAt;
   final bool isRead;
-  final String actorProfileId;
-  final String actorUsername;
-  final String actorDisplayName;
+  final String? actorProfileId;
+  final String? actorUsername;
+  final String? actorDisplayName;
   final NotificationActionStatus actionStatus;
   final int? expectedRelationshipVersion;
   final String? activeListId;
@@ -57,6 +62,9 @@ class InAppNotification {
   final String? activeListItemName;
   final int? assignmentItemVersion;
   final int? generalNoteVersion;
+  final String? publicTemplateId;
+  final String? publicTemplateName;
+  final String? moderationReasonCode;
 
   NotificationCursor get cursor => NotificationCursor(
         createdAt: createdAt,
@@ -82,6 +90,9 @@ class InAppNotification {
       activeListItemName: activeListItemName,
       assignmentItemVersion: assignmentItemVersion,
       generalNoteVersion: generalNoteVersion,
+      publicTemplateId: publicTemplateId,
+      publicTemplateName: publicTemplateName,
+      moderationReasonCode: moderationReasonCode,
     );
   }
 }

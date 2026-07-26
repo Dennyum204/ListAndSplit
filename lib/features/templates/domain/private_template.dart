@@ -46,7 +46,9 @@ class PrivateTemplateSummary {
     required this.updatedAt,
     this.isPublic = false,
     this.publishedAt,
-  }) : assert(isPublic == (publishedAt != null));
+    this.isModerated = false,
+  })  : assert(isPublic == (publishedAt != null)),
+        assert(!isModerated || !isPublic);
 
   final String id;
   final String? categoryId;
@@ -58,6 +60,7 @@ class PrivateTemplateSummary {
   final DateTime updatedAt;
   final bool isPublic;
   final DateTime? publishedAt;
+  final bool isModerated;
 }
 
 class TemplatePublicationResult {

@@ -589,6 +589,66 @@ changes and the copier for destination creation. Blocking already invalidates bo
 accounts. Arbitrary viewers reconcile on manual refresh, app resume, or copy-time
 authorization; the architecture makes no global live-public-content promise.
 
+### Public template reporting and moderation boundary
+
+Reporting is an exact authenticated RPC on the immutable template ID and public
+revision. It rejects owners, stale or unavailable content, active restrictions,
+and blocked pairs with one privacy-safe unavailable contract. Under the
+template-scoped moderation lock it snapshots only the visible name and ordered
+item name/quantity fields, computes a domain-separated 32-byte fingerprint, and
+inserts one individual report into a revision/fingerprint group. One
+reporter/template/revision constraint and the same lock make concurrent duplicate
+submission converge without partial evidence. Successful submission immediately
+excludes that source from the reporter's profile/detail/copy projections; blocking
+the owner remains a separate operation.
+
+The moderation aggregate is private, RPC-only, forced-RLS, explicitly
+default-deny, and absent from Realtime publication. It includes an initially empty
+immutable-Auth-UUID moderator allowlist, append-only grant/revoke audit events,
+report groups and reports, template-level restrictions, append-only decision
+events, and nonidentifying retention tombstones. Administrative grant/revoke and
+retention functions are executable only by `postgres`. Email, username, profile
+state, JWT role claims, and client-visible navigation never grant authority.
+Every protected self-check, bounded keyset queue/detail read, action, and restore
+rechecks the allowlist server-side.
+
+Group state is `open`, `dismissed`, `taken_down`, or `content_deleted`. Dismiss
+closes only one exact-version group. Takedown uses one payload-bound request UUID,
+locks/rechecks the source and group, creates or advances one active restriction,
+unpublishes the source, closes every open group for that template, appends one
+immutable decision, and creates one safe system-authored owner notification.
+Restore is also versioned and payload-bound: it deactivates one restriction,
+appends one event, creates one safe notification, and never republishes. Owner
+private editing/deletion remains available while restricted, but publication
+rechecks the restriction inside the locked transaction. Source changes,
+unpublication, and deletion update evidence state without rewriting its snapshot;
+deletion closes open groups and preserves evidence.
+
+Flutter keeps report intent in the public-template repository/controller. The
+localized dialog exposes the eight stable reason codes, conditional explanation
+requirements, a copyright-notice limitation, one in-flight submission, and a
+separate optional block action. Moderation has its own feature-first repository,
+session-keyed Riverpod controllers, protected Settings entry, immutable-group-ID
+routes, bounded filters/pages, snapshot/current comparison, confirmations, and
+private notes. Revocation clears queue/case data immediately and exits the
+protected route once. Repeated invalidations, taps, or route disposal cannot
+duplicate submission, navigation, dialog, or message ownership.
+
+Report success invalidates the reporter account; moderation actions invalidate the
+moderator and affected owner through the existing private
+`account:<profile-id>` / `invalidate` / `{"v":1}` transport. No report, evidence,
+reason, moderator, or decision data enters Broadcast. Arbitrary public viewers
+continue to rely on action-time authorization, manual refresh, and app resume.
+Notifications v4 is the sole owner-facing outcome projection.
+
+Open groups and active restrictions are ineligible for cleanup. Once all evidence
+for one template has been closed for at least 24 months and no active restriction
+remains, the idempotent `postgres`-only maintenance function replaces detailed
+rows with nonidentifying aggregate tombstones. It is deliberately not scheduled
+by this migration. A later separately reviewed hosted rollout must install and
+verify its exact cron job; repository code must not claim that cleanup is active
+before that step occurs.
+
 ### Split database and client boundary
 
 `public.active_list_split_settings`, `public.active_list_split_participants`,
@@ -715,8 +775,9 @@ The existing `export_own_account_data()` continues to return its unchanged
 schema-version-6 `jsonb` document for legacy clients, and
 `export_own_account_data_v7()` remains unchanged for assignment-aware clients, and
 `export_own_account_data_v8()` remains unchanged for General-Note-aware clients.
-The separate `export_own_account_data_v9()` reuses the corrected v8 allowlisted
-base and returns schema version `9`. Version `2` preserves all version-1 account/social roots
+`export_own_account_data_v9()` remains unchanged for public-template-aware clients.
+The separate `export_own_account_data_v10()` reuses the corrected v9 allowlisted
+base and returns schema version `10`. Version `2` preserves all version-1 account/social roots
 and adds the deterministic `active_lists` array with active/archived owned lists and
 ordered items. Version `3` adds only caller-relative metadata for lists owned by
 others and excludes their items, owner identity, other participants, and internal
@@ -738,10 +799,14 @@ time, and a deterministic current resolved-mention array containing only profile
 ID, current username, and current display name. Removed links leave literal note
 text only. Version `9` adds only `is_public` and nullable `published_at` to each
 caller-owned template; it adds no public template owned by another profile and no
-copy provenance, request UUID, or fingerprint. `shared_list_access` stays byte-for-byte
-metadata-only: it contains no assignment array, item data, General Note text,
-mention identity, or corresponding timestamp. Request IDs, derived balances, and
-suggested payments are excluded
+copy provenance, request UUID, or fingerprint. Version `10` adds the caller's
+deterministically ordered submitted Public Template reports with only stable
+reason code, nullable explanation, and submission time. It includes no target
+template/owner identity, status/group, snapshot/fingerprint, moderator/private
+note, decision, restriction, allowlist, or access audit. `shared_list_access`
+stays byte-for-byte metadata-only: it contains no assignment array, item data,
+General Note text, mention identity, or corresponding timestamp. Request IDs,
+derived balances, and suggested payments are excluded
 because they are respectively private or reproducible. All public export
 functions are hardened `SECURITY DEFINER` boundaries because they must read the
 caller's approved Auth columns and RPC-only social tables: ownership
@@ -761,8 +826,9 @@ are constructed field by field rather than by serializing physical rows. The
 functions are stable and read-only: they do not mark
 notifications read, mutate relationships, update Auth, or persist an export job,
 file, audit row, Storage object, signed URL, or background task. The version-6
-operation excludes assignment and mention fields and their notification types so
-an old strict parser never receives an unknown schema or notification type.
+operation excludes assignment, mention, public-template report fields, and their
+new notification types so an old strict parser never receives an unknown schema or
+notification type.
 
 An internal transferred-owner access row is excluded from `shared_list_access`, so
 the current owner receives the list only in the full owned-list projection while
@@ -780,10 +846,12 @@ temporary/cache storage and invokes the Android/iOS native share sheet with a
 privacy-safe UTC filename and JSON MIME type. It never falls back to public shared
 storage or promises guaranteed cache deletion. The legacy operation still requires
 version `6`; the assignment-aware legacy operation requires version `7`; the
-General-Note-aware legacy operation requires version `8`; and the current operation
-requires version `9`. The parser retains strict compatibility for versions `1`
-through `9`, including non-equal explicit shares in version `5`/`6`/`7`/`8`/`9`
-documents and the exact legacy template shapes through version `8`.
+General-Note-aware legacy operation requires version `8`; the public-template-aware
+legacy operation requires version `9`; and reporting-aware clients require version
+`10`. The parser retains strict compatibility for versions
+`1` through `10`, including non-equal explicit shares in versions `5` through
+`10`, the exact legacy template shapes through version `8`, and absence of the
+submitted-report root through version `9`.
 
 ### Permanent account-deletion boundary
 
@@ -820,7 +888,9 @@ foreign keys remove the profile, either direction of blocks, either relationship
 participant, notification recipient/actor rows, and notifications whose
 relationship or item disappears, every list owned by the profile and the list's
 items/assignments/mentions, and every private category, template, and template
-item. Before a non-owner profile disappears, one parent-first coordinator gathers
+item. Moderation evidence survives while reporter, template-owner, and moderator
+Auth/profile references are anonymized with `SET NULL`; no deleted identity
+snapshot is retained. Before a non-owner profile disappears, one parent-first coordinator gathers
 every surviving affected list referenced by participant access, item assignment,
 resolved mention, Split participant history, or item `completed_by`, excluding
 caller-owned lists that will cascade in full. It locks lists in UUID order before
@@ -958,17 +1028,19 @@ relationship, access, or assignment state machine. Legacy clients retain the
 bounded `list_notifications`, unread-count, and caller-owned mark-read contracts.
 Assignment-aware clients use `list_notifications_v2` and
 `get_unread_notification_count_v2`; General-Note-aware clients use
-`list_notifications_v3` and `get_unread_notification_count_v3`. All generations
-reuse the same bounded, hardened caller-owned mark-read operation. Flutter receives
-a domain model with minimal
+`list_notifications_v3` and `get_unread_notification_count_v3`;
+reporting-aware clients use `list_notifications_v4` and
+`get_unread_notification_count_v4`. All generations reuse the same bounded,
+hardened caller-owned mark-read operation. Flutter receives a domain model with minimal
 actor/resource projection and caller-relative presentation; it never reads or
 mutates notification rows directly.
 
 The physical `public.user_notifications` table supports the reviewed
 friend-request, list-access, ownership-transfer, `list_item_assigned`, and
-`list_note_mentioned` types. It
+`list_note_mentioned` types plus system-authored
+`public_template_taken_down` and `public_template_restored`. It
 records a generated
-UUID, recipient and actor profile IDs,
+UUID, recipient profile ID, nullable actor profile ID,
 normalized relationship participants, the positive relationship version that
 created the notification, database-owned creation and exact 180-day expiry,
 nullable read time, and nullable permanent suppression time. Profile,
@@ -1017,6 +1089,14 @@ link. V3 exposes it only while actor and recipient both retain current list acce
 neither direction is blocked, referenced context exists, and the row is
 unsuppressed/unexpired.
 
+Moderation outcomes require a null actor and contain only the recipient-owned
+template ID, immutable event ID, safe template-name snapshot, and general reason
+code. They contain no reporter, explanation, report count, moderator, private
+note, or queue state. One event-specific unique key produces exactly one
+owner-visible notification for a successful takedown or restoration; reporting
+and dismissal create none. A deleted source may remove the resource link while
+the safe outcome remains understandable.
+
 Access loss by either actor or recipient and either-direction blocking set
 `suppressed_at = coalesce(suppressed_at, mutation_time)`. No reinvitation or
 unblocking path clears suppression. A later explicit mention after legitimately
@@ -1028,8 +1108,9 @@ Legacy notification listing/count functions explicitly exclude
 receive an unknown type or badge they cannot open. V2 functions include the old
 types plus the allowlisted assignment item/list projection and explicitly exclude
 note mentions. V3 includes both informational types with matching listing/count
-predicates. Neither adds a deep link, push payload, archive/preference control, or
-removal event.
+predicates and excludes moderation outcomes. V4 adds the two strict actor-null
+moderation projections. No version adds a moderation deep link, reporter content,
+push payload, archive/preference control, or removal event.
 
 `send_friend_request(uuid,bigint)` creates the notification in the same locked
 transaction only for a real transition into pending. `block_profile(uuid)`
@@ -1152,6 +1233,14 @@ writes are implemented.
   deletion. The final race includes assignment, mention, Split history, and
   completion attribution so it proves the former Split-child/list inversion is
   removed rather than relying on timing alone.
+- Public Template safety tests cover all eight reasons and conditional explanation
+  validation; exact-revision reporting and reporter-only hiding; snapshot and
+  fingerprint integrity; group/action/restore state transitions; UUID-only
+  moderator authorization and immediate revocation; direct-table denial; stale,
+  duplicate, idempotent, concurrent, account-deletion, and source-lifecycle races;
+  owner publication restrictions; notification v1-v4 compatibility; export v10
+  privacy; 24-month retention/tombstones; and localized accessible dialogs,
+  moderation routing, paging, themes, large text, and duplicate-submit guards.
 - Realtime client tests deterministically cover bounded stalled handshakes,
   joined-channel recovery, duplicate recovery signals, diagnostic redaction, and
   the production gateway-to-coordinator-to-registry path through a mounted feature
@@ -1169,19 +1258,24 @@ writes are implemented.
 ## Security constraints
 
 - Treat all client input as untrusted, including claimed ownership, list
-  membership, assignee, payer identity, and notification recipient.
+  membership, assignee, payer identity, notification recipient, reporter,
+  moderator, report snapshot, and moderation state.
 - RLS is required on every application table from the table's first migration.
 - Use least-privilege grants and policies, and restrict realtime and storage with
   the same relationship model as database access.
 - Prefer invoker-rights functions. Security-definer functions require a fixed
   `search_path`, qualified objects, minimal execution grants, and explicit tests.
 - Never expose privileged keys in Flutter or Git.
+- Moderator authority must come only from the private immutable-Auth-UUID
+  allowlist. Its grant/revoke and retention functions remain `postgres`-only and
+  every client moderation RPC rechecks membership.
 - Never use destructive commands against a linked remote database.
 
 ## Open architecture decisions
 
-- Shared-resource administrator deletion, moderation/legal
-  retention, Storage cleanup, and compliance obligations beyond the implemented
+- Shared-resource administrator deletion, appeal/compliance workflows,
+  moderation/legal retention beyond the accepted 24-month Public Template v1
+  contract, Storage cleanup, and obligations beyond the implemented
   current-aggregate account lifecycle.
 - Precise feature folder layering and whether Riverpod code generation is used.
 - Notification links and later non-Auth feature deep links beyond the accepted

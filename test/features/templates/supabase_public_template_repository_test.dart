@@ -114,6 +114,85 @@ void main() {
     expect(result.template.categoryId, isNull);
   });
 
+  test('reports an exact observed revision with stable reason code', () async {
+    response = [
+      {
+        'report_id': _reportId,
+        'report_group_id': _reportGroupId,
+        'reported_revision': 4,
+        'created_at': '2026-07-26T07:00:00.000Z',
+      },
+    ];
+
+    final result = await repository.reportTemplate(
+      _templateId,
+      expectedVersion: 4,
+      reason: PublicTemplateReportReason.copyrightTrademark,
+      explanation: 'This republishes my original work.',
+    );
+
+    expect(calls.single.functionName, 'report_public_template');
+    expect(calls.single.params, {
+      'target_template_id': _templateId,
+      'expected_public_revision': 4,
+      'reason_code': 'copyright_trademark',
+      'explanation': 'This republishes my original work.',
+    });
+    expect(result.reportId, _reportId);
+    expect(result.groupId, _reportGroupId);
+    expect(result.reportedRevision, 4);
+    expect(result.createdAt, DateTime.utc(2026, 7, 26, 7));
+  });
+
+  test('rejects malformed report response and maps stale or hidden state',
+      () async {
+    response = [
+      {
+        'report_id': _reportId,
+        'report_group_id': _reportGroupId,
+        'reported_revision': 5,
+        'created_at': '2026-07-26T07:00:00.000Z',
+      },
+    ];
+    await expectLater(
+      repository.reportTemplate(
+        _templateId,
+        expectedVersion: 4,
+        reason: PublicTemplateReportReason.spamScamDeceptive,
+      ),
+      throwsA(
+        isA<PublicTemplateFailure>().having(
+          (value) => value.code,
+          'code',
+          PublicTemplateFailureCode.generic,
+        ),
+      ),
+    );
+
+    for (final entry in const {
+      '40001': PublicTemplateFailureCode.stale,
+      'P0002': PublicTemplateFailureCode.unavailable,
+      '42501': PublicTemplateFailureCode.unavailable,
+    }.entries) {
+      failure = PostgrestException(message: 'private detail', code: entry.key);
+      await expectLater(
+        repository.reportTemplate(
+          _templateId,
+          expectedVersion: 4,
+          reason: PublicTemplateReportReason.other,
+          explanation: 'Specific concern.',
+        ),
+        throwsA(
+          isA<PublicTemplateFailure>().having(
+            (value) => value.code,
+            'code',
+            entry.value,
+          ),
+        ),
+      );
+    }
+  });
+
   test('maps unavailable nulls without distinguishing the hidden cause',
       () async {
     response = null;
@@ -363,3 +442,5 @@ const _profileId = '11111111-1111-4111-8111-111111111111';
 const _templateId = '22222222-2222-4222-8222-222222222222';
 const _copiedTemplateId = '33333333-3333-4333-8333-333333333333';
 const _requestId = '44444444-4444-4444-8444-444444444444';
+const _reportId = '55555555-5555-4555-8555-555555555555';
+const _reportGroupId = '66666666-6666-4666-8666-666666666666';

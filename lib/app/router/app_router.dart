@@ -23,6 +23,8 @@ import 'package:list_and_split/features/community/presentation/friendship_manage
 import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_members_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_lists_screen.dart';
+import 'package:list_and_split/features/moderation/presentation/moderation_case_screen.dart';
+import 'package:list_and_split/features/moderation/presentation/moderation_queue_screen.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_centre_screen.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 import 'package:list_and_split/features/profile/presentation/onboarding_screen.dart';
@@ -253,6 +255,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.profile,
                 builder: (context, state) => const ProfileScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'moderation',
+                    builder: (context, state) => const ModerationQueueScreen(),
+                    routes: [
+                      GoRoute(
+                        path: ':groupId',
+                        builder: (context, state) => ModerationCaseScreen(
+                          groupId: state.pathParameters['groupId']!,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),

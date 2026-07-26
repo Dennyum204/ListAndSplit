@@ -1,6 +1,39 @@
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/templates/domain/private_template.dart';
 
+enum PublicTemplateReportReason {
+  spamScamDeceptive('spam_scam_deceptive'),
+  hateHarassmentBullying('hate_harassment_bullying'),
+  sexualContent('sexual_content'),
+  violenceDangerous('violence_dangerous'),
+  illegalRegulated('illegal_regulated'),
+  personalConfidentialInformation('personal_confidential_information'),
+  copyrightTrademark('copyright_trademark'),
+  other('other');
+
+  const PublicTemplateReportReason(this.wireValue);
+
+  final String wireValue;
+
+  bool get requiresExplanation =>
+      this == PublicTemplateReportReason.copyrightTrademark ||
+      this == PublicTemplateReportReason.other;
+}
+
+class PublicTemplateReportResult {
+  const PublicTemplateReportResult({
+    required this.reportId,
+    required this.groupId,
+    required this.reportedRevision,
+    required this.createdAt,
+  });
+
+  final String reportId;
+  final String groupId;
+  final int reportedRevision;
+  final DateTime createdAt;
+}
+
 class PublicTemplateProfile {
   const PublicTemplateProfile({
     required this.id,

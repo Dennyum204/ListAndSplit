@@ -116,11 +116,20 @@ void main() {
     expect(complete.redirect(AppRoutes.templates), isNull);
     expect(complete.redirect('${AppRoutes.templates}/template-1'), isNull);
     expect(complete.redirect(AppRoutes.profile), isNull);
+    expect(complete.redirect(AppRoutes.moderation), isNull);
+    expect(
+      complete.redirect(AppRoutes.moderationCase('immutable-group-id')),
+      isNull,
+    );
     expect(complete.redirect(AppRoutes.community), isNull);
     expect(complete.redirect(AppRoutes.friendships), isNull);
     expect(complete.redirect(AppRoutes.blockedUsers), isNull);
     expect(complete.redirect(AppRoutes.notifications), isNull);
     expect(complete.redirect(AppRoutes.signIn), AppRoutes.lists);
+    expect(
+      AppRoutes.moderationCase('immutable-group-id'),
+      '/profile/moderation/immutable-group-id',
+    );
   });
 
   test(

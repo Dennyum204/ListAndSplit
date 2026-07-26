@@ -59,6 +59,7 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
                   child: Text(localizations.templatesEditButton),
                 ),
                 PopupMenuItem(
+                  enabled: !detail.summary.isModerated,
                   value: _TemplateAction.publication,
                   child: Text(
                     detail.summary.isPublic
@@ -131,15 +132,20 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
                             trailing: Chip(
                               key: const Key('templateDetailPublicationState'),
                               avatar: Icon(
-                                loaded.summary.isPublic
-                                    ? Icons.public_rounded
-                                    : Icons.lock_outline_rounded,
+                                loaded.summary.isModerated
+                                    ? Icons.gavel_rounded
+                                    : loaded.summary.isPublic
+                                        ? Icons.public_rounded
+                                        : Icons.lock_outline_rounded,
                                 size: 18,
                               ),
                               label: Text(
-                                loaded.summary.isPublic
-                                    ? localizations.templatesPublicLabel
-                                    : localizations.templatesPrivateLabel,
+                                loaded.summary.isModerated
+                                    ? localizations
+                                        .templatesRemovedByModerationLabel
+                                    : loaded.summary.isPublic
+                                        ? localizations.templatesPublicLabel
+                                        : localizations.templatesPrivateLabel,
                               ),
                             ),
                           ),
@@ -714,6 +720,8 @@ String _detailMessage(
     PrivateTemplatesMessage.invalidInput =>
       localizations.templatesInvalidInputMessage,
     PrivateTemplatesMessage.capacity => localizations.templatesCapacityExceeded,
+    PrivateTemplatesMessage.moderated =>
+      localizations.templatesRemovedByModerationMessage,
     PrivateTemplatesMessage.staleRefreshed =>
       localizations.templatesStaleMessage,
     PrivateTemplatesMessage.unavailable =>

@@ -9,6 +9,7 @@ import 'package:list_and_split/features/account/presentation/account_deletion_ac
 import 'package:list_and_split/features/account/presentation/account_deletion_providers.dart';
 import 'package:list_and_split/features/auth/presentation/auth_actions_controller.dart';
 import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
+import 'package:list_and_split/features/moderation/presentation/public_template_moderation_providers.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/features/profile/presentation/profile_controller.dart';
@@ -61,6 +62,8 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
       authActionsControllerProvider(AuthActionFlow.session),
     );
     final email = ref.watch(authSessionProvider).valueOrNull?.user?.email;
+    final hasModerationAccess =
+        ref.watch(moderationAccessControllerProvider).valueOrNull == true;
     final isBusy = state.isSubmitting ||
         exportState.isBusy ||
         deletionState.isSubmitting ||
@@ -133,6 +136,14 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
             icon: const Icon(Icons.public_rounded),
             label: Text(localizations.publicTemplatesPreviewProfileButton),
           ),
+          if (hasModerationAccess)
+            TextButton.icon(
+              key: const Key('openModerationButton'),
+              onPressed:
+                  isBusy ? null : () => context.push(AppRoutes.moderation),
+              icon: const Icon(Icons.gavel_rounded),
+              label: Text(localizations.moderationSettingsAction),
+            ),
           AccountDataExportAction(
             enabled: !state.isSubmitting && !deletionState.isSubmitting,
           ),

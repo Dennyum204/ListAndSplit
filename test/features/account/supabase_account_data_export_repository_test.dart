@@ -14,7 +14,7 @@ void main() {
 
   setUp(() {
     calls = [];
-    response = validAccountDataExportJson(schemaVersion: 9);
+    response = validAccountDataExportJson(schemaVersion: 10);
     failure = null;
     currentUserId = '11111111-1111-4111-8111-111111111111';
     repository = SupabaseAccountDataExportRepository(
@@ -31,10 +31,11 @@ void main() {
   test('calls only the parameterless reviewed RPC', () async {
     final document = await repository.exportOwnAccountData();
 
-    expect(document.schemaVersion, 9);
+    expect(document.schemaVersion, 10);
     expect(document.activeLists, hasLength(2));
+    expect(document.submittedPublicTemplateReports, hasLength(2));
     expect(calls, hasLength(1));
-    expect(calls.single.functionName, 'export_own_account_data_v9');
+    expect(calls.single.functionName, 'export_own_account_data_v10');
     expect(calls.single.params, isNull);
   });
 
@@ -42,7 +43,7 @@ void main() {
     response = validAccountDataExportJson(
       incompleteProfile: true,
       emptyCollections: true,
-      schemaVersion: 9,
+      schemaVersion: 10,
     );
 
     final document = await repository.exportOwnAccountData();
@@ -72,7 +73,7 @@ void main() {
       SupabaseClient('http://localhost:54321', 'test-anon-key'),
       rpc: (functionName, {params}) async {
         currentUserId = '22222222-2222-4222-8222-222222222222';
-        return validAccountDataExportJson(schemaVersion: 9);
+        return validAccountDataExportJson(schemaVersion: 10);
       },
       currentUserId: () => currentUserId,
     );
