@@ -157,7 +157,7 @@ void main() {
         PublicTemplateReportReason.copyrightTrademark,
         'Specific ownership concern.',
       ),
-      isTrue,
+      PublicTemplateReportOutcome.submitted,
     );
 
     expect(repository.reportCalls, hasLength(1));
@@ -171,7 +171,8 @@ void main() {
       repository.reportCalls.single.explanation,
       'Specific ownership concern.',
     );
-    expect(controller.state.message, PublicTemplatesMessage.reported);
+    expect(controller.state.isMutating, isFalse);
+    expect(controller.state.message, isNull);
     controller.dispose();
   });
 
@@ -191,10 +192,12 @@ void main() {
         PublicTemplateReportReason.spamScamDeceptive,
         null,
       ),
-      isFalse,
+      PublicTemplateReportOutcome.stale,
     );
+    await pumpEventQueue();
     expect(controller.state.detail.value!.summary.version, 5);
-    expect(controller.state.message, PublicTemplatesMessage.staleReview);
+    expect(controller.state.isMutating, isFalse);
+    expect(controller.state.message, isNull);
 
     repository.reportFailures.add(
       const PublicTemplateFailure(PublicTemplateFailureCode.unavailable),
@@ -204,9 +207,10 @@ void main() {
         PublicTemplateReportReason.spamScamDeceptive,
         null,
       ),
-      isFalse,
+      PublicTemplateReportOutcome.unavailable,
     );
-    expect(controller.state.message, PublicTemplatesMessage.unavailable);
+    expect(controller.state.isMutating, isFalse);
+    expect(controller.state.message, isNull);
     controller.dispose();
   });
 
@@ -237,16 +241,105 @@ void main() {
       PublicTemplateReportReason.other,
       'Specific concern.',
     );
-    expect(await second, isFalse);
+    expect(await second, PublicTemplateReportOutcome.failed);
     expect(repository.reportCalls, hasLength(1));
     expect(community.blockedIds, isEmpty);
 
     completion.complete(_reportResult());
-    expect(await first, isTrue);
+    expect(await first, PublicTemplateReportOutcome.submitted);
     expect(community.blockedIds, isEmpty);
     expect(await controller.blockProfile(), isTrue);
     expect(community.blockedIds, [_profileId]);
     controller.dispose();
+  });
+
+  test('stale report clears busy before authoritative refresh completes',
+      () async {
+    final refresh = Completer<PublicTemplateDetail>();
+    final repository = _FakePublicTemplateRepository()
+      ..detail = _detail(version: 4)
+      ..reportFailures.add(
+        const PublicTemplateFailure(PublicTemplateFailureCode.stale),
+      );
+    final controller = _detailController(repository);
+    await controller.load();
+    repository.detailCompleter = refresh;
+
+    expect(
+      await controller.reportTemplate(
+        PublicTemplateReportReason.spamScamDeceptive,
+        null,
+      ),
+      PublicTemplateReportOutcome.stale,
+    );
+
+    expect(controller.state.isMutating, isFalse);
+    expect(controller.state.detail.value!.summary.version, 4);
+    refresh.complete(_detail(version: 5));
+    await pumpEventQueue();
+    expect(controller.state.detail.value!.summary.version, 5);
+    controller.dispose();
+  });
+
+  test('report timeout and unexpected errors always clear mutation state',
+      () async {
+    final pending = Completer<PublicTemplateReportResult>();
+    final timeoutRepository = _FakePublicTemplateRepository()
+      ..detail = _detail()
+      ..reportHandler = (_, __, ___, ____) => pending.future;
+    final timeoutController = _detailController(
+      timeoutRepository,
+      requestTimeout: const Duration(milliseconds: 1),
+    );
+    await timeoutController.load();
+
+    expect(
+      await timeoutController.reportTemplate(
+        PublicTemplateReportReason.spamScamDeceptive,
+        null,
+      ),
+      PublicTemplateReportOutcome.failed,
+    );
+    expect(timeoutController.state.isMutating, isFalse);
+    expect(timeoutController.state.message, isNull);
+    timeoutController.dispose();
+
+    final errorRepository = _FakePublicTemplateRepository()
+      ..detail = _detail()
+      ..reportFailures.add(StateError('unexpected client failure'));
+    final errorController = _detailController(errorRepository);
+    await errorController.load();
+    expect(
+      await errorController.reportTemplate(
+        PublicTemplateReportReason.spamScamDeceptive,
+        null,
+      ),
+      PublicTemplateReportOutcome.failed,
+    );
+    expect(errorController.state.isMutating, isFalse);
+    expect(errorController.state.message, isNull);
+    errorController.dispose();
+  });
+
+  test('late report failure after disposal does not update state', () async {
+    final completion = Completer<PublicTemplateReportResult>();
+    final repository = _FakePublicTemplateRepository()
+      ..detail = _detail()
+      ..reportHandler = (_, __, ___, ____) => completion.future;
+    final controller = _detailController(repository);
+    await controller.load();
+    final operation = controller.reportTemplate(
+      PublicTemplateReportReason.spamScamDeceptive,
+      null,
+    );
+    expect(controller.state.isMutating, isTrue);
+
+    controller.dispose();
+    completion.completeError(
+      const PublicTemplateFailure(PublicTemplateFailureCode.stale),
+    );
+
+    expect(await operation, PublicTemplateReportOutcome.failed);
   });
 
   test('stale copy refreshes and requires review with a new request ID',
@@ -344,6 +437,7 @@ void main() {
 PublicTemplateDetailController _detailController(
   _FakePublicTemplateRepository repository, {
   String Function()? requestIdGenerator,
+  Duration requestTimeout = const Duration(seconds: 15),
 }) {
   return PublicTemplateDetailController(
     repository,
@@ -355,6 +449,7 @@ PublicTemplateDetailController _detailController(
     invalidateCommunity: () {},
     invalidateNotifications: () {},
     requestIdGenerator: requestIdGenerator ?? (() => _requestId),
+    requestTimeout: requestTimeout,
   );
 }
 
@@ -366,6 +461,7 @@ class _FakePublicTemplateRepository implements PublicTemplateRepository {
   final Queue<Object> reportFailures = Queue();
   final List<_ReportCall> reportCalls = [];
   PublicTemplateDetail? detail;
+  Completer<PublicTemplateDetail>? detailCompleter;
   Object? getFailure;
   int listCalls = 0;
   Future<PublicTemplateCopyResult> Function(String, int, String)? copyHandler;
@@ -393,6 +489,8 @@ class _FakePublicTemplateRepository implements PublicTemplateRepository {
     String templateId,
   ) async {
     if (getFailure != null) throw getFailure!;
+    final pending = detailCompleter;
+    if (pending != null) return pending.future;
     return detail!;
   }
 

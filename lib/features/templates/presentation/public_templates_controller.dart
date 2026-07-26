@@ -8,12 +8,13 @@ import 'package:list_and_split/features/templates/domain/public_template_reposit
 
 enum PublicTemplatesMessage {
   copied,
-  reported,
   staleReview,
   unavailable,
   capacity,
   operationFailed,
 }
+
+enum PublicTemplateReportOutcome { submitted, stale, unavailable, failed }
 
 class PublicProfileTemplatesState {
   const PublicProfileTemplatesState({
@@ -261,11 +262,13 @@ class PublicTemplateDetailController
     required void Function() invalidateCommunity,
     required void Function() invalidateNotifications,
     CreationRequestIdGenerator requestIdGenerator = secureCreationRequestId,
+    Duration requestTimeout = const Duration(seconds: 15),
   })  : _canBlock = canBlock,
         _invalidatePrivateTemplates = invalidatePrivateTemplates,
         _invalidateCommunity = invalidateCommunity,
         _invalidateNotifications = invalidateNotifications,
         _requestIdGenerator = requestIdGenerator,
+        _requestTimeout = requestTimeout,
         super(const PublicTemplateDetailState.loading());
 
   final PublicTemplateRepository _repository;
@@ -277,6 +280,7 @@ class PublicTemplateDetailController
   final void Function() _invalidateCommunity;
   final void Function() _invalidateNotifications;
   final CreationRequestIdGenerator _requestIdGenerator;
+  final Duration _requestTimeout;
   int _generation = 0;
   bool _reconciliationPending = false;
   String? _pendingPayload;
@@ -385,57 +389,62 @@ class PublicTemplateDetailController
     }
   }
 
-  Future<bool> reportTemplate(
+  Future<PublicTemplateReportOutcome> reportTemplate(
     PublicTemplateReportReason reason,
     String? explanation,
   ) async {
     final detail = state.detail.valueOrNull;
-    if (detail == null || state.isMutating || !_canBlock) return false;
+    if (detail == null || state.isMutating || !_canBlock) {
+      return PublicTemplateReportOutcome.failed;
+    }
     state = state.copyWith(
       isMutating: true,
       clearMessage: true,
       clearCopiedTemplate: true,
     );
+    var outcome = PublicTemplateReportOutcome.failed;
     try {
-      await _repository.reportTemplate(
-        templateId,
-        expectedVersion: detail.summary.version,
-        reason: reason,
-        explanation: explanation,
-      );
-      if (!mounted) return false;
+      await _repository
+          .reportTemplate(
+            templateId,
+            expectedVersion: detail.summary.version,
+            reason: reason,
+            explanation: explanation,
+          )
+          .timeout(_requestTimeout);
+      if (!mounted) return PublicTemplateReportOutcome.failed;
       _reconciliationPending = false;
-      state = state.copyWith(
-        isMutating: false,
-        message: PublicTemplatesMessage.reported,
-      );
-      return true;
+      outcome = PublicTemplateReportOutcome.submitted;
     } on PublicTemplateFailure catch (failure) {
-      if (!mounted) return false;
-      state = state.copyWith(
-        isMutating: false,
-        message: _messageFor(failure),
-      );
-      if (failure.code == PublicTemplateFailureCode.stale) {
-        await load();
-        if (mounted &&
-            state.message != PublicTemplatesMessage.unavailable &&
-            state.detail.valueOrNull != null) {
-          state = state.copyWith(message: PublicTemplatesMessage.staleReview);
-        }
+      if (!mounted) return PublicTemplateReportOutcome.failed;
+      outcome = switch (failure.code) {
+        PublicTemplateFailureCode.stale => PublicTemplateReportOutcome.stale,
+        PublicTemplateFailureCode.unavailable =>
+          PublicTemplateReportOutcome.unavailable,
+        PublicTemplateFailureCode.invalid ||
+        PublicTemplateFailureCode.retryConflict ||
+        PublicTemplateFailureCode.capacity ||
+        PublicTemplateFailureCode.transport ||
+        PublicTemplateFailureCode.generic =>
+          PublicTemplateReportOutcome.failed,
+      };
+      if (outcome == PublicTemplateReportOutcome.stale) {
+        _reconciliationPending = true;
+      } else if (outcome == PublicTemplateReportOutcome.unavailable) {
+        _reconciliationPending = false;
       }
-      _drainReconciliation();
-      return false;
+    } on TimeoutException {
+      outcome = PublicTemplateReportOutcome.failed;
     } catch (_) {
+      outcome = PublicTemplateReportOutcome.failed;
+    } finally {
       if (mounted) {
-        state = state.copyWith(
-          isMutating: false,
-          message: PublicTemplatesMessage.operationFailed,
-        );
+        state = state.copyWith(isMutating: false, clearMessage: true);
       }
-      _drainReconciliation();
-      return false;
     }
+    if (!mounted) return PublicTemplateReportOutcome.failed;
+    _drainReconciliation();
+    return outcome;
   }
 
   Future<bool> blockProfile() async {

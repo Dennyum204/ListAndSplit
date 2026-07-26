@@ -62,8 +62,6 @@ class _PublicTemplateDetailScreenState
               ),
             );
           }
-        case PublicTemplatesMessage.reported:
-        // The submitting flow owns the privacy confirmation and navigation.
         case PublicTemplatesMessage.staleReview:
           _showMessage(localizations.publicTemplatesStaleMessage);
         case PublicTemplatesMessage.capacity:
@@ -334,16 +332,32 @@ class _PublicTemplateDetailScreenState
 
   Future<void> _confirmReport() async {
     final localizations = AppLocalizations.of(context);
-    final draft = await showDialog<_PublicTemplateReportDraft>(
+    final provider = publicTemplateDetailControllerProvider(_location);
+    final outcome = await showDialog<PublicTemplateReportOutcome>(
       context: context,
-      builder: (_) => const _PublicTemplateReportDialog(),
+      barrierDismissible: false,
+      builder: (_) => _PublicTemplateReportDialog(
+        onSubmit: (reason, explanation) =>
+            ref.read(provider.notifier).reportTemplate(reason, explanation),
+      ),
     );
-    if (draft == null || !mounted) return;
-
-    final reported = await ref
-        .read(publicTemplateDetailControllerProvider(_location).notifier)
-        .reportTemplate(draft.reason, draft.explanation);
-    if (!reported || !mounted) return;
+    if (outcome == null || !mounted) return;
+    switch (outcome) {
+      case PublicTemplateReportOutcome.stale:
+        _showMessage(localizations.publicTemplateReportStaleMessage);
+        return;
+      case PublicTemplateReportOutcome.unavailable:
+        _exitForUnavailable(
+          localizations,
+          ref.read(publicTemplateAccessLossGuardProvider(widget.profileId)),
+        );
+        return;
+      case PublicTemplateReportOutcome.failed:
+        _showMessage(localizations.publicTemplatesOperationFailed);
+        return;
+      case PublicTemplateReportOutcome.submitted:
+        break;
+    }
 
     var resultChosen = false;
     final shouldBlock = await showDialog<bool>(
@@ -428,18 +442,13 @@ class _PublicTemplateDetailScreenState
   }
 }
 
-class _PublicTemplateReportDraft {
-  const _PublicTemplateReportDraft({
-    required this.reason,
-    required this.explanation,
-  });
-
-  final PublicTemplateReportReason reason;
-  final String? explanation;
-}
+typedef _SubmitPublicTemplateReport = Future<PublicTemplateReportOutcome>
+    Function(PublicTemplateReportReason reason, String? explanation);
 
 class _PublicTemplateReportDialog extends StatefulWidget {
-  const _PublicTemplateReportDialog();
+  const _PublicTemplateReportDialog({required this.onSubmit});
+
+  final _SubmitPublicTemplateReport onSubmit;
 
   @override
   State<_PublicTemplateReportDialog> createState() =>
@@ -452,6 +461,7 @@ class _PublicTemplateReportDialogState
   final _explanation = TextEditingController();
   PublicTemplateReportReason _reason =
       PublicTemplateReportReason.spamScamDeceptive;
+  bool _isSubmitting = false;
   bool _isClosing = false;
 
   @override
@@ -463,113 +473,147 @@ class _PublicTemplateReportDialogState
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
-    return AlertDialog(
-      title: Text(localizations.publicTemplateReportDialogTitle),
-      content: SizedBox(
-        width: 480,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(localizations.publicTemplateReportPrivacyDescription),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<PublicTemplateReportReason>(
-                  key: const Key('publicTemplateReportReason'),
-                  // ignore: deprecated_member_use
-                  value: _reason,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: localizations.publicTemplateReportReasonLabel,
-                  ),
-                  items: [
-                    for (final reason in PublicTemplateReportReason.values)
-                      DropdownMenuItem(
-                        value: reason,
-                        child: Text(
-                          _reportReasonLabel(localizations, reason),
-                          overflow: TextOverflow.ellipsis,
+    return PopScope(
+      canPop: !_isSubmitting,
+      child: AlertDialog(
+        title: Text(localizations.publicTemplateReportDialogTitle),
+        content: SizedBox(
+          width: 480,
+          child: Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(localizations.publicTemplateReportPrivacyDescription),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<PublicTemplateReportReason>(
+                    key: const Key('publicTemplateReportReason'),
+                    // ignore: deprecated_member_use
+                    value: _reason,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: localizations.publicTemplateReportReasonLabel,
+                    ),
+                    items: [
+                      for (final reason in PublicTemplateReportReason.values)
+                        DropdownMenuItem(
+                          value: reason,
+                          child: Text(
+                            _reportReasonLabel(localizations, reason),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
+                    ],
+                    onChanged: _isSubmitting
+                        ? null
+                        : (reason) {
+                            if (reason != null) {
+                              setState(() => _reason = reason);
+                            }
+                          },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    key: const Key('publicTemplateReportExplanation'),
+                    controller: _explanation,
+                    enabled: !_isSubmitting,
+                    minLines: 3,
+                    maxLines: 6,
+                    maxLength: 500,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      labelText:
+                          localizations.publicTemplateReportExplanationLabel,
+                      helperText:
+                          localizations.publicTemplateReportExplanationHelper,
+                      alignLabelWithHint: true,
+                    ),
+                    validator: (value) {
+                      final normalized = value?.trim() ?? '';
+                      if (_reason.requiresExplanation && normalized.isEmpty) {
+                        return localizations
+                            .publicTemplateReportExplanationRequired;
+                      }
+                      if (normalized.characters.length > 500) {
+                        return localizations
+                            .publicTemplateReportExplanationTooLong;
+                      }
+                      return null;
+                    },
+                  ),
+                  if (_reason ==
+                      PublicTemplateReportReason.copyrightTrademark) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      localizations.publicTemplateCopyrightSignalNotice,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
-                  onChanged: (reason) {
-                    if (reason != null) setState(() => _reason = reason);
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  key: const Key('publicTemplateReportExplanation'),
-                  controller: _explanation,
-                  minLines: 3,
-                  maxLines: 6,
-                  maxLength: 500,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: InputDecoration(
-                    labelText:
-                        localizations.publicTemplateReportExplanationLabel,
-                    helperText:
-                        localizations.publicTemplateReportExplanationHelper,
-                    alignLabelWithHint: true,
-                  ),
-                  validator: (value) {
-                    final normalized = value?.trim() ?? '';
-                    if (_reason.requiresExplanation && normalized.isEmpty) {
-                      return localizations
-                          .publicTemplateReportExplanationRequired;
-                    }
-                    if (normalized.characters.length > 500) {
-                      return localizations
-                          .publicTemplateReportExplanationTooLong;
-                    }
-                    return null;
-                  },
-                ),
-                if (_reason ==
-                    PublicTemplateReportReason.copyrightTrademark) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    localizations.publicTemplateCopyrightSignalNotice,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
                 ],
-              ],
+              ),
             ),
           ),
         ),
+        actions: [
+          TextButton(
+            key: const Key('cancelPublicTemplateReportButton'),
+            onPressed: _isSubmitting || _isClosing
+                ? null
+                : () {
+                    _isClosing = true;
+                    Navigator.of(context).pop();
+                  },
+            child: Text(localizations.cancelButton),
+          ),
+          FilledButton(
+            key: const Key('submitPublicTemplateReportButton'),
+            onPressed: _isSubmitting || _isClosing ? null : _submit,
+            child: _isSubmitting
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox.square(
+                        key: Key('publicTemplateReportSubmittingIndicator'),
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        localizations.publicTemplateReportSubmittingButton,
+                      ),
+                    ],
+                  )
+                : Text(localizations.publicTemplateReportSubmitButton),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          key: const Key('cancelPublicTemplateReportButton'),
-          onPressed: _isClosing
-              ? null
-              : () {
-                  _isClosing = true;
-                  Navigator.of(context).pop();
-                },
-          child: Text(localizations.cancelButton),
-        ),
-        FilledButton(
-          key: const Key('submitPublicTemplateReportButton'),
-          onPressed: _isClosing ? null : _submit,
-          child: Text(localizations.publicTemplateReportSubmitButton),
-        ),
-      ],
     );
   }
 
-  void _submit() {
-    if (_isClosing) return;
+  Future<void> _submit() async {
+    if (_isSubmitting || _isClosing) return;
     if (_formKey.currentState?.validate() != true) return;
-    _isClosing = true;
     final normalized = _explanation.text.trim();
-    Navigator.of(context).pop(
-      _PublicTemplateReportDraft(
-        reason: _reason,
-        explanation: normalized.isEmpty ? null : normalized,
-      ),
-    );
+    setState(() => _isSubmitting = true);
+    PublicTemplateReportOutcome outcome;
+    try {
+      outcome = await widget.onSubmit(
+        _reason,
+        normalized.isEmpty ? null : normalized,
+      );
+    } catch (_) {
+      outcome = PublicTemplateReportOutcome.failed;
+    }
+    if (!mounted || _isClosing) return;
+    setState(() {
+      _isSubmitting = false;
+      _isClosing = true;
+    });
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    Navigator.of(context).pop(outcome);
   }
 }
 

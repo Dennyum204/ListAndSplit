@@ -558,6 +558,8 @@
   "publicTemplateReportExplanationTooLong": "Utilize no máximo 500 carateres.",
   "publicTemplateCopyrightSignalNotice": "Este é um sinal de moderação na aplicação, não um processo formal de notificação legal.",
   "publicTemplateReportSubmitButton": "Enviar denúncia",
+  "publicTemplateReportSubmittingButton": "A enviar denúncia…",
+  "publicTemplateReportStaleMessage": "Este modelo foi alterado antes de a denúncia ser enviada. Atualize a versão mais recente e tente novamente.",
   "publicTemplateReportSuccessTitle": "Denúncia enviada",
   "publicTemplateReportSuccessDescription": "Este modelo está agora oculto apenas para si. A denúncia não bloqueia o proprietário nem altera a amizade. Pode bloquear o utilizador como ação separada.",
   "publicTemplateReportSuccessMessage": "Denúncia enviada. O modelo está oculto para si.",

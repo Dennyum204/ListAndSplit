@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +10,7 @@ import 'package:list_and_split/features/community/presentation/community_provide
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/templates/domain/public_template.dart';
+import 'package:list_and_split/features/templates/domain/public_template_repository.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_detail_screen.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_profile_screen.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_providers.dart';
@@ -290,6 +293,157 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final configuration in [
+    (
+      locale: const Locale('en'),
+      submitting: 'Submitting report…',
+      stale:
+          'This template changed before your report was submitted. Refresh the latest version and try again.',
+    ),
+    (
+      locale: const Locale('pt'),
+      submitting: 'A enviar denúncia…',
+      stale:
+          'Este modelo foi alterado antes de a denúncia ser enviada. Atualize a versão mais recente e tente novamente.',
+    ),
+  ]) {
+    testWidgets(
+        'stale report stops submitting and stays on refreshed detail '
+        '(${configuration.locale.languageCode})', (tester) async {
+      final completion = Completer<PublicTemplateReportResult>();
+      final repository = FakePublicTemplateRepository()
+        ..detailsByTemplate[_firstTemplateId] = _detail()
+        ..reportCompleter = completion;
+
+      await _pumpReportFlow(
+        tester,
+        repository: repository,
+        community: FakeCommunityRepository(),
+        locale: configuration.locale,
+        dark: configuration.locale.languageCode == 'pt',
+      );
+      await tester.tap(find.byKey(const Key('reportPublicTemplateButton')));
+      await tester.pumpAndSettle();
+      repository.detailsByTemplate[_firstTemplateId] = _detail(version: 3);
+
+      await tester.tap(
+        find.byKey(const Key('submitPublicTemplateReportButton')),
+      );
+      await tester.pump();
+
+      expect(find.text(configuration.submitting), findsOneWidget);
+      expect(
+        find.byKey(const Key('publicTemplateReportSubmittingIndicator')),
+        findsOneWidget,
+      );
+      expect(repository.reportCalls, 1);
+      expect(repository.reportedTemplateVersions, [2]);
+
+      completion.completeError(
+        const PublicTemplateFailure(PublicTemplateFailureCode.stale),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+
+      expect(
+        find.byKey(const Key('publicTemplateReportSubmittingIndicator')),
+        findsNothing,
+      );
+      expect(find.text(configuration.stale), findsOneWidget);
+      expect(
+        find.byKey(const Key('blockAfterPublicTemplateReportButton')),
+        findsNothing,
+      );
+      expect(find.text('Report submitted'), findsNothing);
+      expect(find.byKey(const Key('communityAfterReport')), findsNothing);
+      expect(find.text('Trip kit'), findsOneWidget);
+      expect(repository.detailCalls, 2);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('unexpected report error stops submitting without success',
+      (tester) async {
+    final completion = Completer<PublicTemplateReportResult>();
+    final repository = FakePublicTemplateRepository()
+      ..detailsByTemplate[_firstTemplateId] = _detail()
+      ..reportCompleter = completion;
+
+    await _pumpReportFlow(
+      tester,
+      repository: repository,
+      community: FakeCommunityRepository(),
+      locale: const Locale('en'),
+      dark: false,
+    );
+    await tester.tap(find.byKey(const Key('reportPublicTemplateButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('submitPublicTemplateReportButton')),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const Key('publicTemplateReportSubmittingIndicator')),
+      findsOneWidget,
+    );
+
+    completion.completeError(StateError('unexpected client failure'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('publicTemplateReportSubmittingIndicator')),
+      findsNothing,
+    );
+    expect(
+      find.text(
+        'Public templates could not be loaded or updated. '
+        'Check your connection and try again.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Report submitted'), findsNothing);
+    expect(find.byKey(const Key('communityAfterReport')), findsNothing);
+    expect(find.text('Trip kit'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('disposing the report dialog during submission is safe',
+      (tester) async {
+    final completion = Completer<PublicTemplateReportResult>();
+    final repository = FakePublicTemplateRepository()
+      ..detailsByTemplate[_firstTemplateId] = _detail()
+      ..reportCompleter = completion;
+
+    await _pumpReportFlow(
+      tester,
+      repository: repository,
+      community: FakeCommunityRepository(),
+      locale: const Locale('en'),
+      dark: false,
+    );
+    await tester.tap(find.byKey(const Key('reportPublicTemplateButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('submitPublicTemplateReportButton')),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const Key('publicTemplateReportSubmittingIndicator')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    completion.completeError(
+      const PublicTemplateFailure(PublicTemplateFailureCode.stale),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('optional post-report block remains separate and exactly once',
       (tester) async {
     final repository = FakePublicTemplateRepository()
@@ -442,9 +596,9 @@ Future<void> _pumpReportFlow(
   await tester.pumpAndSettle();
 }
 
-PublicTemplateDetail _detail() => PublicTemplateDetail(
+PublicTemplateDetail _detail({int version = 2}) => PublicTemplateDetail(
       profile: _profile,
-      summary: _summary(_firstTemplateId),
+      summary: _summary(_firstTemplateId, version: version),
       items: [
         const PublicTemplateItem(
           name: 'Coffee beans',
@@ -457,11 +611,12 @@ PublicTemplateDetail _detail() => PublicTemplateDetail(
 PublicTemplateSummary _summary(
   String id, {
   int itemCount = 1,
+  int version = 2,
 }) =>
     PublicTemplateSummary(
       id: id,
       name: 'Trip kit',
-      version: 2,
+      version: version,
       itemCount: itemCount,
       publishedAt: _publishedAt,
     );

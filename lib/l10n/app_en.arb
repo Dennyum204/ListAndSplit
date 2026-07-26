@@ -1220,6 +1220,8 @@
   "publicTemplateReportExplanationTooLong": "Use 500 characters or fewer.",
   "publicTemplateCopyrightSignalNotice": "This is an in-app moderation signal, not a formal legal-notice process.",
   "publicTemplateReportSubmitButton": "Submit report",
+  "publicTemplateReportSubmittingButton": "Submitting report…",
+  "publicTemplateReportStaleMessage": "This template changed before your report was submitted. Refresh the latest version and try again.",
   "publicTemplateReportSuccessTitle": "Report submitted",
   "publicTemplateReportSuccessDescription": "This template is now hidden only for you. Reporting does not block the owner or change your friendship. You may block the user as a separate action.",
   "publicTemplateReportSuccessMessage": "Report submitted. The template is hidden for you.",
