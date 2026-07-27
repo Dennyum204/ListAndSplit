@@ -36,6 +36,7 @@ import 'package:list_and_split/features/templates/presentation/private_template_
 import 'package:list_and_split/features/templates/presentation/private_template_import_screen.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_detail_screen.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_profile_screen.dart';
+import 'package:list_and_split/features/templates/presentation/template_send_screens.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _listsNavigatorKey = GlobalKey<NavigatorState>();
@@ -204,6 +205,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: AppRoutes.templates,
                 builder: (context, state) => const TemplatesScreen(),
                 routes: [
+                  GoRoute(
+                    path: 'shared',
+                    builder: (context, state) =>
+                        const SharedTemplateSendsScreen(),
+                    routes: [
+                      GoRoute(
+                        path: 'received/:templateSendId',
+                        builder: (context, state) => ReceivedTemplateSendScreen(
+                          templateSendId:
+                              state.pathParameters['templateSendId']!,
+                        ),
+                      ),
+                    ],
+                  ),
                   GoRoute(
                     path: ':templateId',
                     builder: (context, state) => PrivateTemplateDetailScreen(

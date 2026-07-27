@@ -472,6 +472,88 @@ void main() {
       }
     });
 
+    test('maps schema-v11 role-specific template offers without provenance',
+        () {
+      final json = validAccountDataExportJson(schemaVersion: 11);
+      final document = AccountDataExportDocument.fromJson(json);
+
+      expect(document.schemaVersion, 11);
+      expect(document.sentTemplateOffers, hasLength(1));
+      expect(document.receivedTemplateOffers, hasLength(1));
+      expect(document.sentTemplateOffers.single.snapshotName, 'Beach trip');
+      expect(
+        document.sentTemplateOffers.single.recipient.username,
+        'gamma_user',
+      );
+      expect(
+        document.receivedTemplateOffers.single.items.single.name,
+        'Coffee',
+      );
+      expect(
+        json['sent_template_offers'].toString(),
+        isNot(contains('accepted_template_id')),
+      );
+      expect(
+        json['sent_template_offers'].toString(),
+        isNot(contains('source_template_id')),
+      );
+      expect(
+        json['received_template_offers'].toString(),
+        isNot(contains('source_template_id')),
+      );
+      expect(json.toString(), isNot(contains('request_id')));
+      expect(json.toString(), isNot(contains('fingerprint')));
+      expect(document.toJson(), json);
+    });
+
+    test('schema-v11 rejects malformed or privacy-expanded offer data', () {
+      Map<String, dynamic> mutateSent(
+        void Function(Map<String, dynamic> offer) change,
+      ) {
+        final root = validAccountDataExportJson(schemaVersion: 11);
+        final offers = List<dynamic>.from(root['sent_template_offers'] as List);
+        root['sent_template_offers'] = offers;
+        final offer = Map<String, dynamic>.from(offers.single as Map);
+        offers[0] = offer;
+        change(offer);
+        return root;
+      }
+
+      Map<String, dynamic> mutateReceived(
+        void Function(Map<String, dynamic> offer) change,
+      ) {
+        final root = validAccountDataExportJson(schemaVersion: 11);
+        final offers =
+            List<dynamic>.from(root['received_template_offers'] as List);
+        root['received_template_offers'] = offers;
+        final offer = Map<String, dynamic>.from(offers.single as Map);
+        offers[0] = offer;
+        change(offer);
+        return root;
+      }
+
+      for (final malformed in [
+        mutateSent((offer) => offer['accepted_template_id'] = 'private'),
+        mutateSent((offer) => offer['source_template_id'] = 'private'),
+        mutateSent((offer) => offer['snapshot_item_count'] = 201),
+        mutateSent((offer) => offer['state'] = 'future'),
+        mutateSent((offer) => offer['snapshot_name'] = ' Beach trip'),
+        mutateReceived((offer) => offer['request_id'] = 'private'),
+        mutateReceived((offer) => offer['accepted_template_id'] = 'private'),
+        mutateReceived((offer) => offer['snapshot_item_count'] = 2),
+        mutateReceived((offer) {
+          final items = List<dynamic>.from(offer['items'] as List);
+          offer['items'] = items;
+          items.add(Map<String, dynamic>.from(items.single as Map));
+        }),
+      ]) {
+        expect(
+          () => AccountDataExportDocument.fromJson(malformed),
+          throwsA(isA<AccountDataExportFailure>()),
+        );
+      }
+    });
+
     test('keeps schema-v1 through v8 export shapes byte-for-byte compatible',
         () {
       for (var version = 1; version <= 8; version += 1) {
@@ -829,7 +911,7 @@ void main() {
     });
 
     test('rejects unsupported schema versions', () {
-      final json = validAccountDataExportJson()..['schema_version'] = 10;
+      final json = validAccountDataExportJson()..['schema_version'] = 12;
 
       expect(
         () => AccountDataExportDocument.fromJson(json),

@@ -524,6 +524,9 @@ class SupabaseTemplateSendRepository implements TemplateSendRepository {
           '22023' => TemplateSendFailureCode.invalid,
           'P0002' || '42501' => TemplateSendFailureCode.unavailable,
           '40001' => TemplateSendFailureCode.stale,
+          '23505'
+              when error.message == 'pending template send already exists' =>
+            TemplateSendFailureCode.duplicatePending,
           '23505' => TemplateSendFailureCode.retryConflict,
           '54000' => TemplateSendFailureCode.capacity,
           '55000' => TemplateSendFailureCode.noLongerPending,

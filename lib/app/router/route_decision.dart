@@ -14,6 +14,7 @@ abstract final class AppRoutes {
   static const foundation = '/';
   static const lists = '/lists';
   static const templates = '/templates';
+  static const sharedTemplates = '/templates/shared';
   static const profile = '/profile';
   static const moderation = '/profile/moderation';
   static const community = '/community';
@@ -35,6 +36,9 @@ abstract final class AppRoutes {
       '${listTemplateImport(listId)}/$templateId';
 
   static String templateDetail(String templateId) => '$templates/$templateId';
+
+  static String receivedTemplateSend(String templateSendId) =>
+      '$sharedTemplates/received/$templateSendId';
 
   static String publicProfile(String profileId) =>
       '$community/profile/$profileId';

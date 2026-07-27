@@ -313,6 +313,29 @@ void main() {
     }
   });
 
+  test('maps the reviewed pending-send uniqueness error distinctly', () async {
+    failure = const PostgrestException(
+      message: 'pending template send already exists',
+      code: '23505',
+    );
+
+    await expectLater(
+      repository.sendTemplate(
+        _sourceTemplateId,
+        _recipientProfileId,
+        expectedTemplateVersion: 3,
+        requestId: _requestId,
+      ),
+      throwsA(
+        isA<TemplateSendFailure>().having(
+          (value) => value.code,
+          'code',
+          TemplateSendFailureCode.duplicatePending,
+        ),
+      ),
+    );
+  });
+
   test('maps malformed data separately from transport failures', () async {
     responses['list_received_template_sends'] = 'not rows';
     await expectLater(

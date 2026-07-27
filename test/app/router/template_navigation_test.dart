@@ -17,14 +17,56 @@ import 'package:list_and_split/features/notifications/presentation/notification_
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/templates/domain/private_template.dart';
 import 'package:list_and_split/features/templates/domain/private_template_repository.dart';
+import 'package:list_and_split/features/templates/domain/template_send.dart';
+import 'package:list_and_split/features/templates/domain/template_send_repository.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_detail_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
+import 'package:list_and_split/features/templates/presentation/template_send_providers.dart';
+import 'package:list_and_split/features/templates/presentation/template_send_screens.dart';
 import 'package:list_and_split/features/templates/presentation/templates_screen.dart';
 
 import '../../helpers/fake_private_template_repository.dart';
 import '../../helpers/fakes.dart';
 
 void main() {
+  testWidgets(
+      'Shared Templates route stays in Templates and opens received offer by ID',
+      (tester) async {
+    final sends = _RouteTemplateSendRepository();
+    await _pumpApp(
+      tester,
+      templates: FakePrivateTemplateRepository(),
+      lists: FakeActiveListRepository(),
+      templateSends: sends,
+    );
+
+    await _openTemplates(tester);
+    await tester.tap(find.byKey(const Key('sharedTemplatesButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SharedTemplateSendsScreen), findsOneWidget);
+    expect(find.text('Duplicate name'), findsOneWidget);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      1,
+    );
+    await tester.tap(find.text('Duplicate name'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ReceivedTemplateSendScreen), findsOneWidget);
+    expect(find.byKey(const Key('receivedTemplateSendDetailList')),
+        findsOneWidget);
+    expect(sends.detailIds, [_routeSendId]);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      1,
+    );
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(SharedTemplateSendsScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'blank duplicate-name templates open by ID and preserve template state',
       (tester) async {
@@ -263,6 +305,7 @@ Future<ProviderContainer> _pumpApp(
   WidgetTester tester, {
   required FakePrivateTemplateRepository templates,
   required FakeActiveListRepository lists,
+  TemplateSendRepository? templateSends,
 }) async {
   final auth = FakeAuthRepository(session: verifiedSession);
   final defaultFriendships = FakeFriendshipRepository()
@@ -298,6 +341,8 @@ Future<ProviderContainer> _pumpApp(
       ),
       activeListRepositoryProvider.overrideWithValue(lists),
       privateTemplateRepositoryProvider.overrideWithValue(templates),
+      if (templateSends != null)
+        templateSendRepositoryProvider.overrideWithValue(templateSends),
     ],
   );
   addTearDown(() async {
@@ -313,6 +358,100 @@ Future<ProviderContainer> _pumpApp(
   await tester.pumpAndSettle();
   return container;
 }
+
+class _RouteTemplateSendRepository implements TemplateSendRepository {
+  final List<String> detailIds = [];
+
+  @override
+  Future<List<TemplateSendProfile>> listEligibleRecipients(
+    String templateId, {
+    int pageSize = 20,
+    TemplateSendRecipientCursor? cursor,
+  }) async =>
+      const [];
+
+  @override
+  Future<TemplateSendMutationResult> sendTemplate(
+    String templateId,
+    String recipientProfileId, {
+    required int expectedTemplateVersion,
+    required String requestId,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<ReceivedTemplateSendSummary>> listReceived({
+    TemplateSendHistoryFilter filter = TemplateSendHistoryFilter.pending,
+    int pageSize = 20,
+    TemplateSendCursor? cursor,
+  }) async =>
+      filter == TemplateSendHistoryFilter.pending
+          ? [_routeReceivedSummary()]
+          : const [];
+
+  @override
+  Future<List<SentTemplateSendSummary>> listSent({
+    TemplateSendHistoryFilter filter = TemplateSendHistoryFilter.pending,
+    int pageSize = 20,
+    TemplateSendCursor? cursor,
+  }) async =>
+      const [];
+
+  @override
+  Future<ReceivedTemplateSendDetail> getReceived(
+    String templateSendId,
+  ) async {
+    detailIds.add(templateSendId);
+    return ReceivedTemplateSendDetail(
+      summary: _routeReceivedSummary(),
+      acceptedTemplateId: null,
+      items: const [],
+    );
+  }
+
+  @override
+  Future<TemplateSendMutationResult> accept(
+    String templateSendId, {
+    required int expectedVersion,
+    required String requestId,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<TemplateSendMutationResult> decline(
+    String templateSendId, {
+    required int expectedVersion,
+    required String requestId,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<TemplateSendMutationResult> revoke(
+    String templateSendId, {
+    required int expectedVersion,
+    required String requestId,
+  }) =>
+      throw UnimplementedError();
+}
+
+ReceivedTemplateSendSummary _routeReceivedSummary() {
+  return ReceivedTemplateSendSummary(
+    id: _routeSendId,
+    sender: const TemplateSendProfile(
+      id: '88888888-8888-4888-8888-888888888888',
+      username: 'sender_user',
+      displayName: 'Sender User',
+    ),
+    snapshotName: 'Duplicate name',
+    itemCount: 0,
+    state: TemplateSendState.pending,
+    version: 1,
+    createdAt: DateTime.utc(2026, 7, 27, 8),
+    stateChangedAt: DateTime.utc(2026, 7, 27, 8),
+  );
+}
+
+const _routeSendId = '99999999-9999-4999-8999-999999999999';
 
 class _UnavailableTemplateRepository extends FakePrivateTemplateRepository {
   String? unavailableTemplateId;

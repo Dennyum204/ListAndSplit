@@ -231,15 +231,19 @@ Current private-template and Public Template slices:
 - Notification v5 adds exactly one recipient template-send notification while
   v1-v4 remain unaware. Export v11 adds role-specific provenance-free offer
   projections while v1-v10 remain unchanged. Opaque private account invalidation
-  is reused. The Dart repository is strict but deliberately unreachable in PR #23.
+  is reused. The strict Dart repository, localized Shared Templates UI,
+  notification-v5 routing, and export-v11 client are implemented.
 - Terminal template-send history has an idempotent 180-day cleanup function. It is
   intentionally unscheduled until the bounded PR #25 operational migration.
 
-Later candidate slices:
+Completed delivery:
 
 - PR #24: localized, accessible Send/Received/Sent/Accept/Decline/Revoke UI,
   notification-v5 actions, export-v11 client integration, and two-device
   reconciliation over the PR #23 server/domain contract.
+
+Later candidate slices:
+
 - PR #25: schedule the existing template-send terminal-retention function once per
   day through a separately authorized additive Cron migration.
 - A friends-only feed of recent public templates.

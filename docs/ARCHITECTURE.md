@@ -627,9 +627,10 @@ Received/Sent lists use bounded descending `(state_changed_at, id)` keysets;
 recipient detail exposes only live sender profile, snapshot name/count/items,
 state/version/times, and the recipient's accepted copy ID. Sent output never
 contains `accepted_template_id` or source/copy provenance. Dart models and
-`TemplateSendRepository` parse exact DTO allowlists behind the Templates feature,
-but no provider, controller, route, localization, or screen reaches them in PR
-#23.
+`TemplateSendRepository` parse exact DTO allowlists behind the Templates feature.
+Session-keyed Riverpod controllers expose Send composition, persistent
+Received/Sent projections, recipient detail/actions, bounded paging, and
+authoritative reconciliation through immutable IDs.
 
 Notification v5 adds `template_send_received`, with one actor-null stored row so
 v1-v4 retain their existing visibility contracts. V5 resolves the sender and
@@ -641,8 +642,8 @@ template or invitation data.
 `export_own_account_data_v11()` wraps v10 with role-specific, unsuppressed,
 friend-visible sent and received projections. Sent export excludes accepted-copy
 identity; received export contains the allowlisted snapshot but no source ID,
-request/fingerprint, or provenance. V1-v10 remain unchanged, and Flutter export
-integration stays on v10 until PR #24. A private postgres-only idempotent function
+request/fingerprint, or provenance. V1-v10 remain unchanged, and Flutter strictly
+parses v11 while preserving those historical shapes. A private postgres-only idempotent function
 deletes terminal offers at least 180 days old and cascades snapshots, ledgers, and
 notifications; no Cron schedule is added until PR #25.
 
@@ -837,7 +838,7 @@ schema-version-6 `jsonb` document for legacy clients, and
 `export_own_account_data_v9()` remains unchanged for public-template-aware clients.
 The separate `export_own_account_data_v10()` reuses the corrected v9 allowlisted
 base and returns schema version `10`; v11 adds only the role-specific template-send
-projections described below while Flutter remains on v10 in PR #23. Version `2`
+projections described below and is the current strict Flutter export contract. Version `2`
 preserves all version-1 account/social roots
 and adds the deterministic `active_lists` array with active/archived owned lists and
 ordered items. Version `3` adds only caller-relative metadata for lists owned by
@@ -869,7 +870,8 @@ unsuppressed, currently pair-visible sent and received template offers. The send
 receives recipient minimal profile, snapshot name/count, state/version, and times
 without accepted-copy/source identity. The recipient receives sender minimal
 profile and the immutable name/item/quantity/position snapshot without source/copy
-provenance. Flutter remains on v10 in PR #23; strict v11 client parsing is PR #24.
+provenance. Flutter strictly parses v11 and rejects expanded or inconsistent
+role projections.
 `shared_list_access`
 stays byte-for-byte metadata-only: it contains no assignment array, item data,
 General Note text, mention identity, or corresponding timestamp. Request IDs,
@@ -1098,9 +1100,9 @@ Assignment-aware clients use `list_notifications_v2` and
 `list_notifications_v3` and `get_unread_notification_count_v3`;
 reporting-aware clients use `list_notifications_v4` and
 `get_unread_notification_count_v4`. Template-send-aware clients use
-`list_notifications_v5` and `get_unread_notification_count_v5`; PR #23 adds only
-their server/domain contract, so the running Flutter client remains on v4 until
-PR #24. All generations reuse the same bounded,
+`list_notifications_v5` and `get_unread_notification_count_v5`; the running
+Flutter client uses v5 and routes actionable template-send rows by immutable send
+ID. All generations reuse the same bounded,
 hardened caller-owned mark-read operation. Flutter receives a domain model with minimal
 actor/resource projection and caller-relative presentation; it never reads or
 mutates notification rows directly.

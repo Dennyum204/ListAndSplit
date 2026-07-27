@@ -18,6 +18,8 @@ class AccountDataExportDocument {
     List<AccountPrivateTemplateExport> templates = const [],
     List<AccountSubmittedPublicTemplateReport> submittedPublicTemplateReports =
         const [],
+    List<AccountSentTemplateOfferExport> sentTemplateOffers = const [],
+    List<AccountReceivedTemplateOfferExport> receivedTemplateOffers = const [],
   })  : outgoingBlocks = List.unmodifiable(outgoingBlocks),
         activeRelationships = List.unmodifiable(activeRelationships),
         visibleNotifications = List.unmodifiable(visibleNotifications),
@@ -26,7 +28,9 @@ class AccountDataExportDocument {
         templateCategories = List.unmodifiable(templateCategories),
         templates = List.unmodifiable(templates),
         submittedPublicTemplateReports =
-            List.unmodifiable(submittedPublicTemplateReports) {
+            List.unmodifiable(submittedPublicTemplateReports),
+        sentTemplateOffers = List.unmodifiable(sentTemplateOffers),
+        receivedTemplateOffers = List.unmodifiable(receivedTemplateOffers) {
     if (product != supportedProduct ||
         !supportedSchemaVersions.contains(schemaVersion) ||
         authIdentity.id != profile.id ||
@@ -45,7 +49,10 @@ class AccountDataExportDocument {
           (template) =>
               template.includesPublicationField != (schemaVersion >= 9),
         ) ||
-        (schemaVersion < 10 && submittedPublicTemplateReports.isNotEmpty)) {
+        (schemaVersion < 10 && submittedPublicTemplateReports.isNotEmpty) ||
+        (schemaVersion < 11 &&
+            (sentTemplateOffers.isNotEmpty ||
+                receivedTemplateOffers.isNotEmpty))) {
       throw const AccountDataExportFailure();
     }
   }
@@ -69,6 +76,7 @@ class AccountDataExportDocument {
         8 => _schemaEightRootKeys,
         9 => _schemaNineRootKeys,
         10 => _schemaTenRootKeys,
+        11 => _schemaElevenRootKeys,
         _ => const <String>{},
       },
     );
@@ -127,11 +135,21 @@ class AccountDataExportDocument {
           : _requiredObjects(json, 'submitted_public_template_reports')
               .map(AccountSubmittedPublicTemplateReport.fromJson)
               .toList(growable: false),
+      sentTemplateOffers: schemaVersion < 11
+          ? const []
+          : _requiredObjects(json, 'sent_template_offers')
+              .map(AccountSentTemplateOfferExport.fromJson)
+              .toList(growable: false),
+      receivedTemplateOffers: schemaVersion < 11
+          ? const []
+          : _requiredObjects(json, 'received_template_offers')
+              .map(AccountReceivedTemplateOfferExport.fromJson)
+              .toList(growable: false),
     );
   }
 
   static const supportedProduct = 'list_and_split';
-  static const supportedSchemaVersion = 10;
+  static const supportedSchemaVersion = 11;
   static const supportedSchemaVersions = {
     1,
     2,
@@ -142,6 +160,7 @@ class AccountDataExportDocument {
     7,
     8,
     9,
+    10,
     supportedSchemaVersion,
   };
   static const _schemaOneRootKeys = {
@@ -176,6 +195,11 @@ class AccountDataExportDocument {
     ..._schemaNineRootKeys,
     'submitted_public_template_reports',
   };
+  static const _schemaElevenRootKeys = {
+    ..._schemaTenRootKeys,
+    'sent_template_offers',
+    'received_template_offers',
+  };
 
   final String product;
   final int schemaVersion;
@@ -191,6 +215,8 @@ class AccountDataExportDocument {
   final List<AccountPrivateTemplateExport> templates;
   final List<AccountSubmittedPublicTemplateReport>
       submittedPublicTemplateReports;
+  final List<AccountSentTemplateOfferExport> sentTemplateOffers;
+  final List<AccountReceivedTemplateOfferExport> receivedTemplateOffers;
 
   Map<String, dynamic> toJson() => {
         'product': product,
@@ -227,8 +253,290 @@ class AccountDataExportDocument {
           'submitted_public_template_reports': submittedPublicTemplateReports
               .map((report) => report.toJson())
               .toList(growable: false),
+        if (schemaVersion >= 11)
+          'sent_template_offers': sentTemplateOffers
+              .map((offer) => offer.toJson())
+              .toList(growable: false),
+        if (schemaVersion >= 11)
+          'received_template_offers': receivedTemplateOffers
+              .map((offer) => offer.toJson())
+              .toList(growable: false),
       };
 }
+
+class AccountTemplateOfferProfileExport {
+  AccountTemplateOfferProfileExport({
+    required this.profileId,
+    required this.username,
+    required this.displayName,
+  }) {
+    if (!_uuidPattern.hasMatch(profileId) ||
+        !_exportUsernamePattern.hasMatch(username) ||
+        displayName.trim() != displayName ||
+        displayName.isEmpty ||
+        displayName.runes.length > 50) {
+      throw const AccountDataExportFailure();
+    }
+  }
+
+  factory AccountTemplateOfferProfileExport.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    _expectExactKeys(json, _keys);
+    return AccountTemplateOfferProfileExport(
+      profileId: _requiredUuid(json, 'profile_id'),
+      username: _requiredString(json, 'username'),
+      displayName: _requiredString(json, 'display_name'),
+    );
+  }
+
+  static const _keys = {'profile_id', 'username', 'display_name'};
+
+  final String profileId;
+  final String username;
+  final String displayName;
+
+  Map<String, dynamic> toJson() => {
+        'profile_id': profileId,
+        'username': username,
+        'display_name': displayName,
+      };
+}
+
+class AccountTemplateOfferItemExport {
+  AccountTemplateOfferItemExport({
+    required this.name,
+    required this.quantityThousandths,
+    required this.position,
+  }) {
+    if (name.trim() != name ||
+        name.isEmpty ||
+        name.runes.length > 120 ||
+        quantityThousandths < 1 ||
+        position < 1 ||
+        position > 200) {
+      throw const AccountDataExportFailure();
+    }
+  }
+
+  factory AccountTemplateOfferItemExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, _keys);
+    return AccountTemplateOfferItemExport(
+      name: _requiredString(json, 'name'),
+      quantityThousandths: _requiredPositiveInt(json, 'quantity_thousandths'),
+      position: _requiredPositiveInt(json, 'position'),
+    );
+  }
+
+  static const _keys = {'name', 'quantity_thousandths', 'position'};
+
+  final String name;
+  final int quantityThousandths;
+  final int position;
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'quantity_thousandths': quantityThousandths,
+        'position': position,
+      };
+}
+
+class AccountSentTemplateOfferExport {
+  AccountSentTemplateOfferExport({
+    required this.templateSendId,
+    required this.recipient,
+    required this.snapshotName,
+    required this.snapshotItemCount,
+    required this.state,
+    required this.version,
+    required this.createdAt,
+    required this.stateChangedAt,
+  }) {
+    _validateTemplateOffer(
+      templateSendId: templateSendId,
+      snapshotName: snapshotName,
+      snapshotItemCount: snapshotItemCount,
+      state: state,
+      version: version,
+      createdAt: createdAt,
+      stateChangedAt: stateChangedAt,
+    );
+  }
+
+  factory AccountSentTemplateOfferExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, _keys);
+    return AccountSentTemplateOfferExport(
+      templateSendId: _requiredUuid(json, 'template_send_id'),
+      recipient: AccountTemplateOfferProfileExport.fromJson(
+        _requiredObject(json, 'recipient'),
+      ),
+      snapshotName: _requiredString(json, 'snapshot_name'),
+      snapshotItemCount: _requiredNonNegativeInt(
+        json,
+        'snapshot_item_count',
+      ),
+      state: _requiredString(json, 'state'),
+      version: _requiredPositiveInt(json, 'version'),
+      createdAt: _requiredUtcDateTime(json, 'created_at'),
+      stateChangedAt: _requiredUtcDateTime(json, 'state_changed_at'),
+    );
+  }
+
+  static const _keys = {
+    'template_send_id',
+    'recipient',
+    'snapshot_name',
+    'snapshot_item_count',
+    'state',
+    'version',
+    'created_at',
+    'state_changed_at',
+  };
+
+  final String templateSendId;
+  final AccountTemplateOfferProfileExport recipient;
+  final String snapshotName;
+  final int snapshotItemCount;
+  final String state;
+  final int version;
+  final DateTime createdAt;
+  final DateTime stateChangedAt;
+
+  Map<String, dynamic> toJson() => {
+        'template_send_id': templateSendId,
+        'recipient': recipient.toJson(),
+        'snapshot_name': snapshotName,
+        'snapshot_item_count': snapshotItemCount,
+        'state': state,
+        'version': version,
+        'created_at': _encodeDateTime(createdAt),
+        'state_changed_at': _encodeDateTime(stateChangedAt),
+      };
+}
+
+class AccountReceivedTemplateOfferExport {
+  AccountReceivedTemplateOfferExport({
+    required this.templateSendId,
+    required this.sender,
+    required this.snapshotName,
+    required this.snapshotItemCount,
+    required this.state,
+    required this.version,
+    required this.createdAt,
+    required this.stateChangedAt,
+    required List<AccountTemplateOfferItemExport> items,
+  }) : items = List.unmodifiable(items) {
+    _validateTemplateOffer(
+      templateSendId: templateSendId,
+      snapshotName: snapshotName,
+      snapshotItemCount: snapshotItemCount,
+      state: state,
+      version: version,
+      createdAt: createdAt,
+      stateChangedAt: stateChangedAt,
+    );
+    if (snapshotItemCount != this.items.length) {
+      throw const AccountDataExportFailure();
+    }
+    var previousPosition = 0;
+    for (final item in this.items) {
+      if (item.position <= previousPosition) {
+        throw const AccountDataExportFailure();
+      }
+      previousPosition = item.position;
+    }
+  }
+
+  factory AccountReceivedTemplateOfferExport.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    _expectExactKeys(json, _keys);
+    return AccountReceivedTemplateOfferExport(
+      templateSendId: _requiredUuid(json, 'template_send_id'),
+      sender: AccountTemplateOfferProfileExport.fromJson(
+        _requiredObject(json, 'sender'),
+      ),
+      snapshotName: _requiredString(json, 'snapshot_name'),
+      snapshotItemCount: _requiredNonNegativeInt(
+        json,
+        'snapshot_item_count',
+      ),
+      state: _requiredString(json, 'state'),
+      version: _requiredPositiveInt(json, 'version'),
+      createdAt: _requiredUtcDateTime(json, 'created_at'),
+      stateChangedAt: _requiredUtcDateTime(json, 'state_changed_at'),
+      items: _requiredObjects(json, 'items')
+          .map(AccountTemplateOfferItemExport.fromJson)
+          .toList(growable: false),
+    );
+  }
+
+  static const _keys = {
+    'template_send_id',
+    'sender',
+    'snapshot_name',
+    'snapshot_item_count',
+    'state',
+    'version',
+    'created_at',
+    'state_changed_at',
+    'items',
+  };
+
+  final String templateSendId;
+  final AccountTemplateOfferProfileExport sender;
+  final String snapshotName;
+  final int snapshotItemCount;
+  final String state;
+  final int version;
+  final DateTime createdAt;
+  final DateTime stateChangedAt;
+  final List<AccountTemplateOfferItemExport> items;
+
+  Map<String, dynamic> toJson() => {
+        'template_send_id': templateSendId,
+        'sender': sender.toJson(),
+        'snapshot_name': snapshotName,
+        'snapshot_item_count': snapshotItemCount,
+        'state': state,
+        'version': version,
+        'created_at': _encodeDateTime(createdAt),
+        'state_changed_at': _encodeDateTime(stateChangedAt),
+        'items': items.map((item) => item.toJson()).toList(growable: false),
+      };
+}
+
+void _validateTemplateOffer({
+  required String templateSendId,
+  required String snapshotName,
+  required int snapshotItemCount,
+  required String state,
+  required int version,
+  required DateTime createdAt,
+  required DateTime stateChangedAt,
+}) {
+  if (!_uuidPattern.hasMatch(templateSendId) ||
+      snapshotName.trim() != snapshotName ||
+      snapshotName.isEmpty ||
+      snapshotName.runes.length > 120 ||
+      snapshotItemCount < 0 ||
+      snapshotItemCount > 200 ||
+      !_templateOfferStates.contains(state) ||
+      version < 1 ||
+      !createdAt.isUtc ||
+      !stateChangedAt.isUtc ||
+      stateChangedAt.isBefore(createdAt)) {
+    throw const AccountDataExportFailure();
+  }
+}
+
+const _templateOfferStates = {
+  'pending',
+  'accepted',
+  'declined',
+  'revoked',
+  'unavailable',
+};
 
 class AccountSubmittedPublicTemplateReport {
   AccountSubmittedPublicTemplateReport({
