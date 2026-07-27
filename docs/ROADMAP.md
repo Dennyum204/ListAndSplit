@@ -220,13 +220,28 @@ Current private-template and Public Template slices:
   public/global fanout, dependency, Edge Function, configuration, or platform
   change is introduced.
 - Fully closed inactive evidence has a 24-month retention contract and a private
-  idempotent cleanup to nonidentifying tombstones. Scheduling that cleanup is a
-  separate additive operational migration, A-062, deployed only to explicitly
-  authorized environments; it is not part of the O-P13 schema migration.
+  idempotent cleanup to nonidentifying tombstones. The separate additive A-062
+  operational migration owns its stable daily schedule per explicitly authorized
+  environment; it is not part of the O-P13 schema migration.
+- Template-send database/domain foundation for owned private/public zero-to-200
+  item immutable friend offers, with five states, one pending triple, exact
+  version and payload-bound request idempotency, atomic private Uncategorized
+  acceptance, persistent Received/minimal Sent projections, and relationship/
+  block/source/moderation/account lifecycle.
+- Notification v5 adds exactly one recipient template-send notification while
+  v1-v4 remain unaware. Export v11 adds role-specific provenance-free offer
+  projections while v1-v10 remain unchanged. Opaque private account invalidation
+  is reused. The Dart repository is strict but deliberately unreachable in PR #23.
+- Terminal template-send history has an idempotent 180-day cleanup function. It is
+  intentionally unscheduled until the bounded PR #25 operational migration.
 
 Later candidate slices:
 
-- Sending a template to a friend with Accept/Decline and idempotent copy creation.
+- PR #24: localized, accessible Send/Received/Sent/Accept/Decline/Revoke UI,
+  notification-v5 actions, export-v11 client integration, and two-device
+  reconciliation over the PR #23 server/domain contract.
+- PR #25: schedule the existing template-send terminal-retention function once per
+  day through a separately authorized additive Cron migration.
 - A friends-only feed of recent public templates.
 
 Private category cardinality, copy atomicity, capacity, versioning, public
@@ -236,7 +251,9 @@ and A-060 through A-062, closing O-P13 and owning the separate daily retention
 schedule. Moderator assignment, client distribution, physical QA, and each hosted
 environment remain explicit controlled gates before external beta or production
 public-content rollout.
-Feed ranking/pagination/retention and sent-template expiry/acceptance remain open.
+Feed ranking/pagination/retention remains open. Template-send product/database
+semantics are resolved by P-055/A-063; only the bounded UI and retention-schedule
+deliveries remain.
 
 ## Phase 4 — Split expense ledger (core scope complete)
 
@@ -349,6 +366,6 @@ future, explicit task with environment and cost approval.
 - When the accepted compile-time configuration should expand into a full
   development/staging/production flavor model.
 - Whether offline read caching can ship safely before offline mutations.
-- What additional feed/sent-template/community features, if any, constitute the
+- What additional feed/community features, if any, constitute the
   minimum external beta after the accepted Public Template safety foundation is
   deployed and physically verified.

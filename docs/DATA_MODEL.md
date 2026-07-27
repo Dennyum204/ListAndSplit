@@ -164,6 +164,17 @@ restriction, decision, private note, allowlist, or access-audit data. Versions `
 through `10` remain strictly readable; the v6 through v9 functions and their exact
 document shapes remain unchanged.
 
+The separate parameterless `export_own_account_data_v11()` preserves versions `1`
+through `10` and adds deterministic `sent_template_offers` and
+`received_template_offers` arrays for unsuppressed current-friend-pair history.
+Sent entries include only offer ID, recipient minimal profile, snapshot name/count,
+state/version, and lifecycle times. They never include accepted-template or source
+identity. Received entries include only offer ID, sender minimal profile, the
+allowlisted immutable name/item/quantity/position snapshot, state/version, and
+times. Neither role receives request UUIDs, fingerprints, source/copy provenance,
+moderation internals, or hidden pair history. Flutter remains on v10 until the
+separate UI/export-client delivery.
+
 Every nested object is built from an explicit field allowlist. The social arrays
 apply the same directional-block, caller-relative active-relationship, recipient,
 suppression, expiry, and either-direction block filters as their existing RPC
@@ -718,15 +729,51 @@ keys. Open groups and active restrictions are never retention candidates. Once a
 template has no open group, no active restriction, and every closure/event is at
 least 24 months old, the private idempotent maintenance function writes only
 aggregate count tombstones and deletes reports, groups, events, and inactive
-restrictions. It is deliberately unscheduled until a separate reviewed cron
-migration. That additive migration owns one stable daily 03:47 UTC job, removes
+restrictions. The reviewed additive Cron migration owns one stable daily 03:47 UTC
+job, removes
 same-name predecessors before scheduling, executes the existing maintenance
 function as `postgres`, and changes no evidence table or retention eligibility
 rule.
 
-Sent-template actions, public-feed ranking/retention, and wider discovery remain
-future aggregates. Reporting/takedown remains an external-rollout gate until its
-separate hosted deployment and physical QA complete.
+### Template send offer and immutable snapshot
+
+`public.template_sends` stores one sender, recipient, nullable live source
+template, immutable snapshot name/count, five-state lifecycle, positive version,
+state/update/create times, optional permanent suppression time, and a nullable
+recipient-owned accepted template reference. Its states are `pending`, `accepted`,
+`declined`, `revoked`, and `unavailable`. A partial unique index permits one
+pending sender/source/recipient triple. Source deletion sets the source reference
+null only after the pending lifecycle trigger closes the offer; accepted-copy
+references may become null if the recipient later deletes that independent copy.
+
+`public.template_send_items` contains only a new row ID, parent send ID, ordered
+1-200 position, trimmed 1-120-character name, exact positive integer
+`quantity_thousandths`, and server creation time. Snapshot updates are rejected;
+parent retention/account deletion may cascade physical deletion. Duplicate names
+remain separate positions. Zero snapshot rows and exactly 200 are valid; a legacy
+source above 200 is left intact and cannot be sent.
+
+`private.template_send_requests` is a forced-RLS, no-client-grant ledger keyed by
+actor/request UUID. It stores only operation, 32-byte payload fingerprint, send
+ID, and server time. Identical retry converges; reuse for another payload or
+operation returns `23505`. No request UUID or fingerprint enters an RPC response,
+notification, Realtime payload, accepted template, or export.
+
+The recipient-only Accept transition creates one ordinary recipient-owned private
+Uncategorized template and independent new item rows in the same transaction.
+Recipient quota failure changes no offer, template, item, request, notification,
+or Realtime row. Decline is recipient-only and Revoke sender-only. Every action
+requires the exact pending version. Friendship loss, either-direction block,
+source deletion, and active moderation restriction close pending offers as
+`unavailable`; pair loss/block permanently suppresses all pair history, and
+moderation suppresses affected source projections. Accepted copies remain
+independent.
+
+Terminal rows are eligible for privileged physical deletion only when
+`state_changed_at` is at least 180 days old. Pending rows never expire
+automatically. The maintenance function is idempotent and intentionally
+unscheduled until PR #25. Public-feed ranking/retention and the Flutter
+template-send experience remain future delivery.
 
 ## Split expense-ledger aggregate
 
@@ -862,13 +909,14 @@ A notification belongs to one recipient. The current
 
 - a database-generated UUID primary key;
 - a recipient profile reference that cascades through account deletion and a
-  nullable actor reference for system-authored moderation outcomes;
+  nullable actor reference for system-authored moderation outcomes and
+  template-send v1-v4 isolation;
 - a check-constrained friend-request, list-access, ownership-transfer,
   `list_item_assigned`, `list_note_mentioned`, `public_template_taken_down`, or
-  `public_template_restored` type;
+  `public_template_restored` type, plus `template_send_received`;
 - type-specific nullable relationship, participant-access, list, assignment-item,
-  or General Note context and the positive authoritative version that caused the
-  notification;
+  General Note, moderation, or template-send context and the positive
+  authoritative version that caused the notification;
 - database-managed creation time and expiry exactly 180 days later;
 - nullable database-managed read time; and
 - nullable permanent suppression time.
@@ -944,21 +992,26 @@ and general reason. It contains no reporter, explanation, report count, moderato
 private note, or queue state. Event uniqueness yields exactly one notification per
 successful takedown/restoration; report and dismiss create none.
 
+V5 listing/count adds `template_send_received` while preserving v1-v4 shapes and
+behavior. A real Send inserts exactly one actor-null row keyed by recipient, send,
+and initial send version. V5 resolves the current sender and action state through
+the protected offer; only the exact unsuppressed pending version is actionable.
+V1-v4 exclude the type because its stored actor is null and it is not a moderation
+outcome. Accept/Decline/Revoke create no sender notification. Mark-read retains its
+signature and adds the same current pair/offer privacy predicate.
+
 Access loss by the mention actor or recipient and either-direction blocking set
 `suppressed_at = coalesce(suppressed_at, mutation_time)`. No operation clears that
 timestamp. Reinvitation/unblocking cannot restore the historical row, although a
 later new explicit mention may create a new unsuppressed version. Profile and list
 deletion use the established physical cascades.
 
-Accepted future notification types remain:
-
-- actionable sent template;
-
 Implemented invitation action state belongs to participant access, as
-friend-request action state belongs to the relationship. Sent-template action state
-will likewise belong to its underlying record. Archive/delete and preference
-controls, later-type payload localization, physical cleanup, and retention beyond
-the implemented current-aggregate account deletion remain open.
+friend-request action state belongs to the relationship. Template-send action
+state belongs to `template_sends`; PR #24 adds its UI/localization. Archive/delete
+and preference controls, later-type payload localization, physical cleanup beyond
+the accepted offer cascade/retention, and retention beyond the implemented
+current-aggregate account deletion remain open.
 
 Push tokens and delivery attempts are future infrastructure for FCM/APNs and are
 outside the initial identity/profile schema. Device token ownership, rotation,
@@ -1041,7 +1094,7 @@ anonymous denial unless public read is explicitly intended.
 | Invitations | Exact recipient and owner through versioned participant-access RPCs |
 | Private templates/categories | RPC-only owner access; copies into accessible lists recheck destination membership and state |
 | Public templates | Readable according to approved public-profile policy; mutation remains owner-only |
-| Template sends | Sender and recipient; acceptance only by recipient |
+| Template sends | RPC-only current unblocked friend pair; sender may Send/Revoke and see minimal status, recipient may read snapshot and Accept/Decline; sender never sees accepted-copy identity; direct CRUD denied |
 | Split settings, participants, expenses, shares, settlements, reversals, balances, suggestions | RPC-only current unblocked owner/member reads; owner-only setup; active owner/member expense and settlement mutations; original recorder/current owner reversal |
 | Notifications | Recipient only; related actors do not gain notification-row access |
 | Storage objects | Same ownership/membership rules as the parent application record |
@@ -1058,8 +1111,7 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   owner-list, and current-assignment records.
 - Support/administrator correction and audit rules for immutable usernames.
 - Avatar Storage, validation, replacement, retention, and deletion lifecycle.
-- Sent-template version/provenance, attribution, offer idempotency, and public-feed
-  ranking/retention.
+- Public-feed ranking/retention and post-foundation template-send UI behavior.
 - Later notification-type payload/localization, archive/preferences, physical
   cleanup, account-lifecycle retention, and push-token tables.
 - Offline mutation identifiers, tombstones, cache reconciliation, and conflict

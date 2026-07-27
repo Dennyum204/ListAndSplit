@@ -589,6 +589,63 @@ changes and the copier for destination creation. Blocking already invalidates bo
 accounts. Arbitrary viewers reconcile on manual refresh, app resume, or copy-time
 authorization; the architecture makes no global live-public-content promise.
 
+### Template send database and domain boundary
+
+`public.template_sends` is the RPC-only current offer aggregate and
+`public.template_send_items` is its immutable ordered snapshot. A private
+`template_send_requests` ledger binds every Send/Accept/Decline/Revoke request UUID
+to a domain-separated SHA-256 payload fingerprint. All three tables force RLS,
+have explicit restrictive false policies, and grant no API role direct table
+access. Exact `postgres`-owned functions derive the caller from `auth.uid()`, pin
+an empty `search_path`, qualify objects, revoke default/anonymous/service-role
+execution, and grant only their reviewed signatures to `authenticated`.
+
+Send locks the source's moderation scope, relevant profiles in UUID order, the
+canonical relationship pair, then the owned source template and items. It
+rechecks onboarding, ownership, friendship, both block directions, active
+moderation, exact source version, and the 0-200 item bound before inserting the
+parent, ordered snapshot, retry ledger, and one recipient notification atomically.
+The partial sender/source/recipient index permits one pending offer; rejected or
+concurrent work commits no partial row or invalidation.
+
+Accept follows moderation scope, profile, pair, recipient template-quota, then
+offer locks. It rechecks the pending version and current authorization before
+creating one normal private null-category recipient template and new item rows.
+The retry ledger makes the destination identity stable. Capacity failure leaves
+the offer pending. Decline and Revoke use the same pair/offer order and exact
+version contract; only the recipient may decline and only the sender may revoke.
+
+Additive triggers close pending offers on friendship loss, either-direction block,
+source deletion, or an active moderation restriction. Pair loss/block permanently
+sets suppression for every pair offer and notification; unblocking/refriending
+never clears it. Source deletion retains terminal offer history and accepted
+copies. Moderation hides affected offer projections without changing independent
+copies. Auth-root deletion cascades offers and snapshots by sender/recipient while
+recipient-owned accepted copies retain ordinary template ownership.
+
+Received/Sent lists use bounded descending `(state_changed_at, id)` keysets;
+recipient detail exposes only live sender profile, snapshot name/count/items,
+state/version/times, and the recipient's accepted copy ID. Sent output never
+contains `accepted_template_id` or source/copy provenance. Dart models and
+`TemplateSendRepository` parse exact DTO allowlists behind the Templates feature,
+but no provider, controller, route, localization, or screen reaches them in PR
+#23.
+
+Notification v5 adds `template_send_received`, with one actor-null stored row so
+v1-v4 retain their existing visibility contracts. V5 resolves the sender and
+exact actionability through the protected offer; Accept/Decline create no sender
+notification. Parent and notification triggers reuse private
+`account:<profile-id>` / `invalidate` / `{"v":1}` fanout. The payload never carries
+template or invitation data.
+
+`export_own_account_data_v11()` wraps v10 with role-specific, unsuppressed,
+friend-visible sent and received projections. Sent export excludes accepted-copy
+identity; received export contains the allowlisted snapshot but no source ID,
+request/fingerprint, or provenance. V1-v10 remain unchanged, and Flutter export
+integration stays on v10 until PR #24. A private postgres-only idempotent function
+deletes terminal offers at least 180 days old and cascades snapshots, ledgers, and
+notifications; no Cron schedule is added until PR #25.
+
 ### Public template reporting and moderation boundary
 
 Reporting is an exact authenticated RPC on the immutable template ID and public
@@ -779,7 +836,9 @@ schema-version-6 `jsonb` document for legacy clients, and
 `export_own_account_data_v8()` remains unchanged for General-Note-aware clients.
 `export_own_account_data_v9()` remains unchanged for public-template-aware clients.
 The separate `export_own_account_data_v10()` reuses the corrected v9 allowlisted
-base and returns schema version `10`. Version `2` preserves all version-1 account/social roots
+base and returns schema version `10`; v11 adds only the role-specific template-send
+projections described below while Flutter remains on v10 in PR #23. Version `2`
+preserves all version-1 account/social roots
 and adds the deterministic `active_lists` array with active/archived owned lists and
 ordered items. Version `3` adds only caller-relative metadata for lists owned by
 others and excludes their items, owner identity, other participants, and internal
@@ -805,7 +864,13 @@ copy provenance, request UUID, or fingerprint. Version `10` adds the caller's
 deterministically ordered submitted Public Template reports with only stable
 reason code, nullable explanation, and submission time. It includes no target
 template/owner identity, status/group, snapshot/fingerprint, moderator/private
-note, decision, restriction, allowlist, or access audit. `shared_list_access`
+note, decision, restriction, allowlist, or access audit. Version `11` adds only
+unsuppressed, currently pair-visible sent and received template offers. The sender
+receives recipient minimal profile, snapshot name/count, state/version, and times
+without accepted-copy/source identity. The recipient receives sender minimal
+profile and the immutable name/item/quantity/position snapshot without source/copy
+provenance. Flutter remains on v10 in PR #23; strict v11 client parsing is PR #24.
+`shared_list_access`
 stays byte-for-byte metadata-only: it contains no assignment array, item data,
 General Note text, mention identity, or corresponding timestamp. Request IDs,
 derived balances, and suggested payments are excluded
@@ -1032,7 +1097,10 @@ Assignment-aware clients use `list_notifications_v2` and
 `get_unread_notification_count_v2`; General-Note-aware clients use
 `list_notifications_v3` and `get_unread_notification_count_v3`;
 reporting-aware clients use `list_notifications_v4` and
-`get_unread_notification_count_v4`. All generations reuse the same bounded,
+`get_unread_notification_count_v4`. Template-send-aware clients use
+`list_notifications_v5` and `get_unread_notification_count_v5`; PR #23 adds only
+their server/domain contract, so the running Flutter client remains on v4 until
+PR #24. All generations reuse the same bounded,
 hardened caller-owned mark-read operation. Flutter receives a domain model with minimal
 actor/resource projection and caller-relative presentation; it never reads or
 mutates notification rows directly.
@@ -1040,7 +1108,8 @@ mutates notification rows directly.
 The physical `public.user_notifications` table supports the reviewed
 friend-request, list-access, ownership-transfer, `list_item_assigned`, and
 `list_note_mentioned` types plus system-authored
-`public_template_taken_down` and `public_template_restored`. It
+`public_template_taken_down` and `public_template_restored`, and actor-null
+`template_send_received`. It
 records a generated
 UUID, recipient profile ID, nullable actor profile ID,
 normalized relationship participants, the positive relationship version that
@@ -1111,8 +1180,10 @@ receive an unknown type or badge they cannot open. V2 functions include the old
 types plus the allowlisted assignment item/list projection and explicitly exclude
 note mentions. V3 includes both informational types with matching listing/count
 predicates and excludes moderation outcomes. V4 adds the two strict actor-null
-moderation projections. No version adds a moderation deep link, reporter content,
-push payload, archive/preference control, or removal event.
+moderation projections. V5 adds one strict actor-null template-send projection and
+derives current sender/actionability through the offer; v1-v4 remain unaware. No
+version adds a moderation deep link, reporter content, push payload,
+archive/preference control, or removal event.
 
 `send_friend_request(uuid,bigint)` creates the notification in the same locked
 transaction only for a real transition into pending. `block_profile(uuid)`
@@ -1156,8 +1227,8 @@ checks, capacity enforcement, and writes belong in one short database transactio
 General Note text/link replacement and mention notification creation follow that
 same boundary. Split expense allocation, settlement, and reversal operations follow
 the same exact PostgreSQL RPC boundary. Public-template operations use the reviewed
-PostgreSQL RPC boundary above; future sent-template operations still require a
-separate placement decision.
+PostgreSQL RPC boundary above; template-send operations use the dedicated exact
+RPC boundary above.
 
 ## Money boundary
 
@@ -1243,6 +1314,12 @@ writes are implemented.
   owner publication restrictions; notification v1-v4 compatibility; export v10
   privacy; 24-month retention/tombstones; and localized accessible dialogs,
   moderation routing, paging, themes, large text, and duplicate-submit guards.
+- Template-send foundation tests cover forced RLS/exact grants, immutable
+  0/200/legacy-over-capacity snapshots, all five states, role/privacy projections,
+  payload-bound request replay/conflict, exact-version actions, quota atomicity,
+  notification v1-v5 compatibility, export v1-v11 compatibility, pair/source/
+  moderation/account lifecycle, 180-day unscheduled retention, and real lock races
+  for capacity, identical Accept retries, and source deletion.
 - Realtime client tests deterministically cover bounded stalled handshakes,
   joined-channel recovery, duplicate recovery signals, diagnostic redaction, and
   the production gateway-to-coordinator-to-registry path through a mounted feature

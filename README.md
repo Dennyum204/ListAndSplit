@@ -29,13 +29,18 @@ current source also adds exact-revision reporting, reporter-only hiding, an
 empty-by-default UUID-authorized moderation queue, restriction-backed
 takedown/restoration, safe owner outcomes, and 24-month closed-evidence retention;
 its hosted rollout and physical QA remain separately controlled.
+The template-send database/domain foundation adds immutable friend offers,
+recipient-only atomic private-copy acceptance, sender revocation, persistent
+Received/minimal Sent projections, notification v5, export v11, and private
+Realtime invalidation. It is deliberately unreachable from Flutter until PR #24,
+and its 180-day terminal cleanup remains unscheduled until PR #25.
 List-scoped Split
 supports owner-selected CHF/EUR, exact integer equal and custom expense shares,
 derived balances, deterministic settle-up suggestions, immutable full/partial
 settlement records, one-time reversals, historical participants, and the same
-private reconciliation path. Shared/sent templates, global/friends feeds, offline
-mutation queues, push delivery, and payment-provider integration remain planned
-work.
+private reconciliation path. Shared templates, template-send UI, global/friends
+feeds, offline mutation queues, push delivery, and payment-provider integration
+remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English/
@@ -518,6 +523,10 @@ unchanged for public-template-aware legacy clients. Current clients use
 `export_own_account_data_v10()`: version `10` preserves versions `1` through `9`,
 retains v9's caller-owned `is_public`/nullable `published_at`, and adds only the
 caller's own submitted report reason, nullable explanation, and submission time.
+The server-only `export_own_account_data_v11()` preserves v1-v10 and adds
+role-specific, unsuppressed sent/received template-offer projections with no
+source/copy provenance, request UUID, or fingerprint. PR #23 does not switch the
+Flutter export client from v10; strict v11 client integration belongs to PR #24.
 It never exports other users' public templates/reports, target identity, report
 status/group, evidence snapshot/fingerprint, provenance, copy request UUID,
 moderator/private note, decision, restriction, allowlist, or access audit. Shared
@@ -581,10 +590,11 @@ SQL into the Dashboard.
 ## Intentional deferrals
 
 The current slices do not implement unrestricted profile/directory search,
-avatars, shared/sent templates, a public feed, rich-text notes, note
+avatars, shared templates, template-send screens/actions, a public feed, rich-text
+notes, note
 history/comments, notification archive/preferences, assignment or mention deep
 links, report withdrawal/unhide/appeal/evidence attachments, automated moderation,
-or scheduled moderation cleanup,
+or scheduled template-send retention cleanup,
 percentage/weight/ratio expense allocation,
 automatic custom-share remainder correction, a mathematically minimum settlement
 solver, SQLite caching/offline

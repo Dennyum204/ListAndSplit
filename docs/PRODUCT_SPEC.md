@@ -83,18 +83,22 @@ are the evidence of implementation status.
   caller-owned lists; version `9` adds only `is_public` and nullable
   `published_at` to caller-owned templates; and version `10` adds only the caller's
   submitted public-template report reason, nullable explanation, and submission
-  time. Equal and custom allocations are represented by their
+  time. Version `11` adds role-specific, unsuppressed current-friend-pair sent and
+  received template-offer projections without source/copy provenance. Equal and
+  custom allocations are represented by their
   explicit integer share rows; no allocation-mode field is introduced. Collections
   are deterministic arrays and are empty rather than null, and export versions `1`
-  through `10` remain compatible.
+  through `11` remain compatible.
 - The existing parameterless `export_own_account_data()` remains unchanged at
   schema version `6` for legacy clients, and
   `export_own_account_data_v7()` remains unchanged for assignment-aware clients.
   General-Note-aware clients call the separate parameterless
   `export_own_account_data_v8()`. Public-template-aware legacy clients call the
   parameterless `export_own_account_data_v9()`. Reporting-aware clients call the
-  separate parameterless `export_own_account_data_v10()`. Versions `7` through
-  `10` add no assignment, item,
+  separate parameterless `export_own_account_data_v10()`. The PR #23 server/domain
+  foundation adds `export_own_account_data_v11()`, but Flutter continues calling
+  v10 until PR #24 adds strict client integration. Versions `7` through
+  `11` add no assignment, item,
   General Note, mention, or participant identity to `shared_list_access`; lists
   owned by another user remain byte-for-byte privacy-minimal metadata under P-039.
 - The export includes nullable onboarding fields faithfully. It includes only the
@@ -363,7 +367,10 @@ The product term is **Templates**; the former name **Internal Lists** should not
 used in new UI or documentation. Private templates remain personal reusable
 content. The Public Template Foundation adds explicit owner publication,
 block-aware profile-only viewing, and independent recipient-owned copies. Shared,
-sent, friend-feed, and collaborative templates remain future work.
+friend-feed, and collaborative templates remain future work. The Template Send
+Foundation implements the server and domain contract for one-friend immutable
+offers; its screens, actions, localization, navigation, and export client remain
+the next Flutter delivery rather than current reachable UI.
 
 - A template is one account-owned reusable ordered collection of item names and
   quantities. Template items have no completion state, actor attribution, unit,
@@ -479,6 +486,47 @@ copies succeed; duplicate-name rows each consume one place.
   private account invalidation. Arbitrary viewers see source changes through
   manual refresh, app resume, or action-time authorization rather than global
   fanout.
+
+#### Template Send Foundation
+
+- A completed authenticated owner may send either an owned private or public
+  template to one current accepted, mutually unblocked friend. An actively
+  moderated source is ineligible. A send snapshots the exact observed source
+  version and rejects a legacy source above 200 current items without changing it.
+  Zero-item and exactly-200-item sources are valid.
+- The immutable offer snapshot contains only the trimmed template name and ordered
+  item name, exact integer `quantity_thousandths`, and position. Later source
+  edits never change it. One `pending` offer may exist for a sender/source/
+  recipient triple; new intentional sends after a terminal result use a new
+  request identity and a new snapshot.
+- States are `pending`, `accepted`, `declined`, `revoked`, and `unavailable`.
+  Pending offers have no automatic expiry. The recipient alone may Accept or
+  Decline; the sender alone may Revoke. Every mutation uses an exact expected
+  version and payload-bound request UUID, so retries converge and conflicting
+  reuse fails.
+- Accept atomically creates exactly one independent recipient-owned private
+  Uncategorized template. The full snapshot, including an empty one, is copied
+  with new identifiers and no visible provenance. Recipient capacity failure
+  leaves the offer pending and creates no partial template, item, version, or
+  invalidation. Repeated Accept never creates another copy.
+- Source deletion closes pending offers as `unavailable`; accepted copies survive.
+  Friendship loss or either-direction blocking closes pending offers and
+  permanently hides all history for that pair. Refriending or unblocking never
+  restores it. An active moderation restriction closes pending offers, hides the
+  affected offer/notification projection, and never mutates an accepted copy.
+- Received and minimal Sent projections are persistent, bounded, and keyset
+  paginated. The sender sees status but never the recipient's accepted template
+  ID. The recipient may read the allowlisted snapshot and their own accepted-copy
+  result. No source/copy provenance is exported or rendered.
+- A real send creates exactly one recipient `template_send_received`
+  notification. Notification RPCs v1-v4 never return the type; v5 resolves its
+  actor/action state from the protected offer. Accept and Decline do not notify
+  the sender. Offer changes reuse opaque private account invalidation only.
+- Terminal offer history is retained for 180 days and has a privileged,
+  idempotent cleanup function. PR #23 intentionally does not schedule it.
+  Account export v11 adds role-specific sent/received offer projections while
+  leaving v1-v10 unchanged. Flutter still requests v10 until the PR #24 UI/export
+  integration.
 
 #### Public Template reporting and moderation
 
@@ -751,8 +799,10 @@ copies succeed; duplicate-name rows each consume one place.
 - Notifications expire logically exactly 180 days after creation and are then
   omitted from listing and badge counts. Physical cleanup remains a documented
   pre-production follow-up and no scheduled deletion is introduced here.
-- Templates sent by friends remain an accepted future actionable type requiring
-  Accept or Decline. Active-list invitation actions are implemented.
+- Template-send notification v5 and the underlying Accept/Decline/Revoke server
+  actions are implemented but remain unreachable until the PR #24 notification
+  and Templates UI integration. Notification RPCs v1-v4 do not return the new
+  type. Active-list invitation actions remain implemented and unchanged.
 - A real absent-to-present item assignment creates one informational
   `list_item_assigned` notification only when another person performed it. A batch
   change creates at most one notification per newly assigned recipient. Duplicate
@@ -893,7 +943,6 @@ choose them:
   its authorization and audit requirements.
 - Avatar storage, upload validation, privacy, replacement, and deletion lifecycle.
 - Public-template community-feed ranking/retention and broader discovery.
-- Invitation and sent-template expiry, revocation, and idempotent re-acceptance.
 - Notification archive/delete/preferences, later types, push-safe payloads,
   physical cleanup, and account-lifecycle retention beyond the accepted
   friend/list/assignment/mention/Public-Template-moderation behavior.

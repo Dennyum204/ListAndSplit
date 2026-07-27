@@ -42,7 +42,9 @@ select is(
     'public_template_id:uuid',
     'public_template_name:text',
     'moderation_reason_code:text',
-    'moderation_event_id:uuid'
+    'moderation_event_id:uuid',
+    'template_send_id:uuid',
+    'template_send_version:bigint'
   ],
   'notification columns contain only accepted reference, moderation, and lifecycle data'
 );
@@ -60,7 +62,8 @@ select is(
     'read_at','suppressed_at','active_list_id','access_participant_id',
     'access_version','active_list_item_id','assignment_item_version',
     'general_note_version','public_template_id','public_template_name',
-    'moderation_reason_code','moderation_event_id'
+    'moderation_reason_code','moderation_event_id','template_send_id',
+    'template_send_version'
   ]::information_schema.sql_identifier[],
   'optional actor, type-specific references, and lifecycle timestamps are nullable'
 );
@@ -124,8 +127,8 @@ select is(
       and contype = 'f'
       and confdeltype = 'c'
   ),
-  6::bigint,
-  'all profile, relationship, list, participant, and item foreign keys cascade'
+  7::bigint,
+  'all profile, relationship, list, participant, item, and template-send foreign keys cascade'
 );
 
 select is(
@@ -171,9 +174,11 @@ select is(
     'user_notifications_pkey',
     'user_notifications_public_template_idx',
     'user_notifications_recipient_unread_expiry_idx',
-    'user_notifications_recipient_visible_created_idx'
+    'user_notifications_recipient_visible_created_idx',
+    'user_notifications_template_send_idx',
+    'user_notifications_template_send_version_key'
   ]::name[],
-  'only required friend/list/item/note/moderation privacy, listing, and badge indexes exist'
+  'only required friend/list/item/note/moderation/template-send privacy, listing, and badge indexes exist'
 );
 
 select ok(
