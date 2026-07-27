@@ -1,4 +1,5 @@
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
+import 'package:list_and_split/features/templates/domain/friend_public_template_feed_repository.dart';
 import 'package:list_and_split/features/templates/domain/private_template.dart';
 import 'package:list_and_split/features/templates/domain/public_template.dart';
 import 'package:list_and_split/features/templates/domain/public_template_repository.dart';
@@ -9,7 +10,8 @@ typedef PublicTemplateRpc = Future<Object?> Function(
   Map<String, dynamic>? params,
 });
 
-class SupabasePublicTemplateRepository implements PublicTemplateRepository {
+class SupabasePublicTemplateRepository
+    implements PublicTemplateRepository, FriendPublicTemplateFeedRepository {
   SupabasePublicTemplateRepository(
     SupabaseClient client, {
     PublicTemplateRpc? rpc,
@@ -18,6 +20,51 @@ class SupabasePublicTemplateRepository implements PublicTemplateRepository {
                 client.rpc<Object?>(functionName, params: params));
 
   final PublicTemplateRpc _rpc;
+
+  @override
+  Future<FriendPublicTemplatePage> listFriendFeed({
+    int pageSize = 20,
+    PublicTemplateCursor? cursor,
+  }) async {
+    try {
+      final document = _object(
+        await _rpc(
+          'list_friend_public_template_feed',
+          params: {
+            'requested_page_size': pageSize,
+            'cursor_published_at': cursor?.publishedAt.toIso8601String(),
+            'cursor_template_id': cursor?.templateId,
+          },
+        ),
+      );
+      _expectExactKeys(document, _friendFeedPageKeys);
+      final entries = _objects(document, 'entries')
+          .map(_friendFeedEntry)
+          .toList(growable: false);
+      if (entries.length > pageSize) {
+        throw const FormatException('oversized friend template page');
+      }
+      _validatePageOrder(
+        entries.map((entry) => entry.template).toList(growable: false),
+        cursor,
+      );
+      final nextCursor = document['next_cursor'] == null
+          ? null
+          : _cursor(_requiredObject(document, 'next_cursor'));
+      if (nextCursor != null &&
+          (entries.isEmpty ||
+              nextCursor.templateId != entries.last.template.id ||
+              nextCursor.publishedAt != entries.last.template.publishedAt)) {
+        throw const FormatException('invalid friend template cursor');
+      }
+      return FriendPublicTemplatePage(
+        entries: entries,
+        nextCursor: nextCursor,
+      );
+    } catch (error) {
+      throw _failure(error);
+    }
+  }
 
   @override
   Future<PublicTemplatePage> listProfileTemplates(
@@ -187,6 +234,8 @@ class SupabasePublicTemplateRepository implements PublicTemplateRepository {
   }
 
   static const _pageKeys = {'profile', 'templates', 'next_cursor'};
+  static const _friendFeedPageKeys = {'entries', 'next_cursor'};
+  static const _friendFeedEntryKeys = {'profile', 'template'};
   static const _profileKeys = {'profile_id', 'username', 'display_name'};
   static const _summaryKeys = {
     'template_id',
@@ -233,6 +282,16 @@ class SupabasePublicTemplateRepository implements PublicTemplateRepository {
       id: _uuid(row['profile_id']),
       username: username,
       displayName: displayName,
+    );
+  }
+
+  static FriendPublicTemplateEntry _friendFeedEntry(
+    Map<String, dynamic> row,
+  ) {
+    _expectExactKeys(row, _friendFeedEntryKeys);
+    return FriendPublicTemplateEntry(
+      profile: _profile(_requiredObject(row, 'profile')),
+      template: _summary(_requiredObject(row, 'template')),
     );
   }
 

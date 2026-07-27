@@ -589,6 +589,41 @@ changes and the copier for destination creation. Blocking already invalidates bo
 accounts. Arbitrary viewers reconcile on manual refresh, app resume, or copy-time
 authorization; the architecture makes no global live-public-content promise.
 
+### Friends public-template feed boundary
+
+The friends feed is one read-through RPC over existing profiles, current
+relationships, blocks, public templates, reports, restrictions, and template
+items. It creates no feed table, impression/history row, retention function, Cron
+job, notification, or export field. The server derives the caller only from
+`auth.uid()`, requires a verified completed profile, excludes self, and admits an
+owner only through the one normalized relationship row in exact `friends` state
+with no either-direction block. Template visibility repeats the public
+listing/detail report and active-restriction exclusions.
+
+The result contains only owner profile ID/current username/display name and
+template ID/name/version/item count/publication time. It is a bounded default-20,
+1-50-row page ordered by `(published_at DESC, template_id DESC)` with an exclusive
+timestamp/UUID cursor, one-row overfetch, no count, and no age cutoff. Publication
+time defines position: edits preserve it and republication replaces it.
+
+The hardened `postgres`-owned stable definer pins an empty `search_path`, fully
+qualifies every object, revokes default/PUBLIC, anonymous, and service-role
+execution, and grants only its exact signature to `authenticated`. Existing
+owner-first partial public-template indexing is reused only when plan evidence
+shows the friend-constrained query avoids scanning unrelated public owners; no
+index is added speculatively.
+
+Flutter keeps strict feed DTO/repository/controller state under Templates while
+exposing `/community/friends-templates` in the Community shell branch. Cards route
+by immutable owner/template IDs to the existing profile and public-detail
+contracts. Refresh/load-more requests are generation guarded, pages are validated
+and deduplicated, cached rows survive refresh failure, and mounted feed state
+registers with the existing account reconciliation registry. Pull, toolbar,
+route-load, resume, and applicable relationship/block/profile invalidations are
+authoritative refresh points. A friend's publication, unpublication, deletion, or
+moderation action has no new foreground fan-out promise; detail/copy/report still
+reauthorize at action time.
+
 ### Template send database and domain boundary
 
 `public.template_sends` is the RPC-only current offer aggregate and

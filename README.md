@@ -42,8 +42,9 @@ List-scoped Split
 supports owner-selected CHF/EUR, exact integer equal and custom expense shares,
 derived balances, deterministic settle-up suggestions, immutable full/partial
 settlement records, one-time reversals, historical participants, and the same
-private reconciliation path. Global/friends feeds, offline mutation queues, push
-delivery, and payment-provider integration remain planned work.
+private reconciliation path. Community now includes a refresh-based friends-only
+feed of recent public templates. Global/ranked discovery, offline mutation queues,
+push delivery, and payment-provider integration remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English/
@@ -682,7 +683,7 @@ SQL into the Dashboard.
 ## Intentional deferrals
 
 The current slices do not implement unrestricted profile/directory search,
-avatars, a public feed, rich-text notes, note
+avatars, a global or ranked public feed, rich-text notes, note
 history/comments, notification archive/preferences, assignment or mention deep
 links, report withdrawal/unhide/appeal/evidence attachments, automated moderation,
 percentage/weight/ratio expense allocation,

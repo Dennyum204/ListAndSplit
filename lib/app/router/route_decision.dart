@@ -18,6 +18,7 @@ abstract final class AppRoutes {
   static const profile = '/profile';
   static const moderation = '/profile/moderation';
   static const community = '/community';
+  static const friendTemplates = '/community/friends-templates';
   static const friendships = '/community/friendships';
   static const blockedUsers = '/community/blocked';
   static const notifications = '/notifications';

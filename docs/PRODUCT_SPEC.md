@@ -366,11 +366,9 @@ are not implemented.
 The product term is **Templates**; the former name **Internal Lists** should not be
 used in new UI or documentation. Private templates remain personal reusable
 content. The Public Template Foundation adds explicit owner publication,
-block-aware profile-only viewing, and independent recipient-owned copies. Shared,
-friend-feed, and collaborative templates remain future work. The Template Send
-Foundation implements the server and domain contract for one-friend immutable
-offers; its screens, actions, localization, navigation, and export client remain
-the next Flutter delivery rather than current reachable UI.
+block-aware profile viewing, a friends-only recent feed, and independent
+recipient-owned copies. Template Send adds immutable one-friend offers and
+recipient-owned copies. Collaborative template editing remains future work.
 
 - A template is one account-owned reusable ordered collection of item names and
   quantities. Template items have no completion state, actor attribution, unit,
@@ -465,7 +463,22 @@ copies succeed; duplicate-name rows each consume one place.
   request/fingerprint values, private aggregates, or hidden counts.
 - Public profile pages use bounded 1-50-row keyset pages ordered by
   `published_at DESC, template_id DESC`, with no total count. Global search,
-  recommendation, ranking, and a friends feed are not introduced.
+  recommendation, and ranking were not introduced by the profile-only foundation.
+- The Community **Templates from friends** screen is a separate read-through
+  projection of currently public, moderation-eligible templates owned by current
+  accepted friends. It excludes the viewer, either-direction blocks, and templates
+  successfully reported by the viewer. It returns no total and stores no feed,
+  impression, view-history, or retention row.
+- Feed recency is the source publication time. Rows are newest first by
+  `(published_at DESC, template_id DESC)` in exclusive 1-50-row keyset pages,
+  defaulting to 20. Ordinary edits preserve position; republication receives a
+  new publication timestamp. Blank public templates remain eligible.
+- Friendship loss, blocking, unpublication, deletion, moderation restriction, or
+  owner account deletion removes an entry on the next authoritative read.
+  Unblocking or refriending may restore a template that is currently eligible.
+  Feed freshness is refresh-based: pull-to-refresh, toolbar refresh, route reload,
+  app resume, and applicable existing private-account invalidations. No feed
+  notification, push delivery, new Realtime topic, or publication fan-out exists.
 - **Save a copy** atomically copies the complete authoritative zero-to-200-item
   snapshot after rechecking caller/source onboarding, blocks, exact source
   version, and caller quota. Every destination/template item receives a new UUID;
@@ -653,8 +666,10 @@ copies succeed; duplicate-name rows each consume one place.
 - The relationship row remains the authoritative friendship action state; the
   retained list-access row independently remains authoritative for invitations.
 - A user's public templates can be viewed from that user's block-aware profile.
-- A future community feed may show recent public templates from accepted friends;
-  ranking, pagination, retention, and rollout remain unresolved.
+- A separate Community feed shows recent public templates from current accepted
+  friends, excluding the viewer. It uses publication-time/UUID keyset ordering,
+  no stored feed rows or age cutoff, and refresh-based freshness rather than
+  global Realtime fan-out.
 - Blocking applies the symmetric shared-list separation rules in the active/shared
   list section. Friendship ending alone preserves accepted list membership.
 
@@ -944,7 +959,8 @@ choose them:
 - A support or administrator correction process for immutable usernames, including
   its authorization and audit requirements.
 - Avatar storage, upload validation, privacy, replacement, and deletion lifecycle.
-- Public-template community-feed ranking/retention and broader discovery.
+- Public-template global/ranked recommendation and broader discovery beyond the
+  accepted chronological friends-only feed.
 - Notification archive/delete/preferences, later types, push-safe payloads,
   physical cleanup, and account-lifecycle retention beyond the accepted
   friend/list/assignment/mention/Public-Template-moderation behavior.

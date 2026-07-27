@@ -32,6 +32,7 @@ import 'package:list_and_split/features/profile/presentation/profile_providers.d
 import 'package:list_and_split/features/profile/presentation/profile_screen.dart';
 import 'package:list_and_split/features/split/presentation/list_split_screen.dart';
 import 'package:list_and_split/features/templates/presentation/templates_screen.dart';
+import 'package:list_and_split/features/templates/presentation/friend_public_template_feed_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_detail_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_import_screen.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_detail_screen.dart';
@@ -236,6 +237,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: AppRoutes.community,
                 builder: (context, state) => const CommunityScreen(),
                 routes: [
+                  GoRoute(
+                    path: 'friends-templates',
+                    builder: (context, state) =>
+                        const FriendPublicTemplateFeedScreen(),
+                  ),
                   GoRoute(
                     path: 'friendships',
                     builder: (context, state) =>

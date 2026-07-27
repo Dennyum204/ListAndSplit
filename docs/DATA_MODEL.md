@@ -670,6 +670,23 @@ Identical retry returns the existing copy; conflicting request reuse is invalid.
 Every failed race writes nothing. Later source, relationship, block, username, or
 account lifecycle cannot change a completed copy.
 
+### Friends public-template feed projection
+
+The friends feed is not a stored aggregate. A read-through RPC joins the caller's
+one current normalized relationship row per pair to completed friend profiles and
+currently public templates. Eligibility additionally excludes either-direction
+blocks, active template restrictions, the caller's own profile, and any template
+the caller successfully reported.
+
+Only the existing public allowlist is projected: owner profile ID, current
+username/display name, template ID/name/version, item count, and publication time.
+Pages use the exclusive `(published_at, template_id)` descending keyset, default
+20 and bounded 1-50, with no count or age cutoff. Friendship loss, blocking,
+unpublication, deletion, restriction, reporting, or account deletion changes only
+the next authoritative projection; refriending or unblocking may restore a
+currently eligible row. No feed identifier, row, soft-delete state, view history,
+retention rule, notification, export member, or Realtime publication exists.
+
 ### Public template reporting and moderation
 
 The private moderation aggregate comprises:
@@ -775,7 +792,8 @@ automatically. The maintenance function is idempotent. A separate operational
 migration owns one stable daily 04:17 UTC `postgres` schedule per explicitly
 authorized environment, replaces every same-name predecessor, and never invokes
 cleanup during deployment. Production remains unscheduled until separately
-authorized. Public-feed ranking/retention remains future delivery.
+authorized. The chronological friends feed is a read-through projection and
+therefore has no retention model.
 
 ## Split expense-ledger aggregate
 
@@ -1096,7 +1114,7 @@ anonymous denial unless public read is explicitly intended.
 | General Note and current resolved mentions | RPC-only current unblocked owner/accepted-member read; active-only update through exact server-validated text/link replacement; archived read-only; direct mention-table CRUD denied |
 | Invitations | Exact recipient and owner through versioned participant-access RPCs |
 | Private templates/categories | RPC-only owner access; copies into accessible lists recheck destination membership and state |
-| Public templates | Readable according to approved public-profile policy; mutation remains owner-only |
+| Public templates | Readable according to approved public-profile and current-friends feed policies; mutation remains owner-only |
 | Template sends | RPC-only current unblocked friend pair; sender may Send/Revoke and see minimal status, recipient may read snapshot and Accept/Decline; sender never sees accepted-copy identity; direct CRUD denied |
 | Split settings, participants, expenses, shares, settlements, reversals, balances, suggestions | RPC-only current unblocked owner/member reads; owner-only setup; active owner/member expense and settlement mutations; original recorder/current owner reversal |
 | Notifications | Recipient only; related actors do not gain notification-row access |
@@ -1114,7 +1132,8 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   owner-list, and current-assignment records.
 - Support/administrator correction and audit rules for immutable usernames.
 - Avatar Storage, validation, replacement, retention, and deletion lifecycle.
-- Public-feed ranking/retention and post-foundation template-send UI behavior.
+- Global/ranked public-template discovery beyond the accepted chronological
+  friends feed.
 - Later notification-type payload/localization, archive/preferences, physical
   cleanup, account-lifecycle retention, and push-token tables.
 - Offline mutation identifiers, tombstones, cache reconciliation, and conflict

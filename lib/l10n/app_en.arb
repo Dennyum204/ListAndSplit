@@ -1200,6 +1200,37 @@
   },
   "publicTemplatesCopyDialogTitle": "Save an independent copy?",
   "publicTemplatesCopyDialogDescription": "The complete current template will be copied into your private Templates as Uncategorized. Your copy has new identities, is independently owned, and will not follow later source changes.",
+  "friendTemplatesTitle": "Templates from friends",
+  "friendTemplatesCommunityAction": "Browse recent public templates shared by your current friends.",
+  "friendTemplatesCommunitySemantics": "Open recent public templates from friends",
+  "friendTemplatesDescription": "Recent public templates from your current friends, newest publication first.",
+  "friendTemplatesRefreshTooltip": "Refresh templates from friends",
+  "friendTemplatesLoadingLabel": "Loading templates from friends",
+  "friendTemplatesInitialError": "Templates from friends could not be loaded. Check your connection and try again.",
+  "friendTemplatesRefreshFailed": "The latest templates could not be loaded. Your previous results are still shown.",
+  "friendTemplatesLoadMoreFailed": "More templates could not be loaded. Try again.",
+  "friendTemplatesEmptyTitle": "No templates to show",
+  "friendTemplatesEmptyDescription": "Pull to refresh when your friends publish public templates.",
+  "friendTemplatesLoadMore": "Load more",
+  "friendTemplatesRetryLoadMore": "Retry loading more",
+  "friendTemplatesLoadingMoreLabel": "Loading more templates from friends",
+  "friendTemplatesCardSemantics": "{templateName}, by {displayName}, at {username}, {itemCount} items, published {publishedDate}",
+  "@friendTemplatesCardSemantics": {
+    "placeholders": {
+      "templateName": {"type": "String"},
+      "displayName": {"type": "String"},
+      "username": {"type": "String"},
+      "itemCount": {"type": "int"},
+      "publishedDate": {"type": "String"}
+    }
+  },
+  "friendTemplatesOwnerSemantics": "Open profile for {displayName}, at {username}",
+  "@friendTemplatesOwnerSemantics": {
+    "placeholders": {
+      "displayName": {"type": "String"},
+      "username": {"type": "String"}
+    }
+  },
   "doneButton": "Done",
   "confirmButton": "Confirm",
   "publicTemplateReportAction": "Report template",

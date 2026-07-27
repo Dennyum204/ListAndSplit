@@ -15,6 +15,7 @@ import 'package:list_and_split/features/profile/presentation/profile_providers.d
 import 'package:list_and_split/features/split/presentation/list_split_providers.dart';
 import 'package:list_and_split/core/supabase/supabase_client_provider.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
+import 'package:list_and_split/features/templates/presentation/public_template_providers.dart';
 
 final resetSessionStateProvider = Provider<void Function()>((ref) {
   return () {
@@ -43,6 +44,7 @@ final resetSessionStateProvider = Provider<void Function()>((ref) {
     ref.invalidate(listSplitControllerProvider);
     ref.invalidate(privateTemplatesControllerProvider);
     ref.invalidate(privateTemplateDetailControllerProvider);
+    ref.invalidate(friendPublicTemplateFeedControllerProvider);
     ref.invalidate(notificationUnreadCountControllerProvider);
     ref.invalidate(notificationCentreControllerProvider);
   };

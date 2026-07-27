@@ -237,6 +237,12 @@ Current private-template and Public Template slices:
   bounded A-065 operational migration defines one stable daily 04:17 UTC schedule
   per explicitly authorized environment without invoking cleanup during
   deployment. Production remains unscheduled until separately authorized.
+- A friends-only Community feed reads current accepted relationships and the
+  existing public-template safety predicates at request time. It excludes self,
+  blocks, active restrictions, and caller-reported templates; orders by
+  publication time/UUID; and uses bounded keyset pages without a stored feed,
+  count, age cutoff, ranking, retention, notification, or new Realtime fan-out.
+  Freshness is explicit refresh/resume plus applicable private invalidations.
 
 Completed delivery:
 
@@ -246,10 +252,8 @@ Completed delivery:
 - PR #25: forward-only, same-name-convergent scheduling for the existing
   template-send terminal-retention function, with local catalog and retention
   boundary coverage. Hosted environments remain separate rollout gates.
-
-Later candidate slices:
-
-- A friends-only feed of recent public templates.
+- PR #26: P-056/A-066 chronological friends-only public-template feed with one
+  hardened read-through RPC and localized Community UI.
 
 Private category cardinality, copy atomicity, capacity, versioning, public
 visibility/category placement, no-provenance behavior, and profile presentation
@@ -258,9 +262,11 @@ and A-060 through A-062, closing O-P13 and owning the separate daily retention
 schedule. Moderator assignment, client distribution, physical QA, and each hosted
 environment remain explicit controlled gates before external beta or production
 public-content rollout.
-Feed ranking/pagination/retention remains open. Template-send product/database
-semantics, Flutter UI, and source-controlled retention schedule are resolved by
-P-055 and A-063 through A-065; hosted rollout remains environment-specific.
+Feed-v1 recency, pagination, and no-retention semantics are resolved by
+P-056/A-066; global/ranked/recommended discovery remains deferred. Template-send
+product/database semantics, Flutter UI, and source-controlled retention schedule
+are resolved by P-055 and A-063 through A-065; hosted rollout remains
+environment-specific.
 
 ## Phase 4 — Split expense ledger (core scope complete)
 
@@ -373,6 +379,6 @@ future, explicit task with environment and cost approval.
 - When the accepted compile-time configuration should expand into a full
   development/staging/production flavor model.
 - Whether offline read caching can ship safely before offline mutations.
-- What additional feed/community features, if any, constitute the
-  minimum external beta after the accepted Public Template safety foundation is
-  deployed and physically verified.
+- What additional global, ranked, or recommended community discovery, if any, is
+  needed after the accepted chronological friends-only feed is deployed and
+  physically verified.
