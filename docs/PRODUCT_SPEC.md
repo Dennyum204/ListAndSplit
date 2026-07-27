@@ -531,8 +531,9 @@ copies succeed; duplicate-name rows each consume one place.
   months from closure, then a private privileged idempotent maintenance operation
   removes identifying identities, explanations, snapshots, fingerprints, notes,
   and detailed records. Only nonidentifying aggregate decision tombstones may
-  remain. The maintenance operation is implemented but is not scheduled until a
-  separate reviewed hosted rollout step.
+  remain. A separate additive scheduling migration installs one daily 03:47 UTC
+  `postgres` Cron job only in environments where that operational rollout is
+  explicitly authorized; Production remains separately controlled.
 - Takedown/restoration notifications are system-authored and contain no reporter,
   explanation, report count, moderator identity, or private note. Legacy
   notification versions exclude the new types. Moderation tables are not published

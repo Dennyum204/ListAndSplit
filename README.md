@@ -257,16 +257,16 @@ public-content rollout until its additive migration is separately reviewed and
 deployed, a development moderator is explicitly granted, current clients are
 distributed, and the reporting/moderation physical QA below passes.
 
-### Public Template moderation rollout (not yet performed)
+### Public Template moderation operations
 
 Migration `20260726072024_public_template_reporting_moderation.sql` deliberately
-creates an empty moderator allowlist and no retention Cron job. Do not assign a
-real moderator or schedule cleanup as part of ordinary migration deployment. Every
-hosted action below requires a separate authorization and an unambiguous
-development target; Production needs its own independently reviewed target,
-identity, request IDs, rollout, and evidence.
+creates an empty moderator allowlist and no retention Cron job. Moderator
+assignment and retention scheduling remain separately reviewed operations. Every
+hosted action below requires explicit authorization and an unambiguous environment
+target; Production needs its own independently reviewed target, identity, request
+IDs, rollout, and evidence.
 
-Use this order for a later controlled development rollout:
+Use this order for a controlled development rollout:
 
 1. Verify project name/reference, branch/commit, clean migration history, and that
    this is the only pending migration. Apply only the reviewed migration.
@@ -296,8 +296,10 @@ Use this order for a later controlled development rollout:
 5. Distribute the matching development client only after the migration and grant
    checks pass, then complete physical QA. An empty allowlist is the safe
    fail-closed state and does not block reporting or owner-private template use.
-6. Schedule retention only in a later separately reviewed additive migration. The
-   accepted job is once daily at 03:47 UTC, named
+6. Retention scheduling is owned by additive migration
+   `20260727095449_schedule_public_template_moderation_retention.sql`. It first
+   unschedules every same-name job through `cron.unschedule`, then installs exactly
+   one active daily 03:47 UTC job named
    `public-template-moderation-retention-daily`, executing as `postgres`:
 
    ```sql
@@ -308,10 +310,9 @@ Use this order for a later controlled development rollout:
    );
    ```
 
-   That later migration must first unschedule an existing same-name job
-   idempotently, preserve `postgres`-only execute privilege, and test that open
-   groups, active restrictions, and evidence newer than 24 months remain. Verify
-   exactly one active job without exposing evidence:
+   The migration preserves `postgres`-only execute privilege and does not invoke
+   cleanup during deployment. Verify exactly one active job without exposing or
+   modifying moderation evidence:
 
    ```sql
    select
@@ -336,7 +337,7 @@ Use this order for a later controlled development rollout:
        'EXECUTE'
      ) as service_role_denied;
 
-   select jobname, schedule, active, username, database
+   select jobname, schedule, command, active, username, database
    from cron.job
    where jobname = 'public-template-moderation-retention-daily';
 
@@ -356,11 +357,13 @@ environment mechanism, substituting
 `private.revoke_public_template_moderator(...)` and operator label
 `list-and-split-dev-controlled-revoke`. Revocation is immediately authoritative;
 the current client clears protected state and exits once. Do not delete the access
-audit. If rollout must be backed out, roll the client back first, revoke every
-development moderator, and—only if the later Cron migration was actually applied—
-unschedule it through another reviewed migration. Keep the additive schema and
-retained evidence; never use destructive migration repair or evidence deletion as
-rollback.
+audit. If only retention scheduling must be rolled back, add a new reviewed
+forward-only migration that calls `cron.unschedule` for every job named
+`public-template-moderation-retention-daily`, then verify zero same-name jobs and
+leave the retention function, schema, and evidence untouched. For a wider rollout
+rollback, roll the client back first and revoke every development moderator through
+the documented audited operation. Never edit prior migrations, repair migration
+history, manually delete evidence, or use evidence deletion as rollback.
 
 Mixed versions are fail-safe: older public reads/copy calls receive the server's
 reporter/restriction filtering, older owner publication attempts are rejected

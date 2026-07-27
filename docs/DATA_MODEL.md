@@ -719,7 +719,10 @@ template has no open group, no active restriction, and every closure/event is at
 least 24 months old, the private idempotent maintenance function writes only
 aggregate count tombstones and deletes reports, groups, events, and inactive
 restrictions. It is deliberately unscheduled until a separate reviewed cron
-migration.
+migration. That additive migration owns one stable daily 03:47 UTC job, removes
+same-name predecessors before scheduling, executes the existing maintenance
+function as `postgres`, and changes no evidence table or retention eligibility
+rule.
 
 Sent-template actions, public-feed ranking/retention, and wider discovery remain
 future aggregates. Reporting/takedown remains an external-rollout gate until its
