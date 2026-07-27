@@ -8,7 +8,9 @@ import 'package:list_and_split/features/community/presentation/friendship_provid
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/templates/data/supabase_public_template_repository.dart';
+import 'package:list_and_split/features/templates/domain/friend_public_template_feed_repository.dart';
 import 'package:list_and_split/features/templates/domain/public_template_repository.dart';
+import 'package:list_and_split/features/templates/presentation/friend_public_template_feed_controller.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/public_templates_controller.dart';
 
@@ -16,6 +18,28 @@ final publicTemplateRepositoryProvider = Provider<PublicTemplateRepository>(
   (ref) => SupabasePublicTemplateRepository(
     ref.watch(supabaseClientProvider),
   ),
+);
+
+final friendPublicTemplateFeedRepositoryProvider =
+    Provider<FriendPublicTemplateFeedRepository>(
+  (ref) => SupabasePublicTemplateRepository(
+    ref.watch(supabaseClientProvider),
+  ),
+);
+
+final friendPublicTemplateFeedControllerProvider =
+    StateNotifierProvider.autoDispose<FriendPublicTemplateFeedController,
+        FriendPublicTemplateFeedState>(
+  (ref) {
+    final userId = ref.watch(verifiedUserIdProvider);
+    final controller = FriendPublicTemplateFeedController(
+      ref.watch(friendPublicTemplateFeedRepositoryProvider),
+      hasAuthenticatedUser: userId != null,
+    );
+    registerForReconciliation(ref, controller.reconcile);
+    if (userId != null) unawaited(controller.load());
+    return controller;
+  },
 );
 
 class PublicTemplateAccessLossGuard {

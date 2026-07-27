@@ -102,6 +102,24 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             isSubmitting: state.isSearching,
             onPressed: state.isBusy ? null : _search,
           ),
+          const SizedBox(height: 16),
+          Card(
+            child: Semantics(
+              button: true,
+              label: localizations.friendTemplatesCommunitySemantics,
+              child: ListTile(
+                key: const Key('openFriendTemplatesFeedButton'),
+                minVerticalPadding: 12,
+                leading: const Icon(Icons.dynamic_feed_outlined),
+                title: Text(localizations.friendTemplatesTitle),
+                subtitle: Text(localizations.friendTemplatesCommunityAction),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: state.isBusy
+                    ? null
+                    : () => context.go(AppRoutes.friendTemplates),
+              ),
+            ),
+          ),
           if (state.result != null) ...[
             const SizedBox(height: 24),
             _DiscoveryResultCard(

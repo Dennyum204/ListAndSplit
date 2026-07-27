@@ -84,6 +84,26 @@ class PublicTemplatePage {
   final PublicTemplateCursor? nextCursor;
 }
 
+class FriendPublicTemplateEntry {
+  const FriendPublicTemplateEntry({
+    required this.profile,
+    required this.template,
+  });
+
+  final PublicTemplateProfile profile;
+  final PublicTemplateSummary template;
+}
+
+class FriendPublicTemplatePage {
+  FriendPublicTemplatePage({
+    required List<FriendPublicTemplateEntry> entries,
+    required this.nextCursor,
+  }) : entries = List.unmodifiable(entries);
+
+  final List<FriendPublicTemplateEntry> entries;
+  final PublicTemplateCursor? nextCursor;
+}
+
 class PublicTemplateItem {
   const PublicTemplateItem({
     required this.name,

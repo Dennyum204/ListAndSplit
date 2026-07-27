@@ -19,6 +19,7 @@ import 'package:list_and_split/features/notifications/presentation/notification_
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/templates/domain/public_template.dart';
 import 'package:list_and_split/features/templates/domain/public_template_repository.dart';
+import 'package:list_and_split/features/templates/presentation/friend_public_template_feed_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_detail_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_detail_screen.dart';
@@ -26,10 +27,98 @@ import 'package:list_and_split/features/templates/presentation/public_template_p
 import 'package:list_and_split/features/templates/presentation/public_template_providers.dart';
 
 import '../../helpers/fake_private_template_repository.dart';
+import '../../helpers/fake_friend_public_template_feed_repository.dart';
 import '../../helpers/fake_public_template_repository.dart';
 import '../../helpers/fakes.dart';
 
 void main() {
+  testWidgets(
+      'Community opens the friends feed in its shell and routes exact IDs',
+      (tester) async {
+    final feed = FakeFriendPublicTemplateFeedRepository()
+      ..outcomes.add(
+        FriendPublicTemplatePage(
+          entries: [
+            FriendPublicTemplateEntry(
+              profile: const PublicTemplateProfile(
+                id: _ownerId,
+                username: 'public_owner',
+                displayName: 'Public Owner',
+              ),
+              template: _summary(_filledTemplateId, itemCount: 1),
+            ),
+          ],
+          nextCursor: null,
+        ),
+      );
+    await _pumpApp(
+      tester,
+      community: _community(),
+      publicTemplates: _publicTemplates(),
+      privateTemplates: FakePrivateTemplateRepository(),
+      friendFeed: feed,
+    );
+
+    await tester.tap(find.byKey(const Key('communityDestination')));
+    await tester.pumpAndSettle();
+    expect(find.byType(CommunityScreen), findsOneWidget);
+    expect(
+        find.byKey(const Key('openFriendTemplatesFeedButton')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('communityUsername')),
+      'preserved_search',
+    );
+
+    await tester.tap(find.byKey(const Key('openFriendTemplatesFeedButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FriendPublicTemplateFeedScreen), findsOneWidget);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      2,
+    );
+    expect(
+      find.byKey(const Key('friendTemplateCard-$_filledTemplateId')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const Key('openFriendTemplate-$_filledTemplateId')),
+    );
+    await tester.pumpAndSettle();
+    final detail = tester.widget<PublicTemplateDetailScreen>(
+      find.byType(PublicTemplateDetailScreen),
+    );
+    expect(detail.profileId, _ownerId);
+    expect(detail.templateId, _filledTemplateId);
+    expect(find.text('Sunscreen'), findsOneWidget);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      2,
+    );
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(FriendPublicTemplateFeedScreen), findsOneWidget);
+    expect(feed.calls, 1);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(CommunityScreen), findsOneWidget);
+    expect(
+      tester
+          .widget<EditableText>(
+            find.descendant(
+              of: find.byKey(const Key('communityUsername')),
+              matching: find.byType(EditableText),
+            ),
+          )
+          .controller
+          .text,
+      'preserved_search',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'profile-only discovery routes duplicate names by immutable ID and preserves Community state',
       (tester) async {
@@ -258,6 +347,7 @@ Future<ProviderContainer> _pumpApp(
   required FakeCommunityRepository community,
   required FakePublicTemplateRepository publicTemplates,
   required FakePrivateTemplateRepository privateTemplates,
+  FakeFriendPublicTemplateFeedRepository? friendFeed,
 }) async {
   tester.view.physicalSize = const Size(900, 1200);
   tester.view.devicePixelRatio = 1;
@@ -301,6 +391,9 @@ Future<ProviderContainer> _pumpApp(
       ),
       privateTemplateRepositoryProvider.overrideWithValue(privateTemplates),
       publicTemplateRepositoryProvider.overrideWithValue(publicTemplates),
+      friendPublicTemplateFeedRepositoryProvider.overrideWithValue(
+        friendFeed ?? FakeFriendPublicTemplateFeedRepository(),
+      ),
     ],
   );
   addTearDown(() async {
