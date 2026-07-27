@@ -221,7 +221,8 @@ Current private-template and Public Template slices:
   change is introduced.
 - Fully closed inactive evidence has a 24-month retention contract and a private
   idempotent cleanup to nonidentifying tombstones. Scheduling that cleanup is a
-  separate reviewed hosted rollout step and is not part of the schema migration.
+  separate additive operational migration, A-062, deployed only to explicitly
+  authorized environments; it is not part of the O-P13 schema migration.
 
 Later candidate slices:
 
@@ -231,9 +232,10 @@ Later candidate slices:
 Private category cardinality, copy atomicity, capacity, versioning, public
 visibility/category placement, no-provenance behavior, and profile presentation
 are resolved. Reporting/takedown/restoration/retention is resolved by P-053/P-054
-and A-060/A-061, closing O-P13. The additive migration, an audited development-only
-moderator grant, client distribution, and two-account-plus-moderator physical QA
-remain explicit gates before external beta or production public-content rollout.
+and A-060 through A-062, closing O-P13 and owning the separate daily retention
+schedule. Moderator assignment, client distribution, physical QA, and each hosted
+environment remain explicit controlled gates before external beta or production
+public-content rollout.
 Feed ranking/pagination/retention and sent-template expiry/acceptance remain open.
 
 ## Phase 4 — Split expense ledger (core scope complete)
@@ -305,8 +307,8 @@ Implemented foundation:
 
 Remaining candidate slices:
 
-- Controlled development rollout and physical QA of the accepted safety
-  foundation, followed later by separately reviewed retention scheduling.
+- Maintain the environment-specific moderator/bootstrap and A-062 retention
+  scheduling runbooks; Production remains independently authorized and verified.
 - Appeal, administrator/compliance, legal-retention, evidence-export, and
   abuse-response behavior beyond the intentionally bounded v1 workflow.
 - Accessibility and localization audits.

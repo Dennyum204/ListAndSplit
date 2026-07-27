@@ -645,9 +645,11 @@ Open groups and active restrictions are ineligible for cleanup. Once all evidenc
 for one template has been closed for at least 24 months and no active restriction
 remains, the idempotent `postgres`-only maintenance function replaces detailed
 rows with nonidentifying aggregate tombstones. It is deliberately not scheduled
-by this migration. A later separately reviewed hosted rollout must install and
-verify its exact cron job; repository code must not claim that cleanup is active
-before that step occurs.
+by the O-P13 schema migration. The separate additive scheduling migration owns one
+stable active `public-template-moderation-retention-daily` Cron job at 03:47 UTC,
+unschedules same-name predecessors idempotently, and records `postgres` as the
+execution user. Each environment must deploy and verify that migration explicitly;
+Production remains separately authorized.
 
 ### Split database and client boundary
 
