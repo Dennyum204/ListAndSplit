@@ -49,7 +49,8 @@ select ok(
       'private.broadcast_notification_invalidation()'::regprocedure,
       'private.broadcast_relationship_invalidation()'::regprocedure,
       'private.broadcast_block_invalidation()'::regprocedure,
-      'private.broadcast_profile_invalidation()'::regprocedure
+      'private.broadcast_profile_invalidation()'::regprocedure,
+      'private.broadcast_template_send_invalidation()'::regprocedure
     )
   ),
   'all private Realtime functions are commented postgres-owned hardened definer boundaries with no Data API execution'
@@ -87,8 +88,8 @@ select is(
       and not trigger_record.tgisinternal
       and trigger_record.tgname like '%broadcast_invalidation%'
   ),
-  10::bigint,
-  'the reviewed list, participant, notification, relationship, block, profile-update, category, template, and Split Broadcast triggers exist; profile deletion uses its parent-first coordinator'
+  11::bigint,
+  'the reviewed list, participant, notification, relationship, block, profile-update, category, template, template-send, and Split Broadcast triggers exist; profile deletion uses its parent-first coordinator'
 );
 
 select ok(
