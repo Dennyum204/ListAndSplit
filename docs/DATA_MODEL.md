@@ -172,8 +172,8 @@ state/version, and lifecycle times. They never include accepted-template or sour
 identity. Received entries include only offer ID, sender minimal profile, the
 allowlisted immutable name/item/quantity/position snapshot, state/version, and
 times. Neither role receives request UUIDs, fingerprints, source/copy provenance,
-moderation internals, or hidden pair history. Flutter remains on v10 until the
-separate UI/export-client delivery.
+moderation internals, or hidden pair history. Flutter strictly consumes v11 and
+continues decoding the retained v1-v10 document shapes.
 
 Every nested object is built from an explicit field allowlist. The social arrays
 apply the same directional-block, caller-relative active-relationship, recipient,
@@ -1008,7 +1008,8 @@ deletion use the established physical cascades.
 
 Implemented invitation action state belongs to participant access, as
 friend-request action state belongs to the relationship. Template-send action
-state belongs to `template_sends`; PR #24 adds its UI/localization. Archive/delete
+state belongs to `template_sends`; the Shared Templates UI localizes and renders
+that server-owned state. Archive/delete
 and preference controls, later-type payload localization, physical cleanup beyond
 the accepted offer cascade/retention, and retention beyond the implemented
 current-aggregate account deletion remain open.

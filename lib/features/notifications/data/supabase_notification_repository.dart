@@ -26,7 +26,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
     try {
       final rows = _rows(
         await _rpc(
-          'list_notifications_v4',
+          'list_notifications_v5',
           params: {
             'page_size': limit,
             'before_created_at': before?.createdAt.toIso8601String(),
@@ -45,7 +45,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
   @override
   Future<int> getUnreadCount() async {
     try {
-      final response = await _rpc('get_unread_notification_count_v4');
+      final response = await _rpc('get_unread_notification_count_v5');
       if (response is! int || response < 0) {
         throw const NotificationFailure();
       }
@@ -96,8 +96,10 @@ class SupabaseNotificationRepository implements NotificationRepository {
       final isModeration =
           type == InAppNotificationType.publicTemplateTakenDown ||
               type == InAppNotificationType.publicTemplateRestored;
-      final isListType =
-          type != InAppNotificationType.friendRequest && !isModeration;
+      final isTemplateSend = type == InAppNotificationType.templateSendReceived;
+      final isListType = type != InAppNotificationType.friendRequest &&
+          !isModeration &&
+          !isTemplateSend;
       final activeListId = json['active_list_id'] as String?;
       final activeListTitle = json['active_list_title'] as String?;
       final activeListStatus = json['active_list_status'] as String?;
@@ -111,6 +113,11 @@ class SupabaseNotificationRepository implements NotificationRepository {
       final publicTemplateId = json['public_template_id'] as String?;
       final publicTemplateName = json['public_template_name'] as String?;
       final moderationReasonCode = json['moderation_reason_code'] as String?;
+      final templateSendId = json['template_send_id'] as String?;
+      final templateSendName = json['template_send_name'] as String?;
+      final templateSendItemCount = json['template_send_item_count'] as int?;
+      final expectedTemplateSendVersion =
+          json['expected_template_send_version'] as int?;
       if ((isFriendAction != (expectedVersion != null)) ||
           (expectedVersion != null && expectedVersion <= 0) ||
           (isListAction != (expectedAccessVersion != null)) ||
@@ -144,6 +151,25 @@ class SupabaseNotificationRepository implements NotificationRepository {
               (publicTemplateId != null &&
                   publicTemplateName != null &&
                   moderationReasonCode != null)) ||
+          (isTemplateSend !=
+              (templateSendId != null &&
+                  templateSendName != null &&
+                  templateSendItemCount != null)) ||
+          (isTemplateSend &&
+              (templateSendItemCount! < 0 ||
+                  templateSendItemCount > 200 ||
+                  templateSendName!.isEmpty ||
+                  templateSendName.trim() != templateSendName ||
+                  templateSendName.length > 120)) ||
+          (!isTemplateSend &&
+              (templateSendId != null ||
+                  templateSendName != null ||
+                  templateSendItemCount != null ||
+                  expectedTemplateSendVersion != null)) ||
+          ((isTemplateSend && status == NotificationActionStatus.actionable) !=
+              (expectedTemplateSendVersion != null)) ||
+          (expectedTemplateSendVersion != null &&
+              expectedTemplateSendVersion <= 0) ||
           (isModeration !=
               (actorProfileId == null &&
                   actorUsername == null &&
@@ -163,11 +189,22 @@ class SupabaseNotificationRepository implements NotificationRepository {
                   activeListItemName.trim() != activeListItemName ||
                   activeListItemName.length > 120)) ||
           (type == InAppNotificationType.friendRequest &&
-              status == NotificationActionStatus.accepted) ||
+              status != NotificationActionStatus.actionable &&
+              status != NotificationActionStatus.friends &&
+              status != NotificationActionStatus.unavailable) ||
           (type == InAppNotificationType.listInvitation &&
-              status == NotificationActionStatus.friends) ||
+              status != NotificationActionStatus.actionable &&
+              status != NotificationActionStatus.accepted &&
+              status != NotificationActionStatus.unavailable) ||
+          (isTemplateSend &&
+              status != NotificationActionStatus.actionable &&
+              status != NotificationActionStatus.accepted &&
+              status != NotificationActionStatus.declined &&
+              status != NotificationActionStatus.revoked &&
+              status != NotificationActionStatus.unavailable) ||
           (type != InAppNotificationType.friendRequest &&
               type != InAppNotificationType.listInvitation &&
+              !isTemplateSend &&
               status != NotificationActionStatus.unavailable)) {
         throw const FormatException();
       }
@@ -194,6 +231,10 @@ class SupabaseNotificationRepository implements NotificationRepository {
         publicTemplateId: publicTemplateId,
         publicTemplateName: publicTemplateName,
         moderationReasonCode: moderationReasonCode,
+        templateSendId: templateSendId,
+        templateSendName: templateSendName,
+        templateSendItemCount: templateSendItemCount,
+        expectedTemplateSendVersion: expectedTemplateSendVersion,
       );
     } catch (_) {
       throw const NotificationFailure();
@@ -217,6 +258,7 @@ class SupabaseNotificationRepository implements NotificationRepository {
           InAppNotificationType.publicTemplateTakenDown,
         'public_template_restored' =>
           InAppNotificationType.publicTemplateRestored,
+        'template_send_received' => InAppNotificationType.templateSendReceived,
         _ => throw const NotificationFailure(),
       };
 
@@ -224,6 +266,8 @@ class SupabaseNotificationRepository implements NotificationRepository {
         'actionable' => NotificationActionStatus.actionable,
         'friends' => NotificationActionStatus.friends,
         'accepted' => NotificationActionStatus.accepted,
+        'declined' => NotificationActionStatus.declined,
+        'revoked' => NotificationActionStatus.revoked,
         'unavailable' => NotificationActionStatus.unavailable,
         _ => throw const NotificationFailure(),
       };
@@ -249,6 +293,10 @@ class SupabaseNotificationRepository implements NotificationRepository {
     'public_template_id',
     'public_template_name',
     'moderation_reason_code',
+    'template_send_id',
+    'template_send_name',
+    'template_send_item_count',
+    'expected_template_send_version',
   };
 
   static const _moderationReasonCodes = {

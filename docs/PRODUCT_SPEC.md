@@ -95,9 +95,9 @@ are the evidence of implementation status.
   General-Note-aware clients call the separate parameterless
   `export_own_account_data_v8()`. Public-template-aware legacy clients call the
   parameterless `export_own_account_data_v9()`. Reporting-aware clients call the
-  separate parameterless `export_own_account_data_v10()`. The PR #23 server/domain
-  foundation adds `export_own_account_data_v11()`, but Flutter continues calling
-  v10 until PR #24 adds strict client integration. Versions `7` through
+  separate parameterless `export_own_account_data_v10()`. Template-send-aware
+  clients call `export_own_account_data_v11()` with strict role-specific offer
+  parsing while versions `1` through `10` remain compatible. Versions `7` through
   `11` add no assignment, item,
   General Note, mention, or participant identity to `shared_list_access`; lists
   owned by another user remain byte-for-byte privacy-minimal metadata under P-039.
@@ -523,10 +523,9 @@ copies succeed; duplicate-name rows each consume one place.
   actor/action state from the protected offer. Accept and Decline do not notify
   the sender. Offer changes reuse opaque private account invalidation only.
 - Terminal offer history is retained for 180 days and has a privileged,
-  idempotent cleanup function. PR #23 intentionally does not schedule it.
+  idempotent cleanup function. It remains intentionally unscheduled until PR #25.
   Account export v11 adds role-specific sent/received offer projections while
-  leaving v1-v10 unchanged. Flutter still requests v10 until the PR #24 UI/export
-  integration.
+  leaving v1-v10 unchanged. Flutter requests and strictly validates v11.
 
 #### Public Template reporting and moderation
 
@@ -800,9 +799,9 @@ copies succeed; duplicate-name rows each consume one place.
   omitted from listing and badge counts. Physical cleanup remains a documented
   pre-production follow-up and no scheduled deletion is introduced here.
 - Template-send notification v5 and the underlying Accept/Decline/Revoke server
-  actions are implemented but remain unreachable until the PR #24 notification
-  and Templates UI integration. Notification RPCs v1-v4 do not return the new
-  type. Active-list invitation actions remain implemented and unchanged.
+  actions are reachable through the localized Shared Templates and notification
+  flows. Notification RPCs v1-v4 do not return the new type. Active-list
+  invitation actions remain implemented and unchanged.
 - A real absent-to-present item assignment creates one informational
   `list_item_assigned` notification only when another person performed it. A batch
   change creates at most one notification per newly assigned recipient. Duplicate

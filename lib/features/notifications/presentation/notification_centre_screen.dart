@@ -383,6 +383,28 @@ class _NotificationCard extends ConsumerWidget {
     AppLocalizations localizations,
   ) {
     final controller = ref.read(notificationCentreControllerProvider.notifier);
+    if (notification.type == InAppNotificationType.templateSendReceived) {
+      if (notification.actionStatus == NotificationActionStatus.actionable &&
+          notification.templateSendId != null) {
+        return Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: FilledButton.icon(
+            key: Key('openTemplateSendNotification-${notification.id}'),
+            onPressed: () {
+              context.go(
+                AppRoutes.receivedTemplateSend(notification.templateSendId!),
+              );
+            },
+            icon: const Icon(Icons.open_in_new_rounded),
+            label: Text(localizations.templateSendOpenInvitationButton),
+          ),
+        );
+      }
+      return Text(
+        localizations.templateSendNotificationUnavailable,
+        textAlign: TextAlign.end,
+      );
+    }
     if (notification.type != InAppNotificationType.friendRequest &&
         notification.type != InAppNotificationType.listInvitation) {
       return Text(
@@ -437,6 +459,12 @@ class _NotificationCard extends ConsumerWidget {
             avatar: const Icon(Icons.group_outlined, size: 18),
             label: Text(localizations.listInvitationAcceptedStatus),
           ),
+        ),
+      NotificationActionStatus.declined ||
+      NotificationActionStatus.revoked =>
+        Text(
+          localizations.notificationUnavailableMessage,
+          textAlign: TextAlign.end,
         ),
       NotificationActionStatus.unavailable => Text(
           localizations.notificationUnavailableMessage,
@@ -495,6 +523,10 @@ class _NotificationCard extends ConsumerWidget {
           localizations.publicTemplateRestoredNotificationTitle(
             notification.publicTemplateName ?? '',
           ),
+        InAppNotificationType.templateSendReceived =>
+          localizations.templateSendNotificationTitle(
+            notification.templateSendName ?? '',
+          ),
       };
 
   String _informationalText(AppLocalizations localizations) =>
@@ -519,6 +551,8 @@ class _NotificationCard extends ConsumerWidget {
           ),
         InAppNotificationType.publicTemplateRestored =>
           localizations.publicTemplateRestoredNotificationInformation,
+        InAppNotificationType.templateSendReceived =>
+          localizations.templateSendNotificationUnavailable,
         InAppNotificationType.friendRequest ||
         InAppNotificationType.listInvitation =>
           localizations.notificationUnavailableMessage,

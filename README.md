@@ -32,8 +32,9 @@ its hosted rollout and physical QA remain separately controlled.
 The template-send database/domain foundation adds immutable friend offers,
 recipient-only atomic private-copy acceptance, sender revocation, persistent
 Received/minimal Sent projections, notification v5, export v11, and private
-Realtime invalidation. It is deliberately unreachable from Flutter until PR #24,
-and its 180-day terminal cleanup remains unscheduled until PR #25.
+Realtime invalidation. Flutter exposes localized Send, Received, Sent,
+Accept/Decline/Revoke, notification routing, and strict export-v11 integration;
+the 180-day terminal cleanup remains unscheduled until PR #25.
 List-scoped Split
 supports owner-selected CHF/EUR, exact integer equal and custom expense shares,
 derived balances, deterministic settle-up suggestions, immutable full/partial
@@ -407,9 +408,9 @@ only explicitly authorized disposable identities:
    understandable and deletion closes open evidence. If separately authorized,
    delete only disposable reporter/owner/moderator identities and verify retained
    evidence becomes generic without exposing deleted identity.
-8. Verify export v10 contains only the caller's reason, nullable explanation, and
-   submission time, while another account's reports and all moderation evidence,
-   state, identities, notes, restrictions, allowlist, and audit data remain absent.
+8. Verify the current v11 export retains the caller-only v10 report projection
+   while another account's reports and all moderation evidence, state, identities,
+   notes, restrictions, allowlist, and audit data remain absent.
 9. Exercise an older client alongside the current client: restricted/reporter-
    hidden sources remain unavailable, old publication cannot bypass restriction,
    old notification parsers receive no new type, and old export versions remain
@@ -470,8 +471,8 @@ Legacy notification clients retain the reviewed `list_notifications` and
 `get_unread_notification_count` contracts and never receive assignment, note-
 mention, or moderation types. Assignment-aware v2 clients likewise never receive
 note mentions or moderation outcomes, and v3 includes notes while excluding
-moderation. Current Flutter uses `list_notifications_v4`,
-`get_unread_notification_count_v4`, and the compatible hardened
+moderation. Current Flutter uses `list_notifications_v5`,
+`get_unread_notification_count_v5`, and the compatible hardened
 `mark_notifications_read` boundary; it never reads or writes
 `user_notifications` directly. A real transition into a pending relationship
 version creates one notification atomically, while duplicate and crossed sends
@@ -483,7 +484,9 @@ loss or blocking stores permanent suppression that reinvitation or unblocking
 cannot clear. System-authored Public Template takedown/restoration rows have no
 actor and expose only the owner's safe template-name snapshot and general reason;
 they never contain reporter, explanation, report count, moderator, private note,
-or queue state.
+or queue state. Template-send-aware v5 adds one actionable recipient row with the
+allowlisted sender and snapshot summary; terminal rows are informational, and no
+accepted-copy or source identity is exposed.
 
 Active lists, items, current item assignments, resolved note mentions, and retained
 participant access rows use only reviewed authenticated RPCs. The tables
@@ -519,14 +522,14 @@ version `6` and unchanged for legacy clients, and
 `export_own_account_data_v7()` remains unchanged for assignment-aware legacy
 clients, and `export_own_account_data_v8()` remains unchanged for
 General-Note-aware legacy clients, while `export_own_account_data_v9()` remains
-unchanged for public-template-aware legacy clients. Current clients use
-`export_own_account_data_v10()`: version `10` preserves versions `1` through `9`,
+unchanged for public-template-aware legacy clients.
+`export_own_account_data_v10()` preserves versions `1` through `9`,
 retains v9's caller-owned `is_public`/nullable `published_at`, and adds only the
 caller's own submitted report reason, nullable explanation, and submission time.
-The server-only `export_own_account_data_v11()` preserves v1-v10 and adds
+`export_own_account_data_v11()` preserves v1-v10 and adds
 role-specific, unsuppressed sent/received template-offer projections with no
-source/copy provenance, request UUID, or fingerprint. PR #23 does not switch the
-Flutter export client from v10; strict v11 client integration belongs to PR #24.
+source/copy provenance, request UUID, or fingerprint. The Flutter export client
+strictly parses v11 while retaining v1-v10 compatibility.
 It never exports other users' public templates/reports, target identity, report
 status/group, evidence snapshot/fingerprint, provenance, copy request UUID,
 moderator/private note, decision, restriction, allowlist, or access audit. Shared

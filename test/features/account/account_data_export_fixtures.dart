@@ -296,6 +296,51 @@ Map<String, dynamic> validAccountDataExportJson({
                 'submitted_at': '2026-07-26T06:45:00.000Z',
               },
             ],
+    if (schemaVersion >= 11)
+      'sent_template_offers': emptyCollections
+          ? <Object?>[]
+          : [
+              {
+                'template_send_id': '14141414-1414-4141-8141-141414141414',
+                'recipient': {
+                  'profile_id': '33333333-3333-4333-8333-333333333333',
+                  'username': 'gamma_user',
+                  'display_name': 'Gamma User',
+                },
+                'snapshot_name': 'Beach trip',
+                'snapshot_item_count': 1,
+                'state': 'accepted',
+                'version': 2,
+                'created_at': '2026-07-27T08:00:00.000Z',
+                'state_changed_at': '2026-07-27T08:05:00.000Z',
+              },
+            ],
+    if (schemaVersion >= 11)
+      'received_template_offers': emptyCollections
+          ? <Object?>[]
+          : [
+              {
+                'template_send_id': '15151515-1515-4151-8151-151515151515',
+                'sender': {
+                  'profile_id': '33333333-3333-4333-8333-333333333333',
+                  'username': 'gamma_user',
+                  'display_name': 'Gamma User',
+                },
+                'snapshot_name': 'Cabin list',
+                'snapshot_item_count': 1,
+                'state': 'pending',
+                'version': 1,
+                'created_at': '2026-07-27T09:00:00.000Z',
+                'state_changed_at': '2026-07-27T09:00:00.000Z',
+                'items': [
+                  {
+                    'name': 'Coffee',
+                    'quantity_thousandths': 1500,
+                    'position': 1,
+                  },
+                ],
+              },
+            ],
   };
 }
 

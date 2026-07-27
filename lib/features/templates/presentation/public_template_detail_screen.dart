@@ -6,6 +6,7 @@ import 'package:list_and_split/features/profile/presentation/profile_providers.d
 import 'package:list_and_split/features/templates/domain/public_template.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/public_templates_controller.dart';
+import 'package:list_and_split/features/templates/presentation/template_send_screens.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class PublicTemplateDetailScreen extends ConsumerStatefulWidget {
@@ -84,6 +85,13 @@ class _PublicTemplateDetailScreenState
             icon: const Icon(Icons.refresh_rounded),
             tooltip: localizations.publicTemplatesRefreshTooltip,
           ),
+          if (detail != null && ownUserId == widget.profileId)
+            IconButton(
+              key: const Key('sendOwnedPublicTemplateButton'),
+              onPressed: state.isMutating ? null : _showSendDialog,
+              icon: const Icon(Icons.send_rounded),
+              tooltip: localizations.templateSendButton,
+            ),
           if (detail != null && ownUserId != widget.profileId)
             IconButton(
               key: const Key('reportPublicTemplateButton'),
@@ -265,6 +273,38 @@ class _PublicTemplateDetailScreenState
         ),
       ),
     );
+  }
+
+  Future<void> _showSendDialog() async {
+    final detail = ref
+        .read(publicTemplateDetailControllerProvider(_location))
+        .detail
+        .valueOrNull;
+    if (detail == null) return;
+    final sent = await showTemplateSendDialog(
+      context,
+      TemplateSendPreview(
+        templateId: detail.summary.id,
+        templateVersion: detail.summary.version,
+        name: detail.summary.name,
+        items: [
+          for (final item in detail.items)
+            TemplateSendPreviewItem(
+              name: item.name,
+              quantity: item.quantity,
+            ),
+        ],
+      ),
+    );
+    if (sent && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context).templateSendSentMessage,
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _confirmCopy() async {

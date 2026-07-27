@@ -20,6 +20,33 @@ import '../../helpers/fake_public_template_repository.dart';
 import '../../helpers/fakes.dart';
 
 void main() {
+  testWidgets('owned public template exposes the Send action', (tester) async {
+    final detail = PublicTemplateDetail(
+      profile: _profile,
+      summary: _summary(_firstTemplateId, itemCount: 0),
+      items: const [],
+    );
+    final repository = FakePublicTemplateRepository()
+      ..detailsByTemplate[_firstTemplateId] = detail;
+
+    await _pump(
+      tester,
+      repository: repository,
+      locale: const Locale('en'),
+      dark: false,
+      userId: _ownerId,
+      child: const PublicTemplateDetailScreen(
+        profileId: _ownerId,
+        templateId: _firstTemplateId,
+      ),
+    );
+
+    expect(
+        find.byKey(const Key('sendOwnedPublicTemplateButton')), findsOneWidget);
+    expect(find.byKey(const Key('reportPublicTemplateButton')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final configuration in [
     (locale: const Locale('en'), dark: false),
     (locale: const Locale('pt'), dark: true),
@@ -486,6 +513,7 @@ Future<void> _pump(
   required Locale locale,
   required bool dark,
   required Widget child,
+  String userId = 'viewer-id',
 }) async {
   tester.view.physicalSize = const Size(900, 1200);
   tester.view.devicePixelRatio = 1;
@@ -495,7 +523,7 @@ Future<void> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        verifiedUserIdProvider.overrideWithValue('viewer-id'),
+        verifiedUserIdProvider.overrideWithValue(userId),
         publicTemplateRepositoryProvider.overrideWithValue(repository),
         communityRepositoryProvider.overrideWithValue(
           FakeCommunityRepository(),

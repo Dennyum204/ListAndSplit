@@ -39,7 +39,7 @@ void main() {
     expect(result.single.actorDisplayName, 'Beta User');
     expect(result.single.actionStatus, NotificationActionStatus.actionable);
     expect(result.single.expectedRelationshipVersion, 4);
-    expect(calls.single.functionName, 'list_notifications_v4');
+    expect(calls.single.functionName, 'list_notifications_v5');
     expect(calls.single.params, {
       'page_size': 20,
       'before_created_at': null,
@@ -264,6 +264,73 @@ void main() {
     }
   });
 
+  test('maps template-send v5 action and terminal states without provenance',
+      () async {
+    for (final entry in const {
+      'actionable': NotificationActionStatus.actionable,
+      'accepted': NotificationActionStatus.accepted,
+      'declined': NotificationActionStatus.declined,
+      'revoked': NotificationActionStatus.revoked,
+      'unavailable': NotificationActionStatus.unavailable,
+    }.entries) {
+      response = [
+        _row(
+          notificationType: 'template_send_received',
+          actionStatus: entry.key,
+          expectedVersion: null,
+          templateSendId: '22222222-2222-4222-8222-222222222222',
+          templateSendName: 'Beach trip',
+          templateSendItemCount: 200,
+          expectedTemplateSendVersion: entry.key == 'actionable' ? 3 : null,
+        ),
+      ];
+
+      final result = await repository.listNotifications(limit: 20);
+
+      expect(result.single.type, InAppNotificationType.templateSendReceived);
+      expect(result.single.actionStatus, entry.value);
+      expect(
+        result.single.templateSendId,
+        '22222222-2222-4222-8222-222222222222',
+      );
+      expect(result.single.templateSendName, 'Beach trip');
+      expect(result.single.templateSendItemCount, 200);
+      expect(
+        result.single.expectedTemplateSendVersion,
+        entry.key == 'actionable' ? 3 : null,
+      );
+      expect(response.toString(), isNot(contains('accepted_template_id')));
+      expect(response.toString(), isNot(contains('source_template_id')));
+    }
+  });
+
+  test('strict v5 parsing rejects malformed template-send projections',
+      () async {
+    final valid = _row(
+      notificationType: 'template_send_received',
+      actionStatus: 'actionable',
+      expectedVersion: null,
+      templateSendId: '22222222-2222-4222-8222-222222222222',
+      templateSendName: 'Beach trip',
+      templateSendItemCount: 2,
+      expectedTemplateSendVersion: 3,
+    );
+    for (final row in [
+      Map<String, dynamic>.from(valid)..['template_send_name'] = ' Beach trip',
+      Map<String, dynamic>.from(valid)..['template_send_item_count'] = 201,
+      Map<String, dynamic>.from(valid)
+        ..['expected_template_send_version'] = null,
+      Map<String, dynamic>.from(valid)..['accepted_template_id'] = 'private',
+      _row()..['template_send_id'] = 'unexpected',
+    ]) {
+      response = [row];
+      await expectLater(
+        repository.listNotifications(limit: 20),
+        throwsA(isA<NotificationFailure>()),
+      );
+    }
+  });
+
   test('rejects moderation notices with actor or private queue metadata',
       () async {
     final valid = _row(
@@ -457,7 +524,7 @@ void main() {
     response = 12;
 
     expect(await repository.getUnreadCount(), 12);
-    expect(calls.single.functionName, 'get_unread_notification_count_v4');
+    expect(calls.single.functionName, 'get_unread_notification_count_v5');
     expect(calls.single.params, isNull);
   });
 
@@ -521,6 +588,10 @@ Map<String, dynamic> _row({
   String? publicTemplateId,
   String? publicTemplateName,
   String? moderationReasonCode,
+  String? templateSendId,
+  String? templateSendName,
+  int? templateSendItemCount,
+  int? expectedTemplateSendVersion,
 }) {
   return {
     'notification_id': 'notification-1',
@@ -543,6 +614,10 @@ Map<String, dynamic> _row({
     'public_template_id': publicTemplateId,
     'public_template_name': publicTemplateName,
     'moderation_reason_code': moderationReasonCode,
+    'template_send_id': templateSendId,
+    'template_send_name': templateSendName,
+    'template_send_item_count': templateSendItemCount,
+    'expected_template_send_version': expectedTemplateSendVersion,
   };
 }
 

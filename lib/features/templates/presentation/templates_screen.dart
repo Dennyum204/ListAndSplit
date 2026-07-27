@@ -28,6 +28,12 @@ class TemplatesScreen extends ConsumerWidget {
         title: Text(localizations.templatesTitle),
         actions: [
           IconButton(
+            key: const Key('sharedTemplatesButton'),
+            onPressed: () => context.push(AppRoutes.sharedTemplates),
+            tooltip: localizations.templateSendsOpenSharedTooltip,
+            icon: const Icon(Icons.send_and_archive_outlined),
+          ),
+          IconButton(
             key: const Key('manageTemplateCategoriesButton'),
             onPressed: state.isMutating
                 ? null

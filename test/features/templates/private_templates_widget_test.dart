@@ -20,6 +20,31 @@ import '../../helpers/fake_private_template_repository.dart';
 import '../../helpers/fakes.dart';
 
 void main() {
+  testWidgets('owned private template exposes the Send action', (tester) async {
+    final repository = FakePrivateTemplateRepository();
+    final template = await repository.createTemplate(
+      'Packing',
+      requestId: 'template',
+    );
+    await _pump(
+      tester,
+      repository: repository,
+      lists: FakeActiveListRepository(),
+      child: PrivateTemplateDetailScreen(templateId: template.id),
+    );
+
+    await tester.tap(find.byKey(const Key('templateActionsButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Send to a friend'), findsOneWidget);
+    final sendAction = find.ancestor(
+      of: find.text('Send to a friend'),
+      matching: find.byType(InkWell),
+    );
+    expect(tester.widget<InkWell>(sendAction).onTap, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'templates screen exposes empty category, search and sort controls',
       (tester) async {

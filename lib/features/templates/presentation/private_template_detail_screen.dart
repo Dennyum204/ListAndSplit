@@ -10,11 +10,13 @@ import 'package:list_and_split/features/templates/domain/private_template.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/private_templates_controller.dart';
 import 'package:list_and_split/features/templates/presentation/template_selection_dialog.dart';
+import 'package:list_and_split/features/templates/presentation/template_send_screens.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 enum _TemplateAction {
   edit,
   publication,
+  send,
   createList,
   import,
   delete,
@@ -66,6 +68,11 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
                         ? localizations.templatesUnpublishButton
                         : localizations.templatesPublishButton,
                   ),
+                ),
+                PopupMenuItem(
+                  enabled: !detail.summary.isModerated,
+                  value: _TemplateAction.send,
+                  child: Text(localizations.templateSendButton),
                 ),
                 PopupMenuItem(
                   enabled: detail.items.isNotEmpty,
@@ -247,12 +254,46 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
         await _showTemplateEditor(context, ref);
       case _TemplateAction.publication:
         await _confirmPublication(context, ref);
+      case _TemplateAction.send:
+        await _showSendDialog(context, ref);
       case _TemplateAction.createList:
         await _showCreateList(context, ref);
       case _TemplateAction.import:
         await _showImport(context, ref);
       case _TemplateAction.delete:
         await _confirmDeleteTemplate(context, ref);
+    }
+  }
+
+  Future<void> _showSendDialog(BuildContext context, WidgetRef ref) async {
+    final detail = ref
+        .read(privateTemplateDetailControllerProvider(templateId))
+        .detail
+        .valueOrNull;
+    if (detail == null || detail.summary.isModerated) return;
+    final sent = await showTemplateSendDialog(
+      context,
+      TemplateSendPreview(
+        templateId: detail.summary.id,
+        templateVersion: detail.summary.version,
+        name: detail.summary.name,
+        items: [
+          for (final item in detail.items)
+            TemplateSendPreviewItem(
+              name: item.name,
+              quantity: item.quantity,
+            ),
+        ],
+      ),
+    );
+    if (sent && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context).templateSendSentMessage,
+          ),
+        ),
+      );
     }
   }
 

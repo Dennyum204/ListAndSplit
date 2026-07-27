@@ -4,6 +4,7 @@ enum TemplateSendFailureCode {
   invalid,
   unavailable,
   stale,
+  duplicatePending,
   retryConflict,
   capacity,
   noLongerPending,

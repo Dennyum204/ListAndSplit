@@ -10,9 +10,17 @@ enum InAppNotificationType {
   listNoteMentioned,
   publicTemplateTakenDown,
   publicTemplateRestored,
+  templateSendReceived,
 }
 
-enum NotificationActionStatus { actionable, friends, accepted, unavailable }
+enum NotificationActionStatus {
+  actionable,
+  friends,
+  accepted,
+  declined,
+  revoked,
+  unavailable,
+}
 
 class NotificationCursor {
   const NotificationCursor({required this.createdAt, required this.id});
@@ -43,6 +51,10 @@ class InAppNotification {
     this.publicTemplateId,
     this.publicTemplateName,
     this.moderationReasonCode,
+    this.templateSendId,
+    this.templateSendName,
+    this.templateSendItemCount,
+    this.expectedTemplateSendVersion,
   });
 
   final String id;
@@ -65,6 +77,10 @@ class InAppNotification {
   final String? publicTemplateId;
   final String? publicTemplateName;
   final String? moderationReasonCode;
+  final String? templateSendId;
+  final String? templateSendName;
+  final int? templateSendItemCount;
+  final int? expectedTemplateSendVersion;
 
   NotificationCursor get cursor => NotificationCursor(
         createdAt: createdAt,
@@ -93,6 +109,10 @@ class InAppNotification {
       publicTemplateId: publicTemplateId,
       publicTemplateName: publicTemplateName,
       moderationReasonCode: moderationReasonCode,
+      templateSendId: templateSendId,
+      templateSendName: templateSendName,
+      templateSendItemCount: templateSendItemCount,
+      expectedTemplateSendVersion: expectedTemplateSendVersion,
     );
   }
 }

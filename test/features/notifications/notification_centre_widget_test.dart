@@ -75,6 +75,44 @@ void main() {
     expect(find.byKey(const Key('notification-n-1')), findsOneWidget);
   });
 
+  testWidgets('template-send notification exposes one localized open action',
+      (tester) async {
+    final notifications = FakeNotificationRepository()
+      ..notifications = [templateSendNotification()];
+    await pumpCentre(tester, notifications: notifications);
+
+    expect(find.text('“Beach trip” was sent to you'), findsOneWidget);
+    expect(find.text('@sender_user'), findsOneWidget);
+    expect(
+      find.byKey(const Key('openTemplateSendNotification-send-n-1')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('acceptNotification-send-n-1')), findsNothing);
+    expect(find.byKey(const Key('declineNotification-send-n-1')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('stale template-send notification is informational only',
+      (tester) async {
+    final notifications = FakeNotificationRepository()
+      ..notifications = [
+        templateSendNotification(
+          actionStatus: NotificationActionStatus.revoked,
+          expectedVersion: null,
+        ),
+      ];
+    await pumpCentre(tester, notifications: notifications);
+
+    expect(
+      find.byKey(const Key('openTemplateSendNotification-send-n-1')),
+      findsNothing,
+    );
+    expect(
+      find.text('This template invitation is no longer actionable.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('pull-to-refresh and application resume reload the centre',
       (tester) async {
     final notifications = FakeNotificationRepository();
@@ -347,6 +385,27 @@ InAppNotification listInvitationNotification({
     activeListTitle: 'Shared trip',
     activeListStatus: 'active',
     expectedAccessVersion: expectedAccessVersion,
+  );
+}
+
+InAppNotification templateSendNotification({
+  NotificationActionStatus actionStatus = NotificationActionStatus.actionable,
+  int? expectedVersion = 1,
+}) {
+  return InAppNotification(
+    id: 'send-n-1',
+    type: InAppNotificationType.templateSendReceived,
+    createdAt: DateTime.utc(2026, 7, 27, 8),
+    isRead: false,
+    actorProfileId: 'sender-1',
+    actorUsername: 'sender_user',
+    actorDisplayName: 'Sender User',
+    actionStatus: actionStatus,
+    expectedRelationshipVersion: null,
+    templateSendId: 'send-1',
+    templateSendName: 'Beach trip',
+    templateSendItemCount: 0,
+    expectedTemplateSendVersion: expectedVersion,
   );
 }
 

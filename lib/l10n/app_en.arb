@@ -1297,5 +1297,85 @@
   "@publicTemplateRestoredNotificationTitle": {
     "placeholders": {"templateName": {"type": "String"}}
   },
-  "publicTemplateRestoredNotificationInformation": "The moderation restriction was lifted. The template remains private until you publish it."
+  "publicTemplateRestoredNotificationInformation": "The moderation restriction was lifted. The template remains private until you publish it.",
+  "templateSendsTitle": "Shared templates",
+  "templateSendsOpenSharedTooltip": "Open shared templates",
+  "templateSendsReceivedTab": "Received",
+  "templateSendsSentTab": "Sent",
+  "templateSendsLoading": "Loading shared templates",
+  "templateSendsLoadingMore": "Loading more shared templates",
+  "templateSendsLoadMore": "Load more",
+  "templateSendsPendingFilter": "Pending",
+  "templateSendsHistoryFilter": "History",
+  "templateSendsNoReceivedPending": "You have no pending received templates.",
+  "templateSendsNoReceivedHistory": "You have no received-template history.",
+  "templateSendsNoSentPending": "You have no pending sent templates.",
+  "templateSendsNoSentHistory": "You have no sent-template history.",
+  "templateSendButton": "Send to a friend",
+  "templateSendDialogTitle": "Send template",
+  "templateSendDialogDescription": "Choose one eligible friend. “{templateName}” will be sent as an independent snapshot containing {itemCount, plural, =0{no items} =1{1 item} other{{itemCount} items}}.",
+  "@templateSendDialogDescription": {
+    "placeholders": {
+      "templateName": {"type": "String"},
+      "itemCount": {"type": "int"}
+    }
+  },
+  "templateSendRecipientsLoading": "Loading eligible friends",
+  "templateSendNoEligibleFriends": "No current friend is eligible to receive this template.",
+  "templateSendRecipientLabel": "Recipient",
+  "templateSendSnapshotTitle": "Snapshot to send",
+  "templateSendSnapshotNotice": "The recipient receives this exact name, order, quantities and item set. Later changes to your template will not change the snapshot.",
+  "templateSendBlankSnapshot": "This snapshot is blank. The recipient may still accept it as an empty template.",
+  "templateSendSubmitting": "Sending template",
+  "templateSendReceivedDetailTitle": "Received template",
+  "templateSendImmutableDetailNotice": "This is the immutable snapshot captured when the template was sent. Accepting creates your own private Uncategorized copy.",
+  "templateSendFrom": "From {displayName} (@{username})",
+  "@templateSendFrom": {
+    "placeholders": {
+      "displayName": {"type": "String"},
+      "username": {"type": "String"}
+    }
+  },
+  "templateSendTo": "To {displayName} (@{username})",
+  "@templateSendTo": {
+    "placeholders": {
+      "displayName": {"type": "String"},
+      "username": {"type": "String"}
+    }
+  },
+  "templateSendStatePending": "Pending",
+  "templateSendStateAccepted": "Accepted",
+  "templateSendStateDeclined": "Declined",
+  "templateSendStateRevoked": "Revoked",
+  "templateSendStateUnavailable": "Unavailable",
+  "templateSendAcceptButton": "Accept",
+  "templateSendDeclineButton": "Decline",
+  "templateSendOpenCopyButton": "Open your copy",
+  "templateSendOpenInvitationButton": "Open invitation",
+  "templateSendTerminalDescription": "This invitation is complete and can no longer be changed.",
+  "templateSendDeclineDialogTitle": "Decline this template?",
+  "templateSendDeclineDialogDescription": "The invitation will move to history. No template copy will be created.",
+  "templateSendRevokeButton": "Revoke",
+  "templateSendRevokeDialogTitle": "Revoke this invitation?",
+  "templateSendRevokeDialogDescription": "“{templateName}” will no longer be available to {recipientName}.",
+  "@templateSendRevokeDialogDescription": {
+    "placeholders": {
+      "templateName": {"type": "String"},
+      "recipientName": {"type": "String"}
+    }
+  },
+  "templateSendSentMessage": "The template snapshot was sent.",
+  "templateSendAcceptedMessage": "The template was accepted and your private copy is ready.",
+  "templateSendDeclinedMessage": "The template invitation was declined.",
+  "templateSendRevokedMessage": "The template invitation was revoked.",
+  "templateSendStaleMessage": "This invitation changed on another device. The latest state was loaded.",
+  "templateSendUnavailableMessage": "This template invitation is no longer available. Refresh and try again.",
+  "templateSendCapacityMessage": "You already have 200 templates. Delete one before accepting this invitation; the invitation remains pending.",
+  "templateSendDuplicatePendingMessage": "This friend already has a pending invitation for this template.",
+  "templateSendRetryConflictMessage": "This retry no longer matches the original request. Refresh and try again.",
+  "templateSendNotificationTitle": "“{templateName}” was sent to you",
+  "@templateSendNotificationTitle": {
+    "placeholders": {"templateName": {"type": "String"}}
+  },
+  "templateSendNotificationUnavailable": "This template invitation is no longer actionable."
 }
