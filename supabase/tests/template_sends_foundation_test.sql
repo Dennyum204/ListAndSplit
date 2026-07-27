@@ -1174,8 +1174,8 @@ select is(
     from cron.job
     where command like '%maintain_template_send_retention%'
   ),
-  0::bigint,
-  'template-send retention is intentionally unscheduled'
+  1::bigint,
+  'the later additive operational migration owns template-send scheduling'
 );
 
 set local role authenticated;

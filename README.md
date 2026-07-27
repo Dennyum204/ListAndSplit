@@ -34,14 +34,16 @@ recipient-only atomic private-copy acceptance, sender revocation, persistent
 Received/minimal Sent projections, notification v5, export v11, and private
 Realtime invalidation. Flutter exposes localized Send, Received, Sent,
 Accept/Decline/Revoke, notification routing, and strict export-v11 integration;
-the 180-day terminal cleanup remains unscheduled until PR #25.
+the source defines a separately authorized stable daily schedule for the
+postgres-only 180-day terminal cleanup. Each hosted environment must deploy and
+verify that operational migration independently; Production remains unscheduled
+until explicitly authorized.
 List-scoped Split
 supports owner-selected CHF/EUR, exact integer equal and custom expense shares,
 derived balances, deterministic settle-up suggestions, immutable full/partial
 settlement records, one-time reversals, historical participants, and the same
-private reconciliation path. Shared templates, template-send UI, global/friends
-feeds, offline mutation queues, push delivery, and payment-provider integration
-remain planned work.
+private reconciliation path. Global/friends feeds, offline mutation queues, push
+delivery, and payment-provider integration remain planned work.
 
 The client uses Riverpod application scope and view models, repository boundaries,
 `MaterialApp.router` with `go_router`, Material 3 light and dark themes, and English/
@@ -377,6 +379,93 @@ while restricted, notification v1-v3 exclude moderation outcomes, and export
 v1-v9 remains unchanged. Older clients have no report or moderator UI, so the
 current client is still required for safety operations and outcome presentation.
 
+### Template-send retention operations
+
+Migration `20260727144646_schedule_template_send_retention.sql` owns one stable
+daily job named `template-send-retention-daily`. It requires `postgres`,
+unschedules every same-name predecessor through `cron.unschedule`, then schedules
+the exact cleanup at 04:17 UTC:
+
+```sql
+select cron.schedule(
+  'template-send-retention-daily',
+  '17 4 * * *',
+  'select * from private.maintain_template_send_retention();'
+);
+```
+
+This slot does not collide with username-reservation cleanup at 03:17 UTC or
+Public Template moderation retention at 03:47 UTC. The migration schedules only;
+it never invokes cleanup. Pending invitations remain indefinitely, while
+`accepted`, `declined`, `revoked`, and `unavailable` rows become eligible only
+after at least 180 terminal days. Parent deletion then cascades snapshots, request
+ledgers, and associated notifications without deleting an accepted independent
+private template.
+
+Every environment requires separate authorization. A source merge does not deploy
+the job to List & Split Dev or Production, and Production remains unscheduled
+until its own explicitly reviewed rollout. For a subsequently authorized Dev
+rollout:
+
+1. Confirm the linked project is **List & Split Dev**
+   (`lzwsgxziqxpxwyalkfuy`), local/remote migration histories match, and
+   `20260727144646_schedule_template_send_retention.sql` is the only pending
+   migration.
+2. Inspect `supabase db push --help`, run `supabase db push --linked --dry-run`,
+   and stop unless it lists exactly that migration. Then apply it once with
+   `supabase db push --linked`.
+3. Verify migration history contains the version exactly once and query only
+   aggregate/catalog state:
+
+   ```sql
+   select jobname, schedule, command, active, username, database
+   from cron.job
+   where jobname = 'template-send-retention-daily';
+
+   select
+     has_function_privilege(
+       'postgres',
+       'private.maintain_template_send_retention(timestamptz)',
+       'EXECUTE'
+     ) as postgres_can_execute,
+     not has_function_privilege(
+       'anon',
+       'private.maintain_template_send_retention(timestamptz)',
+       'EXECUTE'
+     ) as anon_denied,
+     not has_function_privilege(
+       'authenticated',
+       'private.maintain_template_send_retention(timestamptz)',
+       'EXECUTE'
+     ) as authenticated_denied,
+     not has_function_privilege(
+       'service_role',
+       'private.maintain_template_send_retention(timestamptz)',
+       'EXECUTE'
+     ) as service_role_denied;
+
+   select state, count(*)
+   from public.template_sends
+   group by state
+   order by state;
+   ```
+
+4. Confirm exactly one active `postgres` job has schedule `17 4 * * *` and the
+   exact command above; confirm the other Cron jobs, aggregate row counts,
+   function ownership/security/search path, RLS, grants, notifications, exports,
+   Realtime objects, and application data are unchanged. Run database lint plus
+   security/performance advisors. Do not invoke cleanup as a smoke test.
+5. After the first scheduled execution, inspect only the matching
+   `cron.job_run_details` status and aggregate retention counts. Do not expose or
+   manually delete user data.
+
+Rollback is forward-only: add a later reviewed migration that requires `postgres`
+and calls `cron.unschedule(jobid)` for every row named
+`template-send-retention-daily`. It must not invoke cleanup, restore previously
+deleted rows, alter the retention function, edit prior migrations, or repair
+migration history. Verify zero same-name jobs afterwards and confirm the other
+jobs and database objects are unchanged.
+
 ### Public Template reporting and moderation physical QA
 
 After the separately authorized development migration, audited moderator grant,
@@ -593,11 +682,9 @@ SQL into the Dashboard.
 ## Intentional deferrals
 
 The current slices do not implement unrestricted profile/directory search,
-avatars, shared templates, template-send screens/actions, a public feed, rich-text
-notes, note
+avatars, a public feed, rich-text notes, note
 history/comments, notification archive/preferences, assignment or mention deep
 links, report withdrawal/unhide/appeal/evidence attachments, automated moderation,
-or scheduled template-send retention cleanup,
 percentage/weight/ratio expense allocation,
 automatic custom-share remainder correction, a mathematically minimum settlement
 solver, SQLite caching/offline

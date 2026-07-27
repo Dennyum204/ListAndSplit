@@ -523,7 +523,10 @@ copies succeed; duplicate-name rows each consume one place.
   actor/action state from the protected offer. Accept and Decline do not notify
   the sender. Offer changes reuse opaque private account invalidation only.
 - Terminal offer history is retained for 180 days and has a privileged,
-  idempotent cleanup function. It remains intentionally unscheduled until PR #25.
+  idempotent cleanup function. A separate operational migration defines one
+  stable daily 04:17 UTC `postgres` job in each environment that explicitly
+  authorizes and deploys it; scheduling never invokes cleanup. Environments are
+  independent, and Production remains unscheduled until separately authorized.
   Account export v11 adds role-specific sent/received offer projections while
   leaving v1-v10 unchanged. Flutter requests and strictly validates v11.
 

@@ -643,9 +643,15 @@ template or invitation data.
 friend-visible sent and received projections. Sent export excludes accepted-copy
 identity; received export contains the allowlisted snapshot but no source ID,
 request/fingerprint, or provenance. V1-v10 remain unchanged, and Flutter strictly
-parses v11 while preserving those historical shapes. A private postgres-only idempotent function
-deletes terminal offers at least 180 days old and cascades snapshots, ledgers, and
-notifications; no Cron schedule is added until PR #25.
+parses v11 while preserving those historical shapes. A private postgres-only
+idempotent function deletes terminal offers at least 180 days old and cascades
+snapshots, ledgers, and notifications without touching accepted independent
+copies. A separate forward-only operational migration requires `postgres`,
+unschedules every `template-send-retention-daily` predecessor, and schedules only
+`select * from private.maintain_template_send_retention();` at 04:17 UTC. The
+migration never invokes cleanup. Each environment must authorize and verify the
+schedule independently; Production remains unscheduled until separately
+authorized.
 
 ### Public template reporting and moderation boundary
 
@@ -1320,8 +1326,9 @@ writes are implemented.
   0/200/legacy-over-capacity snapshots, all five states, role/privacy projections,
   payload-bound request replay/conflict, exact-version actions, quota atomicity,
   notification v1-v5 compatibility, export v1-v11 compatibility, pair/source/
-  moderation/account lifecycle, 180-day unscheduled retention, and real lock races
-  for capacity, identical Accept retries, and source deletion.
+  moderation/account lifecycle, 180-day retention boundaries, stable non-invoking
+  Cron scheduling, and real lock races for capacity, identical Accept retries,
+  and source deletion.
 - Realtime client tests deterministically cover bounded stalled handshakes,
   joined-channel recovery, duplicate recovery signals, diagnostic redaction, and
   the production gateway-to-coordinator-to-registry path through a mounted feature
