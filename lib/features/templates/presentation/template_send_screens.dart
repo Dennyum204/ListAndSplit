@@ -354,26 +354,33 @@ class _TemplateSendDialogState extends ConsumerState<_TemplateSendDialog> {
                 ),
                 data: (loaded) => loaded.isEmpty
                     ? Text(localizations.templateSendNoEligibleFriends)
-                    : DropdownButtonFormField<String>(
-                        key: const Key('templateSendRecipientField'),
-                        value: _recipientId,
+                    : InputDecorator(
                         decoration: InputDecoration(
                           labelText: localizations.templateSendRecipientLabel,
                         ),
-                        items: [
-                          for (final recipient in loaded)
-                            DropdownMenuItem(
-                              value: recipient.id,
-                              child: Text(
-                                '${recipient.displayName} '
-                                '(@${recipient.username})',
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                        ],
-                        onChanged: state.isSending
-                            ? null
-                            : (value) => setState(() => _recipientId = value),
+                        isEmpty: _recipientId == null,
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            key: const Key('templateSendRecipientField'),
+                            value: _recipientId,
+                            isExpanded: true,
+                            items: [
+                              for (final recipient in loaded)
+                                DropdownMenuItem(
+                                  value: recipient.id,
+                                  child: Text(
+                                    '${recipient.displayName} '
+                                    '(@${recipient.username})',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                            onChanged: state.isSending
+                                ? null
+                                : (value) =>
+                                    setState(() => _recipientId = value),
+                          ),
+                        ),
                       ),
               ),
               if (state.hasMore) ...[
