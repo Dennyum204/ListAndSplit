@@ -233,19 +233,22 @@ Current private-template and Public Template slices:
   projections while v1-v10 remain unchanged. Opaque private account invalidation
   is reused. The strict Dart repository, localized Shared Templates UI,
   notification-v5 routing, and export-v11 client are implemented.
-- Terminal template-send history has an idempotent 180-day cleanup function. It is
-  intentionally unscheduled until the bounded PR #25 operational migration.
+- Terminal template-send history has an idempotent 180-day cleanup function. The
+  bounded A-065 operational migration defines one stable daily 04:17 UTC schedule
+  per explicitly authorized environment without invoking cleanup during
+  deployment. Production remains unscheduled until separately authorized.
 
 Completed delivery:
 
 - PR #24: localized, accessible Send/Received/Sent/Accept/Decline/Revoke UI,
   notification-v5 actions, export-v11 client integration, and two-device
   reconciliation over the PR #23 server/domain contract.
+- PR #25: forward-only, same-name-convergent scheduling for the existing
+  template-send terminal-retention function, with local catalog and retention
+  boundary coverage. Hosted environments remain separate rollout gates.
 
 Later candidate slices:
 
-- PR #25: schedule the existing template-send terminal-retention function once per
-  day through a separately authorized additive Cron migration.
 - A friends-only feed of recent public templates.
 
 Private category cardinality, copy atomicity, capacity, versioning, public
@@ -256,8 +259,8 @@ schedule. Moderator assignment, client distribution, physical QA, and each hoste
 environment remain explicit controlled gates before external beta or production
 public-content rollout.
 Feed ranking/pagination/retention remains open. Template-send product/database
-semantics are resolved by P-055/A-063; only the bounded UI and retention-schedule
-deliveries remain.
+semantics, Flutter UI, and source-controlled retention schedule are resolved by
+P-055 and A-063 through A-065; hosted rollout remains environment-specific.
 
 ## Phase 4 — Split expense ledger (core scope complete)
 

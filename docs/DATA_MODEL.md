@@ -771,9 +771,11 @@ independent.
 
 Terminal rows are eligible for privileged physical deletion only when
 `state_changed_at` is at least 180 days old. Pending rows never expire
-automatically. The maintenance function is idempotent and intentionally
-unscheduled until PR #25. Public-feed ranking/retention and the Flutter
-template-send experience remain future delivery.
+automatically. The maintenance function is idempotent. A separate operational
+migration owns one stable daily 04:17 UTC `postgres` schedule per explicitly
+authorized environment, replaces every same-name predecessor, and never invokes
+cleanup during deployment. Production remains unscheduled until separately
+authorized. Public-feed ranking/retention remains future delivery.
 
 ## Split expense-ledger aggregate
 
