@@ -13,9 +13,10 @@ the roadmap.
 | Concern | Decision |
 | --- | --- |
 | Client | Flutter stable; Android and iOS only |
-| Display name | `List & Split` |
+| Android Dev identity | Flavor `dev`, display name `List & Split Dev`, application ID `com.ferbatech.listandsplit.dev` |
+| Android Production identity | Flavor `prod`, display name `List & Split`, application ID `com.ferbatech.listandsplit` |
 | Dart/Flutter project name | `list_and_split` |
-| Android application ID and namespace | `com.ferbatech.listandsplit` |
+| Android namespace | `com.ferbatech.listandsplit` |
 | iOS bundle identifier | `com.ferbatech.listandsplit` (derived test identifiers are allowed) |
 | Design system | Material 3, with light and dark themes |
 | Supported languages | English and Portuguese, with localization-ready structure |
@@ -140,11 +141,12 @@ preserves that recovery gate across process restarts until password update,
 explicit sign-out, or a normal sign-in succeeds; it is navigation state only and
 is never treated as authentication or authorization evidence.
 
-The registered mobile Auth callback is
-`com.ferbatech.listandsplit://auth-callback` on both Android and iOS, without
-changing either platform identifier. Notification-link behavior and later feature
-deep links remain open. Redirect decisions are centralized and covered by
-navigation/widget tests.
+Android registers `com.ferbatech.listandsplit.dev://auth-callback` for Dev and
+`com.ferbatech.listandsplit://auth-callback` for Production. The existing iOS
+callback remains `com.ferbatech.listandsplit://auth-callback` until separately
+approved iOS scheme work. Notification-link behavior and later feature deep links
+remain open. Redirect decisions are centralized and covered by navigation/widget
+tests.
 
 Exact community discovery and blocked-user management are authenticated,
 post-onboarding routes within the Community branch. They use the same
@@ -1244,22 +1246,33 @@ continuous polling.
 
 ### Client configuration
 
-The Flutter client receives its public Supabase configuration at build/run time
-through the standardized compile-time names `SUPABASE_URL` and
-`SUPABASE_PUBLISHABLE_KEY`. Real values are not hardcoded or committed. A
-placeholder-only example is:
+The Flutter client receives one explicit environment name plus its public
+Supabase configuration at build/run time through `APP_ENV`, `SUPABASE_URL`, and
+`SUPABASE_PUBLISHABLE_KEY`. Real values are not hardcoded or committed.
 
-```text
-flutter run \
-  --dart-define=SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co \
-  --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_PUBLISHABLE_KEY
-```
+Android has `dev` and `prod` product flavors. Gradle owns the
+non-caller-controlled native flavor and final application ID. Before Supabase
+initialization, a narrow platform channel returns those native values to Dart. The
+typed configuration contract cross-checks them against `APP_ENV`, validates the
+exact Dev host, and selects the matching callback. Missing, invalid, partial,
+malformed, or crossed configuration never initializes Supabase and exposes no
+supplied value in its error state.
 
-Both values are required for backend-dependent flows. Missing or incomplete
-configuration routes to the development-configuration screen while keeping the
-app runnable. Only a public anonymous/publishable client key may enter Flutter. A
-service-role key or any other privileged secret must never be included in a client
-binary.
+The Dev contract accepts only `lzwsgxziqxpxwyalkfuy.supabase.co`, paired with the
+native `dev` flavor and `com.ferbatech.listandsplit.dev`. Production rejects that
+project. Because no Production project has been approved, every otherwise valid
+Production configuration also fails closed until a later accepted contract adds
+the exact Production host. Matching caller-controlled Dart values alone can never
+cross an Android environment.
+
+Distinct application IDs give Dev and Production isolated Android storage. The
+new Dev application therefore does not inherit the legacy unsuffixed Dev
+installation's session or local data. Full iOS scheme separation remains
+deferred, but the shared typed environment model supports adding it without
+changing repository or authentication boundaries.
+
+Only a public anonymous/publishable client key may enter Flutter. A service-role
+key or any other privileged secret must never be included in a client binary.
 
 ### Server operation shape
 
@@ -1403,7 +1416,6 @@ writes are implemented.
 - Precise feature folder layering and whether Riverpod code generation is used.
 - Notification links and later non-Auth feature deep links beyond the accepted
   four-tab shell.
-- Development/staging/production flavor and environment-separation strategy.
 - PostgreSQL-function versus Edge-Function placement for each atomic server action.
 - SQLite library, cache schema, synchronization algorithm, conflict policy, and
   background execution limits.

@@ -45,13 +45,17 @@
   "@configurationTitle": {
     "description": "Title of the missing developer configuration screen."
   },
-  "configurationDescription": "This development build needs both SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY supplied with --dart-define. Restart the app after setting them.",
+  "configurationDescription": "This build needs an explicit environment plus SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY supplied with --dart-define. Restart the app after setting them.",
   "@configurationDescription": {
     "description": "Developer instructions when backend configuration is absent."
   },
   "configurationPartialWarning": "Only one Supabase value is set. Provide both values or remove both.",
   "@configurationPartialWarning": {
     "description": "Warning for partially supplied configuration."
+  },
+  "configurationInvalidWarning": "This build's environment and backend configuration are missing, invalid, or do not match. Check the documented build command and try again.",
+  "@configurationInvalidWarning": {
+    "description": "Non-sensitive warning for invalid or crossed build configuration."
   },
   "loadingLabel": "Loading your account…",
   "@loadingLabel": {

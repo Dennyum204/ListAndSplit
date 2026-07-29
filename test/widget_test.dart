@@ -46,8 +46,9 @@ void main() {
       ProviderScope(
         overrides: [
           appConfigurationProvider.overrideWithValue(
-            const AppConfiguration(
-              isConfigured: false,
+            const AppConfiguration.invalid(
+              environment: AppEnvironment.dev,
+              issue: AppConfigurationIssue.publishableKeyMissing,
               isPartiallyConfigured: true,
             ),
           ),
@@ -295,7 +296,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appConfigurationProvider.overrideWithValue(
-          const AppConfiguration.configured(),
+          const AppConfiguration.devConfigured(),
         ),
         authRepositoryProvider.overrideWithValue(auth),
         profileRepositoryProvider.overrideWithValue(FakeProfileRepository()),
@@ -336,7 +337,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appConfigurationProvider.overrideWithValue(
-          const AppConfiguration.configured(),
+          const AppConfiguration.devConfigured(),
         ),
         authRepositoryProvider.overrideWithValue(auth),
         profileRepositoryProvider.overrideWithValue(
@@ -384,7 +385,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appConfigurationProvider.overrideWithValue(
-          const AppConfiguration.configured(),
+          const AppConfiguration.devConfigured(),
         ),
         authRepositoryProvider.overrideWithValue(auth),
         accountDataExportRepositoryProvider.overrideWithValue(
@@ -1306,7 +1307,7 @@ Future<void> _pumpConfiguredApp(
     ProviderScope(
       overrides: [
         appConfigurationProvider.overrideWithValue(
-          const AppConfiguration.configured(),
+          const AppConfiguration.devConfigured(),
         ),
         authRepositoryProvider.overrideWithValue(auth),
         accountDataExportRepositoryProvider.overrideWithValue(

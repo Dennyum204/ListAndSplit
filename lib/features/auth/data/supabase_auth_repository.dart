@@ -9,12 +9,15 @@ class SupabaseAuthRepository implements AuthRepository {
   SupabaseAuthRepository(
     this._client,
     PasswordRecoveryMarker recoveryMarker, {
+    required String authCallbackUri,
     Stream<AuthState>? authStateChanges,
   })  : _authStateChanges = authStateChanges ?? _client.auth.onAuthStateChange,
+        _authCallbackUri = authCallbackUri,
         _recovery = PasswordRecoveryLifecycle(recoveryMarker);
 
   final SupabaseClient _client;
   final Stream<AuthState> _authStateChanges;
+  final String _authCallbackUri;
   final PasswordRecoveryLifecycle _recovery;
 
   @override
@@ -63,7 +66,7 @@ class SupabaseAuthRepository implements AuthRepository {
         () => _client.auth.signUp(
           email: email,
           password: password,
-          emailRedirectTo: authCallbackUri,
+          emailRedirectTo: _authCallbackUri,
         ),
       );
 
@@ -93,7 +96,7 @@ class SupabaseAuthRepository implements AuthRepository {
         () => _client.auth.resend(
           email: email,
           type: OtpType.signup,
-          emailRedirectTo: authCallbackUri,
+          emailRedirectTo: _authCallbackUri,
         ),
       );
 
@@ -101,7 +104,7 @@ class SupabaseAuthRepository implements AuthRepository {
   Future<void> requestPasswordReset({required String email}) => _protect(
         () => _client.auth.resetPasswordForEmail(
           email,
-          redirectTo: authCallbackUri,
+          redirectTo: _authCallbackUri,
         ),
       );
 

@@ -39,12 +39,14 @@ class ConfigurationScreen extends ConsumerWidget {
                           height: 1.5,
                         ),
                   ),
-                  if (configuration.isPartiallyConfigured) ...[
+                  if (!configuration.isConfigured) ...[
                     const SizedBox(height: 16),
                     Semantics(
                       liveRegion: true,
                       child: Text(
-                        localizations.configurationPartialWarning,
+                        configuration.isPartiallyConfigured
+                            ? localizations.configurationPartialWarning
+                            : localizations.configurationInvalidWarning,
                         textAlign: TextAlign.center,
                         style: TextStyle(color: colors.error),
                       ),

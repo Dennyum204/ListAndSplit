@@ -376,8 +376,8 @@ future, explicit task with environment and cost approval.
 - Which minimum persistent-notification capability belongs in later
   action-producing phases beyond the accepted friend-request, list, item-
   assignment, General Note mention, and Public Template moderation outcomes.
-- When the accepted compile-time configuration should expand into a full
-  development/staging/production flavor model.
+- Staging, iOS flavor/scheme, signing, and release-distribution details beyond the
+  accepted Android Dev/Production separation.
 - Whether offline read caching can ship safely before offline mutations.
 - What additional global, ranked, or recommended community discovery, if any, is
   needed after the accepted chronological friends-only feed is deployed and

@@ -1,15 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:list_and_split/features/auth/domain/auth_repository.dart';
 import 'package:list_and_split/features/auth/domain/auth_validation.dart';
 
 void main() {
-  test('mobile auth callback stays aligned with platform registration', () {
-    expect(
-      authCallbackUri,
-      'com.ferbatech.listandsplit://auth-callback',
-    );
-  });
-
   group('AuthValidation', () {
     test('normalizes email without exposing account existence', () {
       expect(
