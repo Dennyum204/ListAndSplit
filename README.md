@@ -34,7 +34,8 @@ The template-send database/domain foundation adds immutable friend offers,
 recipient-only atomic private-copy acceptance, sender revocation, persistent
 Received/minimal Sent projections, notification v5, export v11, and private
 Realtime invalidation. Flutter exposes localized Send, Received, Sent,
-Accept/Decline/Revoke, notification routing, and strict export-v11 integration;
+Accept/Decline/Revoke and notification routing; the current export-v12 parser
+strictly preserves the v11 offer shape.
 the source defines a separately authorized stable daily schedule for the
 postgres-only 180-day terminal cleanup. Each hosted environment must deploy and
 verify that operational migration independently; Production remains unscheduled
@@ -84,29 +85,32 @@ evidence is not an Android beta or Production release.
 
 ## Planned delivery sequence
 
-The next capability is **List Chat**, but it is not implemented. The accepted
-direction is one separate list-scoped group conversation for the owner and current
-accepted participants, entered from its Main List. Version 1 is bounded to text
-history, timestamps, keyset pagination, Realtime arrival, and per-user unread
-state. A dedicated read-only product/security/architecture preflight must resolve
-the remaining contract before schema or code is introduced.
+**List Chat** is split into three bounded deliveries. PR #29 adds the secured
+database/domain foundation: current owner/member authorization, immutable ordered
+plain-text history, tombstones, unread state, idempotent sends, export v12, opaque
+private-account invalidation, and an unscheduled 365-day retention function. The
+migration is not deployed by this PR and Chat remains unreachable until PR #30
+adds its Flutter experience and scoped reconciliation. PR #31 separately owns
+retention scheduling.
 
 Delivery proceeds in this order:
 
 1. PR #28 reconciles documentation and the roadmap.
-2. Complete the read-only List Chat preflight.
-3. Implement List Chat in one or more separately reviewed secured PRs.
-4. Freeze feature selection and classify remaining ideas as required before
+2. The List Chat preflight resolves the bounded v1 contract.
+3. PR #29 implements the database/domain foundation without deployment or UI.
+4. PR #30 implements the Flutter experience and scoped Realtime reconciliation.
+5. PR #31 schedules retention only after separately authorized rollout and QA.
+6. Freeze feature selection and classify remaining ideas as required before
    redesign, post-beta, or rejected.
-5. Implement only the additional functionality Fernando explicitly selects.
-6. Refactor the stable UI through a Figma design system, screen by screen.
-7. Finalize branding and adaptive, monochrome, and Play launcher icons.
-8. Revalidate current official requirements and implement Android release
+7. Implement only the additional functionality Fernando explicitly selects.
+8. Refactor the stable UI through a Figma design system, screen by screen.
+9. Finalize branding and adaptive, monochrome, and Play launcher icons.
+10. Revalidate current official requirements and implement Android release
    infrastructure, Play setup/signing, protected CI, signed AABs, symbols,
    versioning, and artifact retention.
-9. Complete beta operations/compliance readiness and an internal Android beta.
-10. Perform separately authorized Production Supabase and Play rollout.
-11. Plan iOS/TestFlight as a later, separate release surface.
+11. Complete beta operations/compliance readiness and an internal Android beta.
+12. Perform separately authorized Production Supabase and Play rollout.
+13. Plan iOS/TestFlight as a later, separate release surface.
 
 ## Prerequisites
 
@@ -576,9 +580,10 @@ only explicitly authorized disposable identities:
    understandable and deletion closes open evidence. If separately authorized,
    delete only disposable reporter/owner/moderator identities and verify retained
    evidence becomes generic without exposing deleted identity.
-8. Verify the current v11 export retains the caller-only v10 report projection
-   while another account's reports and all moderation evidence, state, identities,
-   notes, restrictions, allowlist, and audit data remain absent.
+8. Verify the current v12 export retains the caller-only v10 report and
+   role-specific v11 offer projections while another account's reports and all
+   moderation evidence, state, identities, notes, restrictions, allowlist, and
+   audit data remain absent.
 9. Exercise an older client alongside the current client: restricted/reporter-
    hidden sources remain unavailable, old publication cannot bypass restriction,
    old notification parsers receive no new type, and old export versions remain
@@ -696,8 +701,13 @@ retains v9's caller-owned `is_public`/nullable `published_at`, and adds only the
 caller's own submitted report reason, nullable explanation, and submission time.
 `export_own_account_data_v11()` preserves v1-v10 and adds
 role-specific, unsuppressed sent/received template-offer projections with no
-source/copy provenance, request UUID, or fingerprint. The Flutter export client
-strictly parses v11 while retaining v1-v10 compatibility.
+source/copy provenance, request UUID, or fingerprint.
+`export_own_account_data_v12()` preserves v1-v11 and adds only the caller's
+retained authored Chat messages, with current minimal list context when access
+still exists or an unavailable marker after access loss. It never exports another
+participant's message, sender name, unread state, request UUID, fingerprint, or
+Realtime data. The Flutter export client strictly parses v12 while retaining
+v1-v11 compatibility.
 It never exports other users' public templates/reports, target identity, report
 status/group, evidence snapshot/fingerprint, provenance, copy request UUID,
 moderator/private note, decision, restriction, allowlist, or access audit. Shared
@@ -772,12 +782,15 @@ automatic custom-share remainder correction, a mathematically minimum settlement
 solver, SQLite caching/offline
 synchronization, push delivery,
 Firebase setup, administrator-initiated deletion, or a production backend.
-List Chat is planned, not implemented. Its first version explicitly excludes
-attachments, images/files, reactions, typing indicators, audio/video, push
-notifications, and general private messages. Editing/deletion, retention, limits,
-archive/delete/account/block lifecycle, unread/badge behavior, notification-centre
-and export integration, moderation, Realtime recovery, stale clients, offline use,
-and encryption/privacy require the dedicated preflight.
+PR #29 implements only List Chat's database/domain foundation. No route, entry
+point, controller, screen, composer, localized UI, widget integration, or client
+`chat_invalidate` routing exists until PR #30. Version 1 has no message editing,
+attachments, images/files, reactions, typing indicators, audio/video, persistent
+notification rows, push, read receipts, offline send queue, E2EE claim, or general
+private messaging. The private 365-day cleanup remains unscheduled until PR #31.
+Terms acceptance, in-app content/user reporting, blocking presentation, and an
+operational moderation process are mandatory before public distribution, but are
+not implemented by this foundation.
 Private Realtime Broadcast is implemented as best-effort account invalidation:
 the event is `invalidate`, the application payload is exactly `{"v":1}`, and every
 valid event, successful join, or app resume reloads authoritative state through

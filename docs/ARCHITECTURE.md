@@ -201,28 +201,65 @@ opaque invalidation input to repository refresh only; stale `40001` failures ref
 state and never overwrite it. Exact quantity parsing is a domain value that stores
 positive integer thousandths and never converts through `double`.
 
-### Planned List Chat boundary (not implemented)
+### List Chat database/domain boundary
 
-List Chat will be entered from a Main List and rendered as a separate list-tied
-screen within the Lists branch. Version 1 is a group conversation only for the
-current owner and accepted participants. Authorization must be derived from the
-authoritative current list-access contract, so removal or departure revokes read,
-write, and Realtime access immediately; Flutter route or cached state is never an
-authorization boundary.
+List Chat stays under the Lists feature and will use a separate list-tied route.
+PR #29 adds only strict domain/repository support; no provider, controller, route,
+screen, composer, badge, localization, widget, or client Realtime routing makes it
+reachable. PR #30 owns that Flutter boundary. Screens must never call Supabase
+directly, and cached route state is never an authorization boundary.
 
-The accepted client/server direction is repository-owned text history, created
-timestamps, bounded keyset pagination, Realtime arrival, and per-user unread
-state. Screens must not own direct Supabase access. A preflight must define the
-storage and RPC contract, restrictive RLS/grants, lifecycle, concurrency,
-retention, export, moderation, unread, and reconnect behavior before any migration
-or implementation. No chat table, RPC, topic, repository, provider, controller,
-route, or export version exists today.
+The additive database foundation uses:
 
-Attachments, files/images, reactions, typing indicators, audio/video, push, and
-general friend-to-friend private messaging are outside version 1. The existing
-private account invalidation contract must not be assumed sufficient for
-new-message delivery; Chat Realtime authorization, topic shape, reconnect,
-stale-client safety, and authoritative reconciliation remain open.
+- forced-RLS, explicit-rejection `public.active_list_chat_messages` with immutable
+  server-owned `message_position`, current sender reference, body, display time,
+  and constrained sender/owner/account tombstone shape;
+- forced-RLS, explicit-rejection `public.active_list_chat_states` with one private
+  visibility boundary and monotonic unread cursor per current account/list;
+- forced-RLS, explicit-rejection
+  `private.active_list_chat_send_requests` for payload-bound idempotency; and
+- the private noncycling `active_list_chat_message_position_seq`.
+
+The position sequence is never client-accessible. A send locks its parent list and
+finishes authorization, normalized-body, archive, and rolling-rate checks before
+allocating `nextval`. Position is immutable, never reused or reset after retention,
+and is the sole durable boundary for join/rejoin visibility, newest-first keyset
+pagination, unread cursors, and deterministic cleanup. `created_at` is display data,
+not authorization or ordering state. Gaps from rolled-back transactions are valid,
+and no Chat operation changes ordinary list version/timestamps.
+
+Exact list, send, tombstone, mark-read, unread, and export-v12 RPCs derive the
+verified caller from `auth.uid()`, recheck authoritative current owner/accepted
+membership and blocking, authorize before resource-specific validation, and hide
+foreign/stale resources behind the generic unavailable outcome. Client RPCs are
+`postgres`-owned `SECURITY DEFINER`, use an empty `search_path` and qualified
+objects, revoke default/PUBLIC/anon/service-role execution, and grant only their
+exact signatures to `authenticated`. Direct table/sequence access is revoked and
+Chat tables are absent from the Realtime publication.
+
+Lifecycle changes preserve the global profile-to-list-to-ordered-child lock
+hierarchy. Acceptance/reacceptance records the latest committed list position as
+both visibility and read boundary under the list lock; removal/departure/block
+removes the state in the same transaction; transfer preserves it; list deletion
+cascades it. Authorized history resolves current username/display name from
+`profiles`, never a stored identity snapshot. Surviving authored rows are
+account-tombstoned before profile deletion; owner-account list cascade remains
+unchanged.
+
+The existing private `account:<profile-id>` channel remains the only transport.
+Existing lifecycle mutations keep `invalidate`/`{"v":1}`. Successful Chat content
+or cursor changes use only `chat_invalidate`/`{"v":1}` with no list/message/action
+data; sends/tombstones address the final authorized set including the actor, and
+mark-read addresses only the caller. Failed/no-op/idempotent-repeat mutations emit
+nothing. Old clients safely ignore the unknown event. PR #30 must route it only to
+mounted Chat history/unread reconciliation through the existing recovered account
+channel; transport recovery remains shared rather than duplicated.
+
+The private bounded retention function removes at most the requested capped batch
+of rows older than 365 days from original creation and cleans dependent request
+rows without rewriting unread positions. It is unscheduled in PR #29; PR #31 owns
+the separate 04:47 UTC Cron delivery. Terms/reporting/moderation remain a
+public-release gate, not an implemented Chat subsystem.
 
 ## Backend architecture
 
@@ -702,8 +739,8 @@ template or invitation data.
 `export_own_account_data_v11()` wraps v10 with role-specific, unsuppressed,
 friend-visible sent and received projections. Sent export excludes accepted-copy
 identity; received export contains the allowlisted snapshot but no source ID,
-request/fingerprint, or provenance. V1-v10 remain unchanged, and Flutter strictly
-parses v11 while preserving those historical shapes. A private postgres-only
+request/fingerprint, or provenance. V1-v10 remain unchanged, and the v11 shape
+remains strictly supported by the current v12 Flutter parser. A private postgres-only
 idempotent function deletes terminal offers at least 180 days old and cascades
 snapshots, ledgers, and notifications without touching accepted independent
 copies. A separate forward-only operational migration requires `postgres`,
@@ -904,7 +941,8 @@ schema-version-6 `jsonb` document for legacy clients, and
 `export_own_account_data_v9()` remains unchanged for public-template-aware clients.
 The separate `export_own_account_data_v10()` reuses the corrected v9 allowlisted
 base and returns schema version `10`; v11 adds only the role-specific template-send
-projections described below and is the current strict Flutter export contract. Version `2`
+projections described below. Version `12` adds only the caller's retained authored
+Chat messages and is the current strict Flutter export contract. Version `2`
 preserves all version-1 account/social roots
 and adds the deterministic `active_lists` array with active/archived owned lists and
 ordered items. Version `3` adds only caller-relative metadata for lists owned by
@@ -937,7 +975,13 @@ receives recipient minimal profile, snapshot name/count, state/version, and time
 without accepted-copy/source identity. The recipient receives sender minimal
 profile and the immutable name/item/quantity/position snapshot without source/copy
 provenance. Flutter strictly parses v11 and rejects expanded or inconsistent
-role projections.
+  role projections. Version `12` adds a flat deterministic
+  `authored_chat_messages` array. Each row contains only message identity, nullable
+  body, created/deleted time and deletion kind, plus current minimal list
+  ID/title/status when the caller still has access or an unavailable context after
+  access loss. It never includes another participant's message or identity, a
+  sender name, read state, unread count, request/fingerprint, access boundary, or
+  Realtime data. Flutter strictly parses v12 while retaining v1-v11.
 `shared_list_access`
 stays byte-for-byte metadata-only: it contains no assignment array, item data,
 General Note text, mention identity, or corresponding timestamp. Request IDs,
@@ -1415,6 +1459,15 @@ writes are implemented.
   moderation/account lifecycle, 180-day retention boundaries, stable non-invoking
   Cron scheduling, and real lock races for capacity, identical Accept retries,
   and source deletion.
+- List Chat foundation tests cover every actor/lifecycle state, forced RLS and
+  exact grants, Unicode/control/length normalization, durable position ordering,
+  visibility windows, pagination, private unread/cap, tombstone immutability,
+  rate limiting, payload-bound replay/conflict, current-name/account cleanup,
+  export v1-v12 privacy, retention, exact opaque event fanout, and no
+  notification/list-version side effect. Independent-connection races exercise
+  both lock orders for send/mark-read versus remove/leave/block/archive/delete/
+  account cleanup, duplicate and distinct sends, rate threshold, restore, and
+  multi-list cleanup.
 - Realtime client tests deterministically cover bounded stalled handshakes,
   joined-channel recovery, duplicate recovery signals, diagnostic redaction, and
   the production gateway-to-coordinator-to-registry path through a mounted feature
@@ -1464,8 +1517,7 @@ writes are implemented.
   physical cleanup, and account-lifecycle retention.
 - FCM/APNs registration, token lifecycle, push-safe content, and notification deep
   links.
-- List Chat storage/RPC/RLS design; editing/deletion and retention; rate/length
-  limits; archive/list-delete/account-delete/block lifecycle; unread/badge,
-  notification-centre, export, and moderation integration; Realtime
-  authorization/reconnect and stale clients; offline behavior; and
-  encryption/privacy expectations.
+- PR #30 List Chat `chat_invalidate` routing, mounted history/unread
+  reconciliation, and stale/access-loss UI behavior; any later offline
+  cache/mutation contract.
+- Public-release List Chat terms/reporting/moderation architecture and operations.

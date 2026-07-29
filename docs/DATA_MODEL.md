@@ -172,8 +172,18 @@ state/version, and lifecycle times. They never include accepted-template or sour
 identity. Received entries include only offer ID, sender minimal profile, the
 allowlisted immutable name/item/quantity/position snapshot, state/version, and
 times. Neither role receives request UUIDs, fingerprints, source/copy provenance,
-moderation internals, or hidden pair history. Flutter strictly consumes v11 and
-continues decoding the retained v1-v10 document shapes.
+moderation internals, or hidden pair history. That strict v11 shape remains
+readable by the current v12 Flutter parser together with v1-v10.
+
+The separate parameterless `export_own_account_data_v12()` preserves versions `1`
+through `11` and adds one deterministic flat `authored_chat_messages` array. It
+contains only the caller's retained authored message ID, nullable body, original
+creation time, nullable deletion time/kind, and minimal conversation context.
+Current list ID/title/status appear only while the caller still has current access;
+otherwise the context is marked unavailable with those fields null. It contains no
+other author's row or identity, sender name, unread/read state, request UUID,
+fingerprint, visibility boundary, membership internals, or Realtime data. Flutter
+strictly consumes v12 and continues decoding v1-v11.
 
 Every nested object is built from an explicit field allowlist. The social arrays
 apply the same directional-block, caller-relative active-relationship, recipient,
@@ -547,25 +557,62 @@ Profile deletion uses one parent-first coordinator for every surviving list
 referenced by access, assignment, mention, Split history, or completion
 attribution, repairing the former child-first Split/list inversion.
 
-### Planned List Chat concept (no current entity)
+### List Chat aggregate
 
-No chat conversation, message, unread-state, attachment, or chat-retention entity
-currently exists in the migrations or implemented data model. The accepted product
-direction is conceptually one group conversation per Main List for its current
-owner and accepted participants, with text history, created timestamps, bounded
-keyset pagination, Realtime arrival, and per-user unread state.
+`public.active_list_chat_messages` is the retained list-scoped message history.
+Each row has a server-generated UUID, cascading list reference, globally unique
+positive immutable `message_position`, nullable current sender reference, nullable
+normalized body, server-created display time, and nullable deletion time/kind.
+Its shape constraint permits only:
 
-The authoritative current list-access relationship must gate reads, writes, and
-Realtime so removal or departure revokes all three immediately. This is a
-conceptual authorization invariant, not a table, column, key, policy, RPC, topic,
-or export design. A dedicated preflight must resolve editing/deletion, retention,
-length/rate limits, archive and list-delete/restore behavior, account
-deletion/anonymization, blocks, unread reset/badges, notification-centre and
-export impact, moderation, Realtime/reconnect, stale clients, offline behavior,
-and encryption/privacy before a physical model is accepted.
+- an active row with sender/body and no deletion fields;
+- a sender/owner tombstone retaining its sender, with null body and matching
+  deletion metadata; or
+- an account tombstone with both sender/body null and `deletion_kind = 'account'`.
 
-Attachments, images/files, reactions, typing indicators, audio/video, push, and
-general private messages remain outside version 1.
+A defensive trigger rejects every update except the approved one-way tombstone or
+account-anonymization transition. Bodies contain at most 2,000 PostgreSQL
+characters, use LF line endings and the General Note's Unicode edge trimming, and
+exclude controls other than tab/LF. Username/display name are never stored here;
+authorized reads join the sender's current profile. A deleted participant's
+surviving rows become account tombstones before profile deletion, while owned-list
+deletion cascades all Chat rows.
+
+`private.active_list_chat_message_position_seq` is a noncycling bigint sequence
+with no client privilege. The secured send path locks and validates the parent list
+before allocation. Its value is never client supplied, changed, reused, derived
+from list version/timestamps, or reset when retention empties a list. It is the
+strict total order and the only boundary for visibility, keyset pages, unread
+cursors, and deterministic retention; sequence gaps are valid.
+
+`public.active_list_chat_states` has primary key `(list_id, profile_id)`, cascading
+list/profile references, `visible_after_message_position`,
+`last_read_message_position`, and `updated_at`. Read cannot precede visibility.
+The owner/backfilled current users start at zero because no prior Chat exists.
+Acceptance/reacceptance snapshots the latest committed list position into both
+fields under the parent lock. Removal/departure/block removes state; transfer
+preserves it. This is private projection state, never authorization: every RPC
+rechecks current owner/accepted membership and blocking.
+
+`private.active_list_chat_send_requests` binds `(actor_id, request_id)` to one list,
+message, domain-separated 32-byte fingerprint, and creation time. Identical
+normalized list/body reuse returns the original visible result without another
+rate slot or invalidation; conflicting reuse fails. Profile/list/message lifecycle
+cleans the ledger, and neither requests nor fingerprints enter API responses,
+Broadcast, or export.
+
+All three tables have forced RLS, explicit rejection policies, and no direct API
+grants. Exact hardened RPCs own newest-first pages (maximum 50), send, tombstone,
+mark-read, bounded unread (100/capped), and export v12. A private bounded function
+physically removes message/tombstone rows older than 365 days from original
+creation and dependent requests without rewriting stored read positions; it is
+not scheduled until PR #31.
+
+Chat content/cursor mutations reuse private account topics with content-free
+`chat_invalidate`/`{"v":1}`. Existing membership/block/archive/list/account
+lifecycle keeps the global `invalidate` event. Chat tables are not in the Realtime
+publication. The Dart domain/repository exists but no Flutter route/controller/UI
+or event routing exists until PR #30.
 
 ## Private template aggregate and copy semantics
 
@@ -1160,6 +1207,6 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   resolution.
 - Appeal, administrator/compliance, and later moderation-automation contracts
   beyond the accepted Public Template report/review lifecycle.
-- List Chat message/unread identifiers and constraints, RPC/RLS/grant boundary,
-  lifecycle and retention, export/moderation integration, Realtime authorization
-  and recovery, stale-client compatibility, offline behavior, and privacy model.
+- PR #30 List Chat client reconciliation/stale-access state and any later offline
+  cache/mutation model.
+- Public-release List Chat terms/reporting/moderation entities and retention.
