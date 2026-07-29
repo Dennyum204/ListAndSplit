@@ -10,6 +10,7 @@ import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
 import 'package:list_and_split/features/lists/domain/general_note.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_chat_providers.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/features/lists/presentation/active_lists_screen.dart';
@@ -18,6 +19,7 @@ import 'package:list_and_split/features/profile/presentation/profile_providers.d
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fakes.dart';
+import '../../helpers/fake_active_list_chat_repository.dart';
 
 void main() {
   testWidgets('overview renders loading, failure, retry, and empty states',
@@ -1762,6 +1764,9 @@ void main() {
         overrides: [
           verifiedUserIdProvider.overrideWithValue('user-1'),
           activeListRepositoryProvider.overrideWithValue(repository),
+          activeListChatRepositoryProvider.overrideWithValue(
+            FakeActiveListChatRepository(),
+          ),
           notificationRepositoryProvider.overrideWithValue(
             FakeNotificationRepository(),
           ),
@@ -1843,6 +1848,9 @@ void main() {
         overrides: [
           verifiedUserIdProvider.overrideWithValue('member-1'),
           activeListRepositoryProvider.overrideWithValue(repository),
+          activeListChatRepositoryProvider.overrideWithValue(
+            FakeActiveListChatRepository(),
+          ),
           notificationRepositoryProvider.overrideWithValue(
             FakeNotificationRepository(),
           ),
@@ -2082,6 +2090,9 @@ Future<void> _pumpRoutedDetail(
       overrides: [
         verifiedUserIdProvider.overrideWithValue(userId),
         activeListRepositoryProvider.overrideWithValue(repository),
+        activeListChatRepositoryProvider.overrideWithValue(
+          FakeActiveListChatRepository(),
+        ),
         notificationRepositoryProvider.overrideWithValue(
           FakeNotificationRepository(),
         ),
@@ -2111,6 +2122,9 @@ Future<void> _pump(
       overrides: [
         verifiedUserIdProvider.overrideWithValue('user-1'),
         activeListRepositoryProvider.overrideWithValue(repository),
+        activeListChatRepositoryProvider.overrideWithValue(
+          FakeActiveListChatRepository(),
+        ),
         notificationRepositoryProvider.overrideWithValue(
           FakeNotificationRepository(),
         ),

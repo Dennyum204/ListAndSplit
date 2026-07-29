@@ -7,6 +7,7 @@ void main() {
   test('account topic and application contract are exact', () {
     expect(accountRealtimeTopic('profile-123'), 'account:profile-123');
     expect(accountInvalidationEvent, 'invalidate');
+    expect(accountChatInvalidationEvent, 'chat_invalidate');
     expect(accountInvalidationPayload, {'v': 1});
 
     expect(
@@ -34,6 +35,24 @@ void main() {
     expect(
       isAccountInvalidationEnvelope({
         'payload': {'v': 1, 'list_id': 'must-not-be-accepted'},
+      }),
+      isFalse,
+    );
+    expect(
+      isAccountChatInvalidationEnvelope({
+        'event': 'chat_invalidate',
+        'meta': {'id': '00000000-0000-4000-8000-000000000001'},
+        'payload': {
+          'v': 1,
+          'id': '00000000-0000-4000-8000-000000000001',
+        },
+        'type': 'broadcast',
+      }),
+      isTrue,
+    );
+    expect(
+      isAccountChatInvalidationEnvelope({
+        'payload': {'v': 1, 'message_id': 'must-not-be-accepted'},
       }),
       isFalse,
     );
@@ -143,6 +162,7 @@ void main() {
     final adapterSource = File(adapter).readAsStringSync();
     expect(adapterSource, contains('RealtimeChannelConfig(private: true)'));
     expect(adapterSource, contains('event: accountInvalidationEvent'));
+    expect(adapterSource, contains('event: accountChatInvalidationEvent'));
     expect(
       adapterSource,
       contains('AccountRealtimeStatusUpdate.fromTransport'),

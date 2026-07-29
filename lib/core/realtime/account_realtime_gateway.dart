@@ -1,4 +1,5 @@
 const accountInvalidationEvent = 'invalidate';
+const accountChatInvalidationEvent = 'chat_invalidate';
 
 const accountInvalidationPayload = <String, Object>{'v': 1};
 
@@ -6,6 +7,14 @@ String accountRealtimeTopic(String authenticatedProfileId) =>
     'account:$authenticatedProfileId';
 
 bool isAccountInvalidationEnvelope(Map<String, dynamic> envelope) {
+  return _isVersionOneInvalidationEnvelope(envelope);
+}
+
+bool isAccountChatInvalidationEnvelope(Map<String, dynamic> envelope) {
+  return _isVersionOneInvalidationEnvelope(envelope);
+}
+
+bool _isVersionOneInvalidationEnvelope(Map<String, dynamic> envelope) {
   final payload = envelope['payload'];
   if (payload is Map) {
     final applicationPayload = Map<Object?, Object?>.of(payload);
@@ -105,6 +114,7 @@ abstract interface class AccountRealtimeGateway {
   AccountRealtimeSubscription subscribe({
     required String authenticatedProfileId,
     required void Function() onInvalidation,
+    required void Function() onChatInvalidation,
     required void Function(AccountRealtimeStatusUpdate update) onStatus,
   });
 }

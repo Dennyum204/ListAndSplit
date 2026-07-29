@@ -12,6 +12,7 @@ class SupabaseAccountRealtimeGateway implements AccountRealtimeGateway {
   AccountRealtimeSubscription subscribe({
     required String authenticatedProfileId,
     required void Function() onInvalidation,
+    required void Function() onChatInvalidation,
     required void Function(AccountRealtimeStatusUpdate update) onStatus,
   }) {
     final channel = _client.channel(
@@ -23,6 +24,14 @@ class SupabaseAccountRealtimeGateway implements AccountRealtimeGateway {
           event: accountInvalidationEvent,
           callback: (envelope) {
             if (isAccountInvalidationEnvelope(envelope)) onInvalidation();
+          },
+        )
+        .onBroadcast(
+          event: accountChatInvalidationEvent,
+          callback: (envelope) {
+            if (isAccountChatInvalidationEnvelope(envelope)) {
+              onChatInvalidation();
+            }
           },
         )
         .subscribe(

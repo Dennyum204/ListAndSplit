@@ -13,6 +13,8 @@ import 'package:list_and_split/features/community/domain/friendship_summary.dart
 import 'package:list_and_split/features/community/presentation/community_providers.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_chat_providers.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_chat_screen.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
@@ -27,10 +29,50 @@ import 'package:list_and_split/features/templates/presentation/private_template_
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fake_list_split_repository.dart';
+import '../../helpers/fake_active_list_chat_repository.dart';
 import '../../helpers/fake_private_template_repository.dart';
 import '../../helpers/fakes.dart';
 
 void main() {
+  testWidgets('main router opens Chat by immutable list ID in the Lists shell',
+      (tester) async {
+    final lists = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..itemsByList[splitListId] = [];
+    final chat = FakeActiveListChatRepository();
+    final container = await _pumpApp(
+      tester,
+      lists: lists,
+      split: FakeListSplitRepository(initial: _debtOverview()),
+      chat: chat,
+    );
+    final router = container.read(appRouterProvider);
+
+    router.go(AppRoutes.listDetail(splitListId));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('listChatButton')));
+    await tester.pumpAndSettle();
+
+    final screen =
+        tester.widget<ActiveListChatScreen>(find.byType(ActiveListChatScreen));
+    expect(screen.listId, splitListId);
+    expect(router.routeInformationProvider.value.uri.path,
+        AppRoutes.listChat(splitListId));
+    expect(find.byType(AuthenticatedShell), findsOneWidget);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      0,
+    );
+    expect(chat.requestedListIds, everyElement(splitListId));
+    expect(lists.createCalls, 0);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(ActiveListDetailScreen), findsOneWidget);
+    expect(router.routeInformationProvider.value.uri.path,
+        AppRoutes.listDetail(splitListId));
+  });
+
   testWidgets('accessible main-list action opens Split by immutable list ID',
       (tester) async {
     final lists = FakeActiveListRepository()
@@ -200,6 +242,7 @@ Future<ProviderContainer> _pumpApp(
   WidgetTester tester, {
   required FakeActiveListRepository lists,
   required FakeListSplitRepository split,
+  FakeActiveListChatRepository? chat,
 }) async {
   final auth = FakeAuthRepository(session: verifiedSession);
   final friendships = FakeFriendshipRepository()
@@ -234,6 +277,9 @@ Future<ProviderContainer> _pumpApp(
         FakeNotificationRepository(),
       ),
       activeListRepositoryProvider.overrideWithValue(lists),
+      activeListChatRepositoryProvider.overrideWithValue(
+        chat ?? FakeActiveListChatRepository(),
+      ),
       privateTemplateRepositoryProvider.overrideWithValue(
         FakePrivateTemplateRepository(),
       ),

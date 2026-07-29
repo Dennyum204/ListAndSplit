@@ -20,6 +20,7 @@ import 'package:list_and_split/features/auth/presentation/verification_screen.da
 import 'package:list_and_split/features/community/presentation/blocked_users_screen.dart';
 import 'package:list_and_split/features/community/presentation/community_screen.dart';
 import 'package:list_and_split/features/community/presentation/friendship_management_screen.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_chat_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_members_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_lists_screen.dart';
@@ -172,6 +173,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       GoRoute(
                         path: 'split',
                         builder: (context, state) => ListSplitScreen(
+                          listId: state.pathParameters['listId']!,
+                        ),
+                      ),
+                      GoRoute(
+                        path: 'chat',
+                        builder: (context, state) => ActiveListChatScreen(
                           listId: state.pathParameters['listId']!,
                         ),
                       ),

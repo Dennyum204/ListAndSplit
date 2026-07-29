@@ -26,7 +26,12 @@ void main() {
     final diagnostics = <AccountRealtimeDiagnostic>[];
     final registry = ReconciliationRegistry();
     var reconciliations = 0;
+    var chatReconciliations = 0;
     registry.register(() async => reconciliations += 1);
+    registry.register(
+      () async => chatReconciliations += 1,
+      scope: ReconciliationScope.chat,
+    );
     final coordinator = AccountReconciliationCoordinator(
       SupabaseAccountRealtimeGateway(client),
       registry,
@@ -120,6 +125,7 @@ void main() {
     );
 
     reconciliations = 0;
+    chatReconciliations = 0;
     recoveredChannel.emitAccountInvalidation('profile-a');
     await _waitUntil(
       () => reconciliations == 1,
@@ -128,6 +134,17 @@ void main() {
     await _flushEventQueue();
 
     expect(reconciliations, 1);
+    expect(chatReconciliations, 1);
+    chatReconciliations = 0;
+    recoveredChannel.emitAccountChatInvalidation('profile-a');
+    await _waitUntil(
+      () => chatReconciliations == 1,
+      'recovered Chat invalidation callback',
+    );
+    await _flushEventQueue();
+
+    expect(reconciliations, 1);
+    expect(chatReconciliations, 1);
     expect(joinedChannel.joinRequests, 1);
     expect(stalledReconnect.joinRequests, 0);
     expect(recoveredChannel.joinRequests, 1);

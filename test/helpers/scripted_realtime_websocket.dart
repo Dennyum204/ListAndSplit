@@ -83,6 +83,14 @@ class ScriptedRealtimeWebSocketChannel implements WebSocketChannel {
   }
 
   void emitAccountInvalidation(String authenticatedProfileId) {
+    _emitInvalidation(authenticatedProfileId, accountInvalidationEvent);
+  }
+
+  void emitAccountChatInvalidation(String authenticatedProfileId) {
+    _emitInvalidation(authenticatedProfileId, accountChatInvalidationEvent);
+  }
+
+  void _emitInvalidation(String authenticatedProfileId, String event) {
     final topic = 'realtime:${accountRealtimeTopic(authenticatedProfileId)}';
     if (joinedTopic != topic || _streamController.isClosed) {
       throw StateError('The requested private account topic is not joined.');
@@ -91,7 +99,7 @@ class ScriptedRealtimeWebSocketChannel implements WebSocketChannel {
       'topic': topic,
       'event': 'broadcast',
       'payload': {
-        'event': accountInvalidationEvent,
+        'event': event,
         'payload': accountInvalidationPayload,
         'type': 'broadcast',
       },

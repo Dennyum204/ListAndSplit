@@ -194,6 +194,67 @@
   "listDetailLoadingLabel": "A carregar lista",
   "listDetailUnavailableTitle": "Esta lista está indisponível",
   "listDetailUnavailableDescription": "Pode ter sido eliminada ou pode já não ter acesso.",
+  "listChatTitle": "Conversa de {listTitle}",
+  "@listChatTitle": {"placeholders": {"listTitle": {"type": "String"}}},
+  "listChatOpenButton": "Abrir conversa da lista",
+  "listChatOpenOneUnreadLabel": "Abrir conversa da lista, 1 mensagem por ler",
+  "listChatOpenUnreadLabel": "Abrir conversa da lista, {countLabel} mensagens por ler",
+  "@listChatOpenUnreadLabel": {"placeholders": {"countLabel": {"type": "String"}}},
+  "listChatLoadingLabel": "A carregar conversa da lista",
+  "listChatRefreshingLabel": "A atualizar conversa da lista",
+  "listChatLoadFailedTitle": "Não foi possível carregar esta conversa",
+  "listChatLoadFailedDescription": "Verifique a ligação e tente novamente.",
+  "listChatEmptyTitle": "Ainda não há mensagens",
+  "listChatEmptyDescription": "Inicie uma conversa de texto simples com as pessoas desta lista.",
+  "listChatLoadOlderButton": "Carregar mensagens anteriores",
+  "listChatLoadingOlderLabel": "A carregar mensagens anteriores",
+  "listChatRetryOlderButton": "Tentar mensagens anteriores novamente",
+  "listChatNewMessagesButton": "Novas mensagens",
+  "listChatArchivedBanner": "A conversa desta lista arquivada é apenas de leitura. Restaure a lista para enviar ou eliminar mensagens.",
+  "listChatComposerLabel": "Mensagem",
+  "listChatComposerHelper": "Texto simples, até 2 000 carateres.",
+  "listChatCharacterCount": "{count} de 2 000 carateres",
+  "@listChatCharacterCount": {"placeholders": {"count": {"type": "int"}}},
+  "listChatSendButton": "Enviar mensagem",
+  "listChatSendingLabel": "A enviar mensagem",
+  "listChatInvalidMessage": "Introduza uma mensagem com 1–2 000 carateres e sem carateres de controlo.",
+  "listChatSendUncertainMessage": "Não foi possível confirmar o envio. Tente novamente sem alterar a mensagem ou edite-a para iniciar um novo pedido.",
+  "listChatRateLimitedMessage": "Foram enviadas demasiadas mensagens recentemente. Aguarde um momento e tente novamente.",
+  "listChatRequestConflictMessage": "Esta nova tentativa já não corresponde à mensagem original. Atualize e tente novamente.",
+  "listChatOperationFailedMessage": "Não foi possível concluir a ação na conversa. Verifique a ligação e tente novamente.",
+  "listChatRefreshFailedMessage": "Não foi possível carregar as mensagens mais recentes. A conversa existente continua disponível.",
+  "listChatDeleteUncertainMessage": "Não foi possível confirmar a eliminação. Foi carregada a conversa mais recente.",
+  "listChatDeleteButton": "Eliminar mensagem",
+  "listChatDeleteTitle": "Eliminar esta mensagem?",
+  "listChatDeleteDescription": "O texto será substituído por um aviso de eliminação permanente.",
+  "listChatDeletedBySender": "Mensagem eliminada pelo remetente",
+  "listChatDeletedByOwner": "Mensagem eliminada pelo proprietário da lista",
+  "listChatDeletedAccountSenderLabel": "Conta eliminada",
+  "listChatDeletedWithAccount": "Mensagem removida após eliminação da conta",
+  "listChatYouLabel": "Você",
+  "listChatSenderLabel": "{displayName} (@{username})",
+  "@listChatSenderLabel": {
+    "placeholders": {
+      "displayName": {"type": "String"},
+      "username": {"type": "String"}
+    }
+  },
+  "listChatMessageSemantics": "{sender}, {timestamp}: {message}",
+  "@listChatMessageSemantics": {
+    "placeholders": {
+      "sender": {"type": "String"},
+      "timestamp": {"type": "String"},
+      "message": {"type": "String"}
+    }
+  },
+  "listChatTimestamp": "{date} às {time}",
+  "@listChatTimestamp": {
+    "placeholders": {
+      "date": {"type": "String"},
+      "time": {"type": "String"}
+    }
+  },
+  "listChatAccessRemovedMessage": "Já não tem acesso à conversa desta lista. Foi carregada a vista Listas mais recente.",
   "listRenameButton": "Mudar nome",
   "listRenameTitle": "Mudar o nome da lista",
   "listArchiveButton": "Arquivar",

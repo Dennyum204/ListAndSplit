@@ -750,6 +750,67 @@
   "listDetailLoadingLabel": "Loading list",
   "listDetailUnavailableTitle": "This list is unavailable",
   "listDetailUnavailableDescription": "It may have been deleted or you may no longer have access.",
+  "listChatTitle": "{listTitle} chat",
+  "@listChatTitle": {"placeholders": {"listTitle": {"type": "String"}}},
+  "listChatOpenButton": "Open list chat",
+  "listChatOpenOneUnreadLabel": "Open list chat, 1 unread message",
+  "listChatOpenUnreadLabel": "Open list chat, {countLabel} unread messages",
+  "@listChatOpenUnreadLabel": {"placeholders": {"countLabel": {"type": "String"}}},
+  "listChatLoadingLabel": "Loading list chat",
+  "listChatRefreshingLabel": "Refreshing list chat",
+  "listChatLoadFailedTitle": "We couldn't load this chat",
+  "listChatLoadFailedDescription": "Check your connection and try again.",
+  "listChatEmptyTitle": "No messages yet",
+  "listChatEmptyDescription": "Start a plain-text conversation with the people in this list.",
+  "listChatLoadOlderButton": "Load older messages",
+  "listChatLoadingOlderLabel": "Loading older messages",
+  "listChatRetryOlderButton": "Retry older messages",
+  "listChatNewMessagesButton": "New messages",
+  "listChatArchivedBanner": "This archived list's chat is read-only. Restore the list to send or delete messages.",
+  "listChatComposerLabel": "Message",
+  "listChatComposerHelper": "Plain text, up to 2,000 characters.",
+  "listChatCharacterCount": "{count} of 2,000 characters",
+  "@listChatCharacterCount": {"placeholders": {"count": {"type": "int"}}},
+  "listChatSendButton": "Send message",
+  "listChatSendingLabel": "Sending message",
+  "listChatInvalidMessage": "Enter a message of 1–2,000 characters without control characters.",
+  "listChatSendUncertainMessage": "The send result could not be confirmed. Retry the unchanged message, or edit it to start a new request.",
+  "listChatRateLimitedMessage": "Too many messages were sent recently. Wait a moment and try again.",
+  "listChatRequestConflictMessage": "This retry no longer matches the original message. Refresh and try again.",
+  "listChatOperationFailedMessage": "The chat action couldn't be completed. Check your connection and try again.",
+  "listChatRefreshFailedMessage": "The latest messages couldn't be loaded. Your existing chat is still available.",
+  "listChatDeleteUncertainMessage": "The deletion result could not be confirmed. The latest chat was loaded.",
+  "listChatDeleteButton": "Delete message",
+  "listChatDeleteTitle": "Delete this message?",
+  "listChatDeleteDescription": "Its text will be replaced by a permanent deletion notice.",
+  "listChatDeletedBySender": "Message deleted by its sender",
+  "listChatDeletedByOwner": "Message deleted by the list owner",
+  "listChatDeletedAccountSenderLabel": "Deleted account",
+  "listChatDeletedWithAccount": "Message removed after account deletion",
+  "listChatYouLabel": "You",
+  "listChatSenderLabel": "{displayName} (@{username})",
+  "@listChatSenderLabel": {
+    "placeholders": {
+      "displayName": {"type": "String"},
+      "username": {"type": "String"}
+    }
+  },
+  "listChatMessageSemantics": "{sender}, {timestamp}: {message}",
+  "@listChatMessageSemantics": {
+    "placeholders": {
+      "sender": {"type": "String"},
+      "timestamp": {"type": "String"},
+      "message": {"type": "String"}
+    }
+  },
+  "listChatTimestamp": "{date} at {time}",
+  "@listChatTimestamp": {
+    "placeholders": {
+      "date": {"type": "String"},
+      "time": {"type": "String"}
+    }
+  },
+  "listChatAccessRemovedMessage": "You no longer have access to this list chat. The latest Lists view was loaded.",
   "listRenameButton": "Rename",
   "listRenameTitle": "Rename list",
   "listArchiveButton": "Archive",

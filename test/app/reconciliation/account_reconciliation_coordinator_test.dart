@@ -100,6 +100,66 @@ void main() {
     await coordinator.dispose();
   });
 
+  test('Chat invalidation reconciles only Chat-scoped mounted projections',
+      () async {
+    final gateway = _FakeGateway();
+    final registry = ReconciliationRegistry();
+    var fullOnly = 0;
+    var chat = 0;
+    registry.register(() async => fullOnly += 1);
+    registry.register(
+      () async => chat += 1,
+      scope: ReconciliationScope.chat,
+    );
+    final coordinator = AccountReconciliationCoordinator(gateway, registry);
+    coordinator.setAccount('account-a');
+    await _flush();
+
+    gateway.subscriptions.single.emitChatInvalidation();
+    await _flush();
+    expect(chat, 1);
+    expect(fullOnly, 0);
+
+    gateway.subscriptions.single.emitInvalidation();
+    await _flush();
+    expect(chat, 2);
+    expect(fullOnly, 1);
+    await coordinator.dispose();
+  });
+
+  test('full invalidation supersedes Chat work queued during a running pass',
+      () async {
+    final gateway = _FakeGateway();
+    final registry = ReconciliationRegistry();
+    final firstChatPass = Completer<void>();
+    var chat = 0;
+    var fullOnly = 0;
+    registry.register(
+      () async {
+        chat += 1;
+        if (chat == 1) await firstChatPass.future;
+      },
+      scope: ReconciliationScope.chat,
+    );
+    registry.register(() async => fullOnly += 1);
+    final coordinator = AccountReconciliationCoordinator(gateway, registry);
+    coordinator.setAccount('account-a');
+    await _flush();
+    final subscription = gateway.subscriptions.single;
+
+    subscription.emitChatInvalidation();
+    await _flush();
+    subscription.emitChatInvalidation();
+    subscription.emitInvalidation();
+    subscription.emitChatInvalidation();
+    firstChatPass.complete();
+    await _flush();
+
+    expect(chat, 2);
+    expect(fullOnly, 1);
+    await coordinator.dispose();
+  });
+
   test('late events from an old account generation are ignored', () async {
     final gateway = _FakeGateway();
     final registry = ReconciliationRegistry();
@@ -113,6 +173,7 @@ void main() {
     coordinator.setAccount('account-b');
     await _flush();
     oldSubscription.emitInvalidation();
+    oldSubscription.emitChatInvalidation();
     oldSubscription.emitStatus(AccountRealtimeStatus.subscribed);
     await _flush();
 
@@ -464,6 +525,7 @@ class _FakeGateway implements AccountRealtimeGateway {
   AccountRealtimeSubscription subscribe({
     required String authenticatedProfileId,
     required void Function() onInvalidation,
+    required void Function() onChatInvalidation,
     required void Function(AccountRealtimeStatusUpdate update) onStatus,
   }) {
     accountIds.add(authenticatedProfileId);
@@ -474,6 +536,7 @@ class _FakeGateway implements AccountRealtimeGateway {
     late final _FakeSubscription subscription;
     subscription = _FakeSubscription(
       onInvalidation,
+      onChatInvalidation,
       onStatus,
       () => openSubscriptions -= 1,
     );
@@ -483,9 +546,15 @@ class _FakeGateway implements AccountRealtimeGateway {
 }
 
 class _FakeSubscription implements AccountRealtimeSubscription {
-  _FakeSubscription(this._onInvalidation, this._onStatus, this._onClosed);
+  _FakeSubscription(
+    this._onInvalidation,
+    this._onChatInvalidation,
+    this._onStatus,
+    this._onClosed,
+  );
 
   final void Function() _onInvalidation;
+  final void Function() _onChatInvalidation;
   final void Function(AccountRealtimeStatusUpdate update) _onStatus;
   final void Function() _onClosed;
   Completer<void>? closeCompleter;
@@ -494,6 +563,8 @@ class _FakeSubscription implements AccountRealtimeSubscription {
   bool isOpen = true;
 
   void emitInvalidation() => _onInvalidation();
+
+  void emitChatInvalidation() => _onChatInvalidation();
 
   void emitStatus(AccountRealtimeStatus status, {Object? error}) => _onStatus(
         AccountRealtimeStatusUpdate.fromTransport(status, error: error),
