@@ -90,9 +90,11 @@ database/domain foundation: current owner/member authorization, immutable ordere
 plain-text history, tombstones, unread state, idempotent sends, export v12, opaque
 private-account invalidation, and an unscheduled 365-day retention function. The
 migration was separately deployed and verified only in List & Split Dev after
-PR #29 merged. PR #30 adds the Flutter experience and scoped reconciliation; its
-physical-device QA and any client distribution remain pending. PR #31 separately
-owns retention scheduling.
+PR #29 merged. PR #30 adds the Flutter experience and scoped reconciliation. On
+2026-07-29, its identical Dev client passed two-device QA on one Samsung device
+and one Android emulator across access, unread state, bidirectional Realtime,
+pagination, lifecycle, uncertain retry, localization, and accessibility. PR #31
+separately owns retention scheduling.
 
 Delivery proceeds in this order:
 
@@ -785,13 +787,15 @@ synchronization, push delivery,
 Firebase setup, administrator-initiated deletion, or a production backend.
 PR #30 adds the list-tied Chat route, entry point, controller, screen, composer,
 localized accessible history/unread UI, and scoped client `chat_invalidate`
-routing. Its physical-device QA remains pending. Version 1 has no message editing,
-attachments, images/files, reactions, typing indicators, audio/video, persistent
-notification rows, push, read receipts, offline send queue, E2EE claim, or general
-private messaging. The private 365-day cleanup remains unscheduled until PR #31.
-Terms acceptance, in-app content/user reporting, blocking presentation, and an
-operational moderation process are mandatory before public distribution, but are
-not implemented by this foundation.
+routing. Its two-device Dev QA passed on 2026-07-29, including automatic
+delivery/recovery, history retention reconciliation, stale-access exits, lifecycle
+transitions, and localized accessible presentation. Version 1 has no message
+editing, attachments, images/files, reactions, typing indicators, audio/video,
+persistent notification rows, push, read receipts, offline send queue, E2EE claim,
+or general private messaging. The private 365-day cleanup remains unscheduled
+until PR #31. Terms acceptance, in-app content/user reporting, blocking
+presentation, and an operational moderation process are mandatory before public
+distribution, but are not implemented by this foundation.
 Private Realtime Broadcast is implemented as best-effort account invalidation on
 one `account:<profile-id>` channel. Global event `invalidate` and Chat-scoped event
 `chat_invalidate` both carry exactly `{"v":1}`. Valid global events, successful

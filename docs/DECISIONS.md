@@ -158,9 +158,10 @@ contract while leaving staging, iOS schemes, signing, and distribution separatel
 deferred. P-057/A-068 establish List Chat's direction and repository boundary;
 P-058/A-070 define and implement its database/domain foundation in PR #29; its
 migration was separately deployed only to List & Split Dev. A-071 defines PR
-#30's Flutter experience and scoped Realtime reconciliation, with physical QA
-still pending, and PR #31 owns retention scheduling. A-069 fixes
-the feature-to-Figma-to-release sequence and defers release infrastructure.
+#30's Flutter experience and scoped Realtime reconciliation. At the 2026-07-29
+finalization gate, PR #30 remained unmerged after its two-device Dev QA passed;
+PR #31 owns retention scheduling. A-069 fixes the feature-to-Figma-to-release
+sequence and defers release infrastructure.
 
 ## Deferred but accepted direction
 

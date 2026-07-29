@@ -1018,8 +1018,8 @@ Notification links and later feature deep-link contracts remain open.
   automated takedown, account strike/suspension, similarity matching,
   cross-template enforcement, or moderator-management UI is introduced by the
   moderation foundation.
-- The List Chat client experience introduced by PR #30 still requires physical
-  two-device QA, and retention remains unscheduled until PR #31. Its version-1
+- The List Chat client experience introduced by PR #30 completed two-device Dev
+  QA on 2026-07-29. Retention remains unscheduled until PR #31, and the version-1
   exclusions are recorded above.
 
 ## Open product decisions
