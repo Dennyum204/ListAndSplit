@@ -14,6 +14,7 @@ import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_chat_providers.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
@@ -24,6 +25,7 @@ import 'package:list_and_split/features/templates/presentation/private_template_
 import 'package:list_and_split/features/templates/presentation/templates_screen.dart';
 
 import '../../helpers/fake_private_template_repository.dart';
+import '../../helpers/fake_active_list_chat_repository.dart';
 import '../../helpers/fakes.dart';
 
 void main() {
@@ -493,6 +495,9 @@ Future<_Harness> _pumpApp(
         notifications ?? FakeNotificationRepository(),
       ),
       activeListRepositoryProvider.overrideWithValue(lists),
+      activeListChatRepositoryProvider.overrideWithValue(
+        FakeActiveListChatRepository(),
+      ),
       privateTemplateRepositoryProvider.overrideWithValue(templates),
     ],
   );

@@ -611,8 +611,10 @@ not scheduled until PR #31.
 Chat content/cursor mutations reuse private account topics with content-free
 `chat_invalidate`/`{"v":1}`. Existing membership/block/archive/list/account
 lifecycle keeps the global `invalidate` event. Chat tables are not in the Realtime
-publication. The Dart domain/repository exists but no Flutter route/controller/UI
-or event routing exists until PR #30.
+publication. PR #30 adds Flutter route/controller/UI support and routes this
+second event through the same account channel only to mounted Chat history/unread
+projections; subscription/reconnect/resume and the global event remain full
+authoritative reconciliation.
 
 ## Private template aggregate and copy semantics
 
@@ -1123,10 +1125,11 @@ product and retention decisions before schema or code is added.
 
 Realtime adds no application entity, history, outbox, queue, or authorization
 record. Each completed authenticated profile may join only the private topic
-`account:<auth.uid()>` for Broadcast receive. The sole application event is
-`invalidate` with payload exactly `{"v":1}`. Supabase transport metadata is not
-application data, and no list, item, profile, notification, relationship, block,
-operation, version, or timestamp enters the application payload.
+`account:<auth.uid()>` for Broadcast receive. Global `invalidate` and Chat-scoped
+`chat_invalidate` both use payload exactly `{"v":1}`. Supabase transport metadata
+is not application data, and no list, item, profile, notification, relationship,
+block, Chat message, operation, version, or timestamp enters either application
+payload.
 
 Hardened database triggers derive affected profile IDs from authoritative rows
 and call private `realtime.send` inside the successful mutation transaction. List
@@ -1156,6 +1159,12 @@ changes invalidate only server-derived affected moderators/owners through the sa
 opaque contract. No reason, explanation, snapshot, fingerprint, report count,
 moderator, decision, private note, or restriction state enters the payload, and no
 moderation table is in a Realtime publication.
+
+Chat send/tombstone fanout reaches the final server-derived authorized list
+accounts, and mark-read reaches only its caller, through `chat_invalidate`.
+The client routes that event only to mounted Chat history/unread registrations.
+Membership, blocking, archive/restore, list deletion, account deletion, successful
+subscription/reconnect, and resume keep full authoritative reconciliation.
 
 The one `realtime.messages` receive policy compares the requested channel topic
 with `auth.uid()` and restricts the extension to `broadcast`. There is no client

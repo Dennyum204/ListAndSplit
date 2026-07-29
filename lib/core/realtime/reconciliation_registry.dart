@@ -4,17 +4,35 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 typedef ReconciliationTask = Future<void> Function();
 
-class ReconciliationRegistry {
-  final Map<Object, ReconciliationTask> _tasks = {};
+enum ReconciliationScope {
+  chat,
+  full,
+}
 
-  void Function() register(ReconciliationTask task) {
+class ReconciliationRegistry {
+  final Map<Object, ({ReconciliationScope scope, ReconciliationTask task})>
+      _tasks = {};
+
+  void Function() register(
+    ReconciliationTask task, {
+    ReconciliationScope scope = ReconciliationScope.full,
+  }) {
     final registration = Object();
-    _tasks[registration] = task;
+    _tasks[registration] = (scope: scope, task: task);
     return () => _tasks.remove(registration);
   }
 
-  Future<void> reconcile() async {
-    final tasks = List<ReconciliationTask>.of(_tasks.values);
+  Future<void> reconcile({
+    ReconciliationScope scope = ReconciliationScope.full,
+  }) async {
+    final tasks = _tasks.values
+        .where(
+          (registration) =>
+              scope == ReconciliationScope.full ||
+              registration.scope == ReconciliationScope.chat,
+        )
+        .map((registration) => registration.task)
+        .toList(growable: false);
     await Future.wait(tasks.map(_runSafely));
   }
 
@@ -35,8 +53,10 @@ final reconciliationRegistryProvider = Provider<ReconciliationRegistry>(
 
 void registerForReconciliation(
   Ref<Object?> ref,
-  ReconciliationTask task,
-) {
-  final unregister = ref.read(reconciliationRegistryProvider).register(task);
+  ReconciliationTask task, {
+  ReconciliationScope scope = ReconciliationScope.full,
+}) {
+  final unregister =
+      ref.read(reconciliationRegistryProvider).register(task, scope: scope);
   ref.onDispose(unregister);
 }

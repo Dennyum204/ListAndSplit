@@ -22,7 +22,8 @@ or Production-released. Production remains fail-closed and unconfigured.
    bounded v1 contract.
 3. PR #29 implements the secured database/domain foundation without deployment or
    reachable UI.
-4. PR #30 implements the Flutter experience and scoped Realtime reconciliation.
+4. PR #30 implements the Flutter experience and scoped Realtime reconciliation;
+   physical two-device QA remains a delivery gate.
 5. PR #31 separately schedules retention after authorized rollout and QA.
 6. Freeze feature selection, classifying each remaining idea as required before
    redesign, post-beta, or rejected; historical ideas are not automatic promises.
@@ -207,12 +208,14 @@ P-058/A-070 resolve List Chat's database/domain contract. PR #29 adds the
 RPC-only forced-RLS message/state/request model, durable server-owned position
 order, lifecycle-safe idempotent sends/tombstones/unread, export v12, opaque
 `chat_invalidate`, strict Dart repository support, and an unscheduled bounded
-365-day retention function. It does not deploy the migration or expose Chat to a
-user.
+365-day retention function. PR #29 itself did not deploy the migration or expose
+Chat to a user; the migration was later separately deployed and verified only in
+List & Split Dev.
 
 PR #30 adds the separate accessible/localized Lists route, controller, composer,
 history/unread UI, and scoped authoritative reconciliation on the existing
-recovered private account channel. PR #31 separately schedules
+recovered private account channel. Its automated verification belongs to the PR
+and physical two-device QA remains pending. PR #31 separately schedules
 `list-chat-retention-daily` at 04:47 UTC after authorized rollout and physical QA.
 
 Attachments, images/files, Markdown enrichment, reactions, typing indicators,
@@ -450,7 +453,8 @@ does not make them prerequisites for redesign, beta, or Production:
 - payment processing or provider integration.
 
 List Chat's bounded v1 is the only accepted next capability. P-058/A-070 resolve
-its database/domain foundation; PR #30 client reconciliation and the exact
-public-release reporting/moderation workflow remain open in `DECISIONS.md`.
+its database/domain foundation and A-071 records PR #30 client reconciliation.
+Physical QA, PR #31 retention scheduling, and the exact public-release
+reporting/moderation workflow remain open.
 Play/signing/AAB/icon/store work is deferred by A-069, and Production remains
 separately authorized.

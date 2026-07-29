@@ -46,4 +46,31 @@ void main() {
     expect(ids, hasLength(100));
     expect(ids.every(pattern.hasMatch), isTrue);
   });
+
+  test('Chat unread UI remains scoped to list detail only', () {
+    final detail = File(
+      'lib/features/lists/presentation/active_list_detail_screen.dart',
+    ).readAsStringSync();
+    expect(detail, contains('activeListChatUnreadControllerProvider'));
+    expect(detail, contains("Key('listChatButton')"));
+
+    for (final path in [
+      'lib/features/lists/presentation/active_lists_screen.dart',
+      'lib/app/screens/authenticated_shell.dart',
+      'lib/features/notifications/presentation/notification_bell.dart',
+      'lib/features/notifications/presentation/notification_centre_screen.dart',
+    ]) {
+      final source = File(path).readAsStringSync();
+      expect(
+        source,
+        isNot(contains('activeListChatUnreadControllerProvider')),
+        reason: '$path must not display a Chat unread badge.',
+      );
+      expect(
+        source,
+        isNot(contains('listChatButton')),
+        reason: '$path must not expose the list-detail Chat entry point.',
+      );
+    }
+  });
 }

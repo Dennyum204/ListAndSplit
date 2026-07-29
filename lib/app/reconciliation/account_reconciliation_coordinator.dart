@@ -32,7 +32,7 @@ class AccountReconciliationCoordinator {
   var _subscriptionUnhealthy = false;
   var _resumeReconciledDuringRecovery = false;
   var _reconciliationRunning = false;
-  var _dirtyAgain = false;
+  ReconciliationScope? _pendingReconciliation;
   var _generation = 0;
   var _disposed = false;
 
@@ -74,6 +74,7 @@ class AccountReconciliationCoordinator {
     _restartRequested = false;
     _subscriptionUnhealthy = false;
     _resumeReconciledDuringRecovery = false;
+    _pendingReconciliation = null;
     ++_generation;
     final transition = _transitionFuture;
     if (transition != null) await transition;
@@ -107,7 +108,7 @@ class AccountReconciliationCoordinator {
       if (accountChanged) {
         _restartTimer?.cancel();
         _burstTimer?.cancel();
-        _dirtyAgain = false;
+        _pendingReconciliation = null;
         _resumeReconciledDuringRecovery = false;
         _activeAccountId = null;
       }
@@ -146,6 +147,10 @@ class AccountReconciliationCoordinator {
         _subscription = _gateway.subscribe(
           authenticatedProfileId: accountId,
           onInvalidation: () => _requestReconciliation(generation),
+          onChatInvalidation: () => _requestReconciliation(
+            generation,
+            ReconciliationScope.chat,
+          ),
           onStatus: (update) => _handleStatus(generation, update),
         );
       } catch (_) {
@@ -241,12 +246,13 @@ class AccountReconciliationCoordinator {
     _subscriptionUnhealthy = true;
   }
 
-  void _requestReconciliation(int generation) {
+  void _requestReconciliation(
+    int generation, [
+    ReconciliationScope scope = ReconciliationScope.full,
+  ]) {
     if (!_isCurrent(generation)) return;
-    if (_reconciliationRunning) {
-      _dirtyAgain = true;
-      return;
-    }
+    _pendingReconciliation = _strongerScope(_pendingReconciliation, scope);
+    if (_reconciliationRunning) return;
     unawaited(_runReconciliationBurst(generation));
   }
 
@@ -255,27 +261,44 @@ class AccountReconciliationCoordinator {
     _reconciliationRunning = true;
     var passes = 0;
     try {
-      do {
-        _dirtyAgain = false;
-        await _registry.reconcile();
+      while (_isCurrent(generation) &&
+          _pendingReconciliation != null &&
+          passes < 2) {
+        final scope = _pendingReconciliation!;
+        _pendingReconciliation = null;
+        await _registry.reconcile(scope: scope);
         passes += 1;
-      } while (_isCurrent(generation) && _dirtyAgain && passes < 2);
+      }
     } finally {
       _reconciliationRunning = false;
     }
-    if (!_isCurrent(generation) && _dirtyAgain && !_disposed) {
-      _dirtyAgain = false;
-      _requestReconciliation(_generation);
+    if (_pendingReconciliation == null || _disposed) return;
+    if (!_isCurrent(generation)) {
+      if (_isCurrent(_generation)) {
+        unawaited(_runReconciliationBurst(_generation));
+      }
       return;
     }
-    if (_isCurrent(generation) && _dirtyAgain) {
-      _dirtyAgain = false;
-      _burstTimer?.cancel();
-      _burstTimer = Timer(
-        _burstCooldown,
-        () => _requestReconciliation(generation),
-      );
+    _burstTimer?.cancel();
+    _burstTimer = Timer(
+      _burstCooldown,
+      () {
+        if (_isCurrent(generation)) {
+          unawaited(_runReconciliationBurst(generation));
+        }
+      },
+    );
+  }
+
+  ReconciliationScope _strongerScope(
+    ReconciliationScope? current,
+    ReconciliationScope requested,
+  ) {
+    if (current == ReconciliationScope.full ||
+        requested == ReconciliationScope.full) {
+      return ReconciliationScope.full;
     }
+    return ReconciliationScope.chat;
   }
 
   bool _isCurrent(int generation) =>

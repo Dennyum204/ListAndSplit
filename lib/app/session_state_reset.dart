@@ -8,6 +8,7 @@ import 'package:list_and_split/features/community/presentation/community_search_
 import 'package:list_and_split/features/community/presentation/friendship_management_controller.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_chat_providers.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_centre_controller.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_controller.dart';
@@ -40,6 +41,8 @@ final resetSessionStateProvider = Provider<void Function()>((ref) {
     ref.invalidate(activeListsControllerProvider);
     ref.invalidate(activeListDetailControllerProvider);
     ref.invalidate(activeListMembersControllerProvider);
+    ref.invalidate(activeListChatControllerProvider);
+    ref.invalidate(activeListChatUnreadControllerProvider);
     ref.invalidate(listSplitRefreshSignalProvider);
     ref.invalidate(listSplitControllerProvider);
     ref.invalidate(privateTemplatesControllerProvider);

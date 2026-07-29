@@ -203,11 +203,11 @@ positive integer thousandths and never converts through `double`.
 
 ### List Chat database/domain boundary
 
-List Chat stays under the Lists feature and will use a separate list-tied route.
-PR #29 adds only strict domain/repository support; no provider, controller, route,
-screen, composer, badge, localization, widget, or client Realtime routing makes it
-reachable. PR #30 owns that Flutter boundary. Screens must never call Supabase
-directly, and cached route state is never an authorization boundary.
+List Chat stays under the Lists feature at `/lists/:listId/chat`. PR #29 adds the
+strict domain/repository support and PR #30 adds session-keyed Riverpod
+history/unread controllers, an accessible localized screen/composer, and the
+list-detail-only unread badge. Screens never call Supabase directly, and cached
+route state is never an authorization boundary.
 
 The additive database foundation uses:
 
@@ -251,9 +251,27 @@ Existing lifecycle mutations keep `invalidate`/`{"v":1}`. Successful Chat conten
 or cursor changes use only `chat_invalidate`/`{"v":1}` with no list/message/action
 data; sends/tombstones address the final authorized set including the actor, and
 mark-read addresses only the caller. Failed/no-op/idempotent-repeat mutations emit
-nothing. Old clients safely ignore the unknown event. PR #30 must route it only to
-mounted Chat history/unread reconciliation through the existing recovered account
-channel; transport recovery remains shared rather than duplicated.
+nothing. Old clients safely ignore the unknown event. The account reconciliation
+registry routes it only to mounted Chat history/unread projections; global
+invalidations, successful subscription/reconnect, and app resume run full
+reconciliation. A full request supersedes queued Chat-only work, duplicate events
+coalesce, account-generation changes discard old callbacks, and transport recovery
+remains shared rather than duplicated.
+
+History loads 30 newest rows initially and requests at most 50 older rows using
+only `message_position` keysets. The client displays rows chronologically,
+strictly deduplicates identity/position, preserves the viewport when prepending,
+and keeps its last valid cache on malformed or transient refreshes. A received
+Chat invalidation refreshes newest pages until the existing loaded range overlaps.
+Unread is marked monotonically only through the newest row actually reached at
+the bottom; the detail badge is absent at zero and caps 100 as `99+`.
+
+Send/delete remain server-confirmed. No optimistic message or tombstone is
+fabricated. An uncertain send retains one payload-bound request UUID only while
+the normalized body is unchanged; an edited payload starts a new request.
+Archived Chat stays readable without mutation controls. Access loss or list
+deletion discards local drafts, tears down scoped providers, exits to Lists once,
+and shows one privacy-safe localized message.
 
 The private bounded retention function removes at most the requested capped batch
 of rows older than 365 days from original creation and cleans dependent request

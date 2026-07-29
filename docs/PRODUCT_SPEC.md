@@ -380,9 +380,9 @@ are not implemented.
 
 List Chat is one list-scoped group conversation for the current owner and accepted
 participants, not direct/private friend messaging. PR #29 implements its secured
-database and Dart domain foundation only. It does not make Chat reachable: the
-separate Lists route, screen, composer, badge, accessibility/localization work,
-and scoped client reconciliation belong to PR #30.
+database and Dart domain foundation. PR #30 adds the separate Lists route, screen,
+composer, list-specific badge, accessibility/localization work, and scoped client
+reconciliation. Physical-device QA remains a separate delivery gate.
 
 Messages are immutable plain text with server-created display times and a durable
 server-owned position. CRLF/CR becomes LF; Unicode edge whitespace follows the
@@ -1018,8 +1018,9 @@ Notification links and later feature deep-link contracts remain open.
   automated takedown, account strike/suspension, similarity matching,
   cross-template enforcement, or moderator-management UI is introduced by the
   moderation foundation.
-- The List Chat database/domain foundation has no reachable UI until PR #30 and no
-  scheduled retention until PR #31. Its version-1 exclusions are recorded above.
+- The List Chat client experience introduced by PR #30 still requires physical
+  two-device QA, and retention remains unscheduled until PR #31. Its version-1
+  exclusions are recorded above.
 
 ## Open product decisions
 

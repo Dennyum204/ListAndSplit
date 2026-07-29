@@ -8,6 +8,7 @@ import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/general_note.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_chat_providers.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_controller.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
@@ -41,14 +42,22 @@ class ActiveListDetailScreen extends ConsumerWidget {
     ref.listen<ActiveListDetailState>(
       activeListDetailControllerProvider(listId),
       (previous, next) {
+        final chatIsOpen = GoRouter.maybeOf(context)
+                ?.routeInformationProvider
+                .value
+                .uri
+                .path ==
+            AppRoutes.listChat(listId);
         if (next.message == ActiveListDetailMessage.remotelyArchived &&
-            previous?.message != ActiveListDetailMessage.remotelyArchived) {
+            previous?.message != ActiveListDetailMessage.remotelyArchived &&
+            !chatIsOpen) {
           context.go(AppRoutes.lists);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(localizations.listRemotelyArchivedMessage)),
           );
         } else if (next.message == ActiveListDetailMessage.unavailable &&
-            previous?.message != ActiveListDetailMessage.unavailable) {
+            previous?.message != ActiveListDetailMessage.unavailable &&
+            !chatIsOpen) {
           context.go(AppRoutes.lists);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(localizations.listAccessRevokedMessage)),
@@ -60,6 +69,11 @@ class ActiveListDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(detail?.summary.title ?? localizations.listsTitle),
         actions: [
+          if (detail != null)
+            _ListChatButton(
+              listId: listId,
+              enabled: !state.isMutating,
+            ),
           const NotificationBell(),
           if (detail != null)
             IconButton(
@@ -373,6 +387,74 @@ class ActiveListDetailScreen extends ConsumerWidget {
     return showDialog<void>(
       context: context,
       builder: (_) => _ItemDialog(listId: listId, item: item),
+    );
+  }
+}
+
+class _ListChatButton extends ConsumerWidget {
+  const _ListChatButton({
+    required this.listId,
+    required this.enabled,
+  });
+
+  final String listId;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final localizations = AppLocalizations.of(context);
+    final unread =
+        ref.watch(activeListChatUnreadControllerProvider(listId)).valueOrNull;
+    final label = unread == null || unread.count == 0
+        ? localizations.listChatOpenButton
+        : unread.count == 1
+            ? localizations.listChatOpenOneUnreadLabel
+            : localizations.listChatOpenUnreadLabel(unread.compactLabel);
+    final onOpen =
+        enabled ? () => context.go(AppRoutes.listChat(listId)) : null;
+    return Semantics(
+      button: true,
+      enabled: onOpen != null,
+      excludeSemantics: true,
+      label: label,
+      onTap: onOpen,
+      child: IconButton(
+        key: const Key('listChatButton'),
+        onPressed: onOpen,
+        tooltip: localizations.listChatOpenButton,
+        icon: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(Icons.forum_outlined),
+            if (unread != null && unread.count > 0)
+              PositionedDirectional(
+                end: -9,
+                top: -9,
+                child: ExcludeSemantics(
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      minWidth: 20,
+                      minHeight: 20,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.error,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      unread.compactLabel,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onError,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
