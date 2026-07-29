@@ -10,7 +10,35 @@ Product behavior should be delivered as tested vertical slices. Before a slice
 introduces schema, its relevant open decisions in [`DECISIONS.md`](DECISIONS.md)
 and [`DATA_MODEL.md`](DATA_MODEL.md) must be resolved and recorded.
 
-## Phase 0 — Bootstrap foundation (initial delivery scope)
+The major foundations through PR #26 and the Android environment boundary in PR
+#27 are implemented in source. That does not collapse the distinct states of
+source-merged, deployed to List & Split Dev, physically verified, beta-released,
+or Production-released. Production remains fail-closed and unconfigured.
+
+## Next delivery sequence
+
+1. PR #28 reconciles documentation and the roadmap.
+2. Perform a read-only List Chat product, security, and architecture preflight.
+3. Implement List Chat through one or more separately reviewed secured PRs.
+4. Freeze feature selection, classifying each remaining idea as required before
+   redesign, post-beta, or rejected; historical ideas are not automatic promises.
+5. Implement only the additional functionality Fernando explicitly selects.
+6. Apply the Figma design system and UI refactor to stable functionality,
+   screen by screen.
+7. Finalize branding and adaptive, monochrome, and Play launcher icons.
+8. Revalidate official requirements and implement Android release infrastructure:
+   the supported toolchain, Play Console, Play App Signing and separate upload
+   key, protected CI, signed AAB, symbols, versioning, and artifact retention.
+9. Complete beta operations/compliance readiness and an internal Android beta.
+10. Perform separately authorized Production Supabase and Play rollout.
+11. Plan iOS/TestFlight as a later, separately approved release surface.
+
+The Android beta-pipeline work previously considered for PR #28 is deferred.
+There is no Play Console developer account and no approved final launcher icon.
+Earlier toolchain recommendations are provisional research only and must be
+revalidated when step 8 begins.
+
+## Phase 0 — Bootstrap foundation (implemented)
 
 Goal: establish a runnable, reviewable mobile foundation and safe development
 workflow without implementing product features.
@@ -45,26 +73,26 @@ Exit evidence:
 - Work is published only on the authorized task branch and draft pull request; it
   is not merged automatically.
 
-## Phase 1 — Identity, profiles, and friendships (planned)
+## Phase 1 — Identity, profiles, and friendships (foundation implemented)
 
 Goal: establish authenticated identity and the mutual social graph that gates later
 collaboration.
 
-Candidate slices:
+Implemented slices:
 
-- Implement verified email/password sign-up, sign-in, sign-out, verification
+- Verified email/password sign-up, sign-in, sign-out, verification
   resend, forgotten-password, password recovery, and session routing through the
   registered mobile callback.
-- Add migration-driven owner-only profiles and verified-user onboarding with
+- Migration-driven owner-only profiles and verified-user onboarding with
   canonical globally unique immutable usernames and editable display names.
-- Implement active directional block/unblock, private outgoing-block management,
+- Active directional block/unblock, private outgoing-block management,
   and secure exact canonical-username discovery with symmetric either-direction
   separation.
-- After that gate, implement the resolved RPC-only relationship model: atomic
+- The resolved RPC-only relationship model: atomic
   send/cancel/accept/decline/end transitions, caller-relative active lists, strict
   reopening control, expected-version conflict protection, and the versioned
   one-current-state-per-unordered-pair mutual friendship contract.
-- Introduce RPC-only persistent in-app friend-request notifications with atomic
+- RPC-only persistent in-app friend-request notifications with atomic
   creation/suppression, block-aware keyset listing, read state, a bell badge, and
   exact 180-day logical expiry.
 - The versioned account-data export slice is implemented and manually verified.
@@ -73,7 +101,7 @@ Candidate slices:
   `auth.sessions` validation, Auth-root current-aggregate cascades, the private
   30-day username reservation, daily physical cleanup, response-loss
   reconciliation, and other-device resume validation.
-- Add RLS and database-function tests for every relationship transition.
+- RLS and database-function coverage for every relationship transition.
 
 The friend relationship schema gate O-A09 is resolved: one current row uses the
 five accepted states, deterministic pair locking, monotonic versions, server-owned
@@ -82,17 +110,18 @@ references that row without replacing its action authority and still excludes
 push delivery, other notification types, and public profiles. The four-tab
 authenticated shell now includes secure shared-list membership and private
 account-scoped Realtime reconciliation.
-Resolve the immutable-username support/admin correction
-path and avatar storage lifecycle before the later slices that encode them.
+The immutable-username support/admin correction path and avatar storage lifecycle
+remain open and must be resolved before a later slice encodes either.
 Shared-resource ownership/deletion and the Public Template v1 moderation/retention
 contract are resolved. Administrator deletion, appeal/compliance, moderation/legal
 retention beyond that contract, Storage cleanup, and broader compliance obligations
 remain open beyond the implemented self-service current-aggregate lifecycle.
 
-## Phase 2 — Active/shared lists (in progress)
+## Phase 2 — Active/shared lists (core scope complete)
 
-Goal: deliver the core collaborative-list experience for accepted friends. This
-phase is in progress through owner and accepted-member collaboration.
+Goal: deliver the core collaborative-list experience for accepted friends. The
+selected online owner/member foundation is implemented; optional extensions remain
+subject to feature-freeze selection.
 
 Implemented slices:
 
@@ -168,7 +197,23 @@ shared-resource blocking, archive/delete, item quantity/order, item-assignment
 permissions/lifecycle/notifications/export, and online assignment concurrency are
 resolved.
 
-## Phase 3 — Templates and community discovery (in progress)
+### Next capability: planned List Chat
+
+List Chat is not implemented. The accepted direction is a separate screen entered
+from each Main List, with one group conversation limited to the current owner and
+accepted participants. Access loss must immediately revoke read, write, and
+Realtime. Version 1 is bounded to text history, created timestamps, keyset
+pagination, Realtime new-message arrival, and per-user unread state; it is not
+general direct/private messaging.
+
+The preflight in sequencing step 2 must resolve editing/deletion, retention,
+message length/rate limits, archived/list-delete/account-delete/block lifecycle,
+unread/badge and notification-centre behavior, export, moderation/reporting,
+Realtime authorization/reconnect, stale clients, offline behavior, and
+encryption/privacy. Attachments, images/files, reactions, typing indicators,
+audio/video, push, and general private messages are deferred from version 1.
+
+## Phase 3 — Templates and community discovery (core scope complete)
 
 Goal: add reusable content while preserving strict copy independence.
 
@@ -251,22 +296,25 @@ Completed delivery:
   reconciliation over the PR #23 server/domain contract.
 - PR #25: forward-only, same-name-convergent scheduling for the existing
   template-send terminal-retention function, with local catalog and retention
-  boundary coverage. Hosted environments remain separate rollout gates.
+  boundary coverage. Its migration was separately deployed and verified in List &
+  Split Dev; Production remains a separate rollout gate.
 - PR #26: P-056/A-066 chronological friends-only public-template feed with one
-  hardened read-through RPC and localized Community UI.
+  hardened read-through RPC and localized Community UI. Its migration was
+  separately deployed to List & Split Dev and its two-device physical QA passed;
+  neither fact is beta or Production release evidence.
 
 Private category cardinality, copy atomicity, capacity, versioning, public
 visibility/category placement, no-provenance behavior, and profile presentation
 are resolved. Reporting/takedown/restoration/retention is resolved by P-053/P-054
 and A-060 through A-062, closing O-P13 and owning the separate daily retention
 schedule. Moderator assignment, client distribution, physical QA, and each hosted
-environment remain explicit controlled gates before external beta or production
-public-content rollout.
+environment remain explicit operational evidence and authorization gates rather
+than consequences of a source merge.
 Feed-v1 recency, pagination, and no-retention semantics are resolved by
 P-056/A-066; global/ranked/recommended discovery remains deferred. Template-send
 product/database semantics, Flutter UI, and source-controlled retention schedule
 are resolved by P-055 and A-063 through A-065; hosted rollout remains
-environment-specific.
+environment-specific, with the Dev schedule deployed and Production unscheduled.
 
 ## Phase 4 — Split expense ledger (core scope complete)
 
@@ -305,7 +353,7 @@ Percentage/weight/ratio or automatic proportional allocation, recipient approval
 disputes, backdating, attachments, a mathematically minimum solver, and
 payment-provider or money-transfer integration remain out of scope.
 
-## Phase 5 — Offline tolerance and push delivery (planned later)
+## Phase 5 — Offline tolerance and push delivery (optional later backlog)
 
 Goal: improve reliability and timeliness after online data flows are stable.
 
@@ -321,7 +369,7 @@ Candidate slices:
 This phase requires an explicit sync design. It does not itself authorize creation
 of a Firebase project.
 
-## Phase 6 — Public safety, hardening, and release readiness (foundation in progress)
+## Phase 6 — Public safety implemented; release readiness deferred
 
 Goal: make public/community behavior supportable and prepare a production-quality
 release.
@@ -334,6 +382,12 @@ Implemented foundation:
 - Explicit default-deny moderation storage, UUID-only allowlisting, audit events,
   immediate revocation, account-deletion anonymization, and no client/private
   evidence in Realtime.
+- Android Dev/Production identity separation: Dev uses the `.dev` package, Dev
+  label/callback, and exact Dev-host allowlist; Production keeps the unsuffixed
+  identity and callback but fails closed without an approved backend contract.
+  PR #27 physical QA verified separate installation/storage, existing Dev data,
+  session persistence, and Dev callback routing on one physical Android device
+  and one Android emulator. This is not beta or Production release evidence.
 
 Remaining candidate slices:
 
@@ -345,8 +399,9 @@ Remaining candidate slices:
 - Security review of RLS, functions, storage, realtime, secrets, and dependency
   supply chain.
 - Performance, resilience, observability, and migration rollback/recovery planning.
-- Release signing, store metadata, supported-device testing, and production
-  environment planning under separate explicit authorization.
+- After the feature/Figma/branding gates, revalidated release signing, store
+  metadata, supported-device testing, and Production planning under separate
+  explicit authorization.
 
 No production Supabase project is implied by this roadmap. Creating one requires a
 future, explicit task with environment and cost approval.
@@ -371,14 +426,22 @@ future, explicit task with environment and cost approval.
   and overstated completion.
 - Publish through a focused task branch and draft pull request. Never auto-merge.
 
-## Sequencing decisions still open
+## Optional backlog, not release promises
 
-- Which minimum persistent-notification capability belongs in later
-  action-producing phases beyond the accepted friend-request, list, item-
-  assignment, General Note mention, and Public Template moderation outcomes.
-- Staging, iOS flavor/scheme, signing, and release-distribution details beyond the
-  accepted Android Dev/Production separation.
-- Whether offline read caching can ship safely before offline mutations.
-- What additional global, ranked, or recommended community discovery, if any, is
-  needed after the accepted chronological friends-only feed is deployed and
-  physically verified.
+The feature-freeze review may defer or reject these ideas. Their presence here
+does not make them prerequisites for redesign, beta, or Production:
+
+- offline read caching and a separately designed offline mutation queue;
+- push delivery plus notification preferences/archive;
+- avatars and image uploads;
+- expanded notification and feature deep links;
+- advanced Split percentages, receipts, recurring expenses, and charts;
+- additional locales;
+- advanced moderation and administrator tooling;
+- observability and analytics; and
+- payment processing or provider integration.
+
+List Chat's bounded v1 is the only accepted next capability. The exact Chat
+product/data/security questions remain open in `DECISIONS.md`; the preflight must
+resolve them before schema or code. Play/signing/AAB/icon/store work is deferred
+by A-069, and Production remains separately authorized.

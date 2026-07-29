@@ -2,7 +2,7 @@
 
 ## Record semantics
 
-This log captures decisions agreed for List & Split as of 2026-07-26. **Accepted**
+This log captures decisions agreed for List & Split as of 2026-07-29. **Accepted**
 means the direction is agreed; it does not mean the behavior is implemented. Check
 code, tests, migrations, and pull requests for implementation status.
 
@@ -73,6 +73,7 @@ below as `P-033a`, `P-034a`, `A-035a`, and `A-036a`.
 | P-054 | Moderator authority is an initially empty private allowlist of immutable Auth UUIDs. Moderators review bounded Open/Taken down/Closed groups with immutable snapshot/current comparison and individual reporter detail. Dismiss closes one group; takedown restricts one template, unpublishes it, closes all its open groups, and notifies the owner once; restore removes the restriction and notifies once without republishing. Every action is confirmed and requires a private 1-1,000-character note; takedown also requires one stable owner-facing reason. | Owners may privately read/edit/delete restricted templates but cannot publish. Reports and dismissals notify nobody. System-authored outcome notifications expose only safe template name/general reason. Open evidence and active restrictions are retained; fully closed inactive evidence is retained for 24 months, then a privileged idempotent operation removes detailed personal/content evidence and may retain only nonidentifying aggregate tombstones. The operation is implemented and A-062 separately owns scheduling; moderator assignment, hosted rollout, and physical QA remain controlled steps. Export v10 adds only the caller's own submitted reason, nullable explanation, and date. |
 | P-055 | A completed user may send one owned private or public zero-to-200-item template snapshot to one current mutually unblocked friend. Offers are `pending`, `accepted`, `declined`, `revoked`, or `unavailable`; pending never expires automatically. The recipient alone Accepts/Declines, the sender alone Revokes, and one pending sender/source/recipient triple exists at a time. Accept creates one independent private Uncategorized recipient copy, including a blank copy, while recipient-capacity failure leaves the offer pending. | Active moderation rejects new sends and closes/hides affected pending offers. Source deletion closes pending offers; accepted copies survive. Friendship loss or either-direction block closes pending offers and permanently hides all pair history; refriending/unblocking never restores it. Accept/Decline do not notify the sender. Persistent Received and minimal Sent status exist, terminal history lasts 180 days, and the sender never sees `accepted_template_id`. |
 | P-056 | Community has a separate friends-only feed of currently public, moderation-eligible templates owned by current accepted friends; it excludes the viewer, either-direction blocks, and templates successfully reported by the viewer. “Recent” means publication time, ordered by `(published_at DESC, template_id DESC)`. Ordinary edits preserve position and republication receives a new timestamp. | Pages default to 20 and accept 1-50 rows with an exclusive timestamp/UUID cursor, no total or age cutoff. The projection is authoritative at read time: friendship loss, block, unpublish, delete, restriction, or account deletion removes an entry on refresh, while unblock/refriend may restore current eligibility. V1 has no stored/ranked/recommended feed, retention, notification, push, publication fan-out, or new Realtime topic. |
+| P-057 | The next capability is one list-scoped group Chat entered from each Main List in a separate screen. Only the current owner and accepted participants belong; removal or departure immediately ends read, write, and Realtime access. V1 is not general direct/private messaging. | The accepted baseline is text history, created timestamps, bounded keyset pagination, Realtime arrival, and per-user unread state. Attachments, images/files, reactions, typing indicators, audio/video, push, and general private messages are deferred. Editing/deletion, retention, limits, lifecycle, unread, notification, export, moderation, transport, offline, and privacy details remain open for a dedicated preflight; this decision does not authorize schema or claim implementation. |
 
 ### Architecture and delivery
 
@@ -138,6 +139,8 @@ below as `P-033a`, `P-034a`, `A-035a`, and `A-036a`.
 | A-065 | One additive operational migration owns the stable `template-send-retention-daily` Cron job. It requires `postgres`, unschedules every same-name predecessor through `cron.unschedule`, and schedules only `select * from private.maintain_template_send_retention();` once daily at `17 4 * * *`. | The 04:17 UTC slot does not collide with the existing 03:17 username-reservation or 03:47 moderation-retention jobs. Repeated scheduling converges on exactly one active `postgres` job without invoking cleanup during deployment or changing retention semantics, schema, grants, RLS, notifications, Realtime, exports, Flutter, or accepted copies. Each environment requires separate authorization and verification; Production remains unscheduled until explicitly deployed. Rollback is another forward-only migration that unschedules every stable-name job without invoking cleanup, restoring deleted rows, or rewriting history. |
 | A-066 | One additive migration adds only the hardened stable `list_friend_public_template_feed(integer,timestamptz,uuid)` read-through RPC. It derives a verified completed caller from `auth.uid()`, reuses normalized `friends` relationships plus exact block/report/restriction/publication predicates, returns the strict P-056 allowlist, and remains `postgres`-owned with empty `search_path`, qualified objects, exact authenticated grant, and no direct-table change. | Flutter adds strict DTO/repository mapping, generation-safe paginated controller state, reconciliation registration, and the localized accessible `/community/friends-templates` Community route. Existing detail/copy/report RPCs remain action-time authorities. Existing private account invalidation covers applicable pair/profile changes; pull, toolbar, route load, and resume cover freshness without a feed table, index without plan evidence, export v12, notification, or new Realtime transport. |
 | A-067 | Android has explicit `dev` and `prod` product flavors. Dev is `com.ferbatech.listandsplit.dev` / `List & Split Dev` and accepts only List & Split Dev project host `lzwsgxziqxpxwyalkfuy.supabase.co`; Production is `com.ferbatech.listandsplit` / `List & Split` and has no approved backend contract yet. A typed Dart contract cross-checks explicit `APP_ENV` against native Gradle flavor and final application ID through a narrow platform channel before Supabase initialization. | Missing, invalid, partial, malformed, mismatched, or environment-crossed configuration fails closed without revealing supplied values. Matching caller-controlled Dart values cannot bypass native Android identity. Production rejects the Dev project and remains unavailable until a later approved exact host is recorded. No hosted configuration, session migration, iOS flavor, signing, AAB, branding, dependency, SDK, database, or Edge Function change is part of this decision. |
+| A-068 | List Chat remains behind the Lists feature repository boundary and a separate list-tied route. Its server authorization must derive current owner/accepted-participant access and revoke read, write, and Realtime immediately when access ends. | A read-only preflight must define the physical schema, exact RPCs, RLS/grants, concurrency, lifecycle, retention, unread, export/moderation, Realtime authorization/recovery, stale-client, offline, and privacy contracts before implementation. No existing account invalidation topic or proposed table shape is accepted implicitly. |
+| A-069 | Delivery order is explicit: (1) List Chat preflight and secured implementation; (2) feature-freeze classification; (3) only additional functionality Fernando explicitly selects; (4) Figma design-system/UI refactoring; (5) final branding/icons; (6) revalidated Android release infrastructure; (7) beta readiness and internal Android beta; (8) separately authorized Production rollout; and (9) later iOS/TestFlight planning. | The previously proposed Android beta-pipeline PR is deferred. There is currently no Play Console developer account or approved final launcher icon. Play setup, App Signing/upload key, protected release CI, signed AABs, symbols/versioning/artifact retention, and store publication wait for the earlier gates. Previous toolchain research is provisional and must be revalidated against current official requirements when release work resumes. |
 
 The P-049/P-050 and A-054 through A-057 delivery is merged. The P-051/P-052 and
 A-058/A-059 delivery is also merged. P-053/P-054 and A-060/A-061 are merged.
@@ -148,7 +151,9 @@ foundation; A-064 defines its reachable Flutter experience and A-065 owns its
 retention schedule. P-056/A-066 define the chronological friends-only public-
 template feed. A-067 closes the Android Dev/Production environment-separation
 contract while leaving staging, iOS schemes, signing, and distribution separately
-deferred.
+deferred. P-057/A-068 accept only the bounded direction and authorization boundary
+for planned List Chat; no Chat schema or implementation exists. A-069 fixes the
+feature-to-Figma-to-release sequence and defers release infrastructure.
 
 ## Deferred but accepted direction
 
@@ -162,6 +167,10 @@ These items are part of the agreed direction but intentionally deferred:
 - Moderator assignment and each environment's retention scheduling require
   separate controlled rollout steps; Production remains separately authorized.
 - Production backend/environment creation under a separate explicit authorization.
+- List Chat attachments, images/files, reactions, typing indicators, audio/video,
+  push, and general private messages.
+- Play Console, signing/upload-key, AAB/symbol/versioning CI, final launcher
+  branding, store publication, and iOS/TestFlight work until the A-069 gates.
 
 ## Open product decisions
 
@@ -173,6 +182,7 @@ These items are part of the agreed direction but intentionally deferred:
 | O-P15 | What administrator deletion, appeal/compliance, moderation/legal retention beyond the accepted Public Template v1 contract, Storage cleanup, and compliance obligations extend the accepted account lifecycle? |
 | O-P16 | When does avatar editing ship, where are avatar objects stored, and what validation, privacy, replacement, and deletion lifecycle applies? |
 | O-P17 | Which additional locales beyond English and Portuguese ship first? |
+| O-P18 | For List Chat, what editing/deletion, retention/cleanup, maximum length/rate, archived-list, list deletion/restoration, account deletion/anonymization, participant-block, unread reset/badge, notification-centre, export, moderation/reporting, and encryption/privacy rules apply? |
 
 ## Open architecture and data decisions
 
@@ -188,6 +198,7 @@ These items are part of the agreed direction but intentionally deferred:
 | O-A13 | Which Storage use cases exist and what object lifecycle/policies follow their parent records? |
 | O-A14 | Which logging, analytics, crash reporting, privacy controls, and performance budgets are appropriate? |
 | O-A15 | What extended automated environment will exercise hosted Realtime, Storage, and later cross-service integration beyond deterministic bounded-handshake/recovery and gateway-to-mounted-projection tests, the accepted local private-channel transport smoke test, and CI migration/database/RLS coverage? |
+| O-A16 | What physical List Chat storage/RPC/RLS design, Realtime authorization/topic/reconnect contract, stale-client compatibility, and offline behavior implement P-057/A-068 safely? |
 
 ## Closed decision references
 

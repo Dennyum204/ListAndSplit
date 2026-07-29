@@ -10,6 +10,14 @@ This document records the agreed product direction. It is not a statement that t
 features below are implemented. Source code, tests, migrations, and pull requests
 are the evidence of implementation status.
 
+The major foundations through PR #26 are implemented in source: identity and
+account lifecycle, mutual community relationships, collaborative lists,
+assignments, General Note and mentions, private/public/template-send/feed flows,
+Public Template reporting/moderation, Split equal/custom expenses and
+settlements, and English/Portuguese presentation. Android Dev/Production identity
+separation is implemented by PR #27. Source merge, hosted rollout, physical QA,
+beta distribution, and Production release remain separate evidence states.
+
 ## Product principles
 
 - Collaboration is based on mutual, accepted friendships rather than followers.
@@ -360,6 +368,28 @@ are not implemented.
   updates mounted list titles;
   remote archive/restore moves the list between projections, and a remotely
   archived open detail returns to Lists once. Manual refresh remains available.
+
+### Planned List Chat (not implemented)
+
+The next product capability is a separate group-chat screen entered from each
+Main List. It is tied to that exact list and is available only to its owner and
+current accepted participants. Removed or departed participants must immediately
+lose read, write, and Realtime access. Version 1 is list-scoped group conversation
+only, not general direct or private messaging between friends.
+
+The accepted baseline direction is text messages, message history, created
+timestamps, bounded keyset pagination, Realtime arrival of new messages, and
+per-user unread state. Attachments, images/files, reactions, typing indicators,
+audio/video, push notifications, and general private messages are deferred from
+version 1. This section does not define a physical schema or claim that Chat
+exists.
+
+A dedicated read-only preflight must resolve editing/deletion, retention and
+cleanup, message length and rate limits, archived-list behavior, list
+deletion/restoration, account deletion/anonymization, blocks among existing
+participants, unread reset and badge placement, notification-centre integration,
+account export, reporting/moderation, Realtime authorization/reconnect, stale
+clients, offline behavior, and encryption/privacy before implementation.
 
 ### Templates
 
@@ -898,8 +928,9 @@ Notification links and later feature deep-link contracts remain open.
 - Blocks apply symmetrically to discovery and contact even though each block record
   is directional, and atomically apply the accepted shared-list separation rules.
 - Public reporting and moderator takedown/restoration are required before external
-  public-content rollout. Their accepted v1 behavior is implemented locally but
-  still requires separately authorized Dev deployment and physical QA.
+  public-content rollout. Their accepted v1 source contract is implemented;
+  moderator bootstrap, hosted rollout, physical QA, and each later environment
+  remain separately evidenced operational states.
 
 ### Reliability and offline direction
 
@@ -954,6 +985,9 @@ Notification links and later feature deep-link contracts remain open.
   automated takedown, account strike/suspension, similarity matching,
   cross-template enforcement, or moderator-management UI is introduced by the
   moderation foundation.
+- No List Chat schema or UI exists yet. Its accepted version-1 direction excludes
+  attachments, images/files, reactions, typing indicators, audio/video, push
+  notifications, and general private messages.
 
 ## Open product decisions
 
@@ -974,3 +1008,7 @@ choose them:
   Template v1 contract, Storage cleanup, and legal/compliance export obligations
   beyond the accepted current-aggregate account lifecycle.
 - Which additional locales beyond English and Portuguese ship first.
+- List Chat editing/deletion, retention, limits, archive/delete/account/block
+  lifecycle, unread/badge behavior, notification-centre and export integration,
+  moderation, Realtime recovery, stale clients, offline behavior, and
+  encryption/privacy.

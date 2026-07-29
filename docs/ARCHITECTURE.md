@@ -201,6 +201,29 @@ opaque invalidation input to repository refresh only; stale `40001` failures ref
 state and never overwrite it. Exact quantity parsing is a domain value that stores
 positive integer thousandths and never converts through `double`.
 
+### Planned List Chat boundary (not implemented)
+
+List Chat will be entered from a Main List and rendered as a separate list-tied
+screen within the Lists branch. Version 1 is a group conversation only for the
+current owner and accepted participants. Authorization must be derived from the
+authoritative current list-access contract, so removal or departure revokes read,
+write, and Realtime access immediately; Flutter route or cached state is never an
+authorization boundary.
+
+The accepted client/server direction is repository-owned text history, created
+timestamps, bounded keyset pagination, Realtime arrival, and per-user unread
+state. Screens must not own direct Supabase access. A preflight must define the
+storage and RPC contract, restrictive RLS/grants, lifecycle, concurrency,
+retention, export, moderation, unread, and reconnect behavior before any migration
+or implementation. No chat table, RPC, topic, repository, provider, controller,
+route, or export version exists today.
+
+Attachments, files/images, reactions, typing indicators, audio/video, push, and
+general friend-to-friend private messaging are outside version 1. The existing
+private account invalidation contract must not be assumed sufficient for
+new-message delivery; Chat Realtime authorization, topic shape, reconnect,
+stale-client safety, and authoritative reconciliation remain open.
+
 ## Backend architecture
 
 ### Supabase responsibilities
@@ -1271,8 +1294,23 @@ installation's session or local data. Full iOS scheme separation remains
 deferred, but the shared typed environment model supports adding it without
 changing repository or authentication boundaries.
 
+PR #27 physical QA verified the implemented boundary on one physical Android
+device and one Android emulator: separate installation/storage, existing Dev
+data, session persistence, and the Dev callback route. This is environment-
+identity evidence only; it is not a signed release, beta distribution, or
+Production readiness claim.
+
 Only a public anonymous/publishable client key may enter Flutter. A service-role
 key or any other privileged secret must never be included in a client binary.
+
+Android release infrastructure is deliberately deferred until selected
+functionality is stable, the Figma screen-by-screen refactor is complete, and
+final branding exists. There is currently no Play Console developer account or
+approved final launcher icon. Earlier toolchain recommendations are provisional
+research and must be revalidated against then-current official requirements before
+Play setup, upload signing, protected release CI, signed AABs, symbols, versioning,
+or publication are implemented. Production remains a separately authorized
+environment.
 
 ### Server operation shape
 
@@ -1426,3 +1464,8 @@ writes are implemented.
   physical cleanup, and account-lifecycle retention.
 - FCM/APNs registration, token lifecycle, push-safe content, and notification deep
   links.
+- List Chat storage/RPC/RLS design; editing/deletion and retention; rate/length
+  limits; archive/list-delete/account-delete/block lifecycle; unread/badge,
+  notification-centre, export, and moderation integration; Realtime
+  authorization/reconnect and stale clients; offline behavior; and
+  encryption/privacy expectations.
