@@ -30,7 +30,7 @@ class SupabaseAccountDataExportRepository
     if (expectedUserId == null) throw const AccountDataExportFailure();
 
     try {
-      final response = await _rpc('export_own_account_data_v11');
+      final response = await _rpc('export_own_account_data_v12');
       if (response is! Map) throw const AccountDataExportFailure();
       final document = AccountDataExportDocument.fromJson(
         Map<String, dynamic>.from(response),

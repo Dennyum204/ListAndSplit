@@ -92,11 +92,13 @@ beta distribution, and Production release remain separate evidence states.
   `published_at` to caller-owned templates; and version `10` adds only the caller's
   submitted public-template report reason, nullable explanation, and submission
   time. Version `11` adds role-specific, unsuppressed current-friend-pair sent and
-  received template-offer projections without source/copy provenance. Equal and
-  custom allocations are represented by their
+  received template-offer projections without source/copy provenance. Version
+  `12` adds only the caller's retained authored List Chat messages, using current
+  minimal list context while access remains or an unavailable marker after access
+  ends. Equal and custom allocations are represented by their
   explicit integer share rows; no allocation-mode field is introduced. Collections
   are deterministic arrays and are empty rather than null, and export versions `1`
-  through `11` remain compatible.
+  through `12` remain compatible.
 - The existing parameterless `export_own_account_data()` remains unchanged at
   schema version `6` for legacy clients, and
   `export_own_account_data_v7()` remains unchanged for assignment-aware clients.
@@ -105,8 +107,10 @@ beta distribution, and Production release remain separate evidence states.
   parameterless `export_own_account_data_v9()`. Reporting-aware clients call the
   separate parameterless `export_own_account_data_v10()`. Template-send-aware
   clients call `export_own_account_data_v11()` with strict role-specific offer
-  parsing while versions `1` through `10` remain compatible. Versions `7` through
-  `11` add no assignment, item,
+  parsing. Chat-aware clients call `export_own_account_data_v12()` with strict
+  caller-authored-message parsing while versions `1` through `11` remain
+  compatible. Versions `7` through
+  `12` add no assignment, item,
   General Note, mention, or participant identity to `shared_list_access`; lists
   owned by another user remain byte-for-byte privacy-minimal metadata under P-039.
 - The export includes nullable onboarding fields faithfully. It includes only the
@@ -144,6 +148,9 @@ beta distribution, and Production release remain separate evidence states.
 - Version `10` never exports another reporter, report status or group, content
   snapshot/fingerprint, moderator identity/note, decision, restriction, allowlist,
   or access-audit information.
+- Version `12` never exports another participant's Chat message, sender name or
+  identity, per-user read position, unread count, idempotency request/fingerprint,
+  membership boundary, or Realtime data.
 - Export is generated synchronously on demand and returned to the caller. The
   server retains no export file or export record. The mobile app validates and
   pretty-prints the versioned document, writes it to OS-managed temporary/cache
@@ -369,27 +376,52 @@ are not implemented.
   remote archive/restore moves the list between projections, and a remotely
   archived open detail returns to Lists once. Manual refresh remains available.
 
-### Planned List Chat (not implemented)
+### List Chat v1 foundation
 
-The next product capability is a separate group-chat screen entered from each
-Main List. It is tied to that exact list and is available only to its owner and
-current accepted participants. Removed or departed participants must immediately
-lose read, write, and Realtime access. Version 1 is list-scoped group conversation
-only, not general direct or private messaging between friends.
+List Chat is one list-scoped group conversation for the current owner and accepted
+participants, not direct/private friend messaging. PR #29 implements its secured
+database and Dart domain foundation only. It does not make Chat reachable: the
+separate Lists route, screen, composer, badge, accessibility/localization work,
+and scoped client reconciliation belong to PR #30.
 
-The accepted baseline direction is text messages, message history, created
-timestamps, bounded keyset pagination, Realtime arrival of new messages, and
-per-user unread state. Attachments, images/files, reactions, typing indicators,
-audio/video, push notifications, and general private messages are deferred from
-version 1. This section does not define a physical schema or claim that Chat
-exists.
+Messages are immutable plain text with server-created display times and a durable
+server-owned position. CRLF/CR becomes LF; Unicode edge whitespace follows the
+General Note rule; valid internal spaces, tabs, newlines, accents, and emoji remain.
+Empty normalized bodies, forbidden controls, and more than 2,000 PostgreSQL
+characters are rejected. Each caller may make 20 successful sends per list in a
+rolling 60 seconds; an identical request retry returns its original result and
+does not consume another slot.
 
-A dedicated read-only preflight must resolve editing/deletion, retention and
-cleanup, message length and rate limits, archived-list behavior, list
-deletion/restoration, account deletion/anonymization, blocks among existing
-participants, unread reset and badge placement, notification-centre integration,
-account export, reporting/moderation, Realtime authorization/reconnect, stale
-clients, offline behavior, and encryption/privacy before implementation.
+Messages cannot be edited. While the list is active, a sender may tombstone their
+own retained message and the current owner may tombstone any retained message.
+Tombstones preserve ordering but remove the body and distinguish sender, owner,
+and deleted-account outcomes. Removed or departed users cannot later tombstone
+history. Archived Chat remains readable and mark-read-only; restoring the list
+re-enables writes. Permanent list deletion cascades Chat. Ownership transfer
+preserves history and current state.
+
+Newly accepted and reaccepted participants see only messages after their
+server-recorded join boundary. Removal, departure, or the existing block-induced
+membership lifecycle immediately ends read, write, and Realtime access and removes
+private unread state. Profile names are resolved at authorized read time rather
+than snapshotted. If a former author deletes their account while the list survives,
+their retained rows become bodyless “Deleted account” tombstones; owner-account
+deletion continues to cascade the owned list.
+
+Unread state is private and counts only visible, non-tombstoned messages from
+another sender after the caller's monotonic read position. Counting stops at 100,
+displayed as `99+`; there are no read receipts or notification-centre rows.
+History uses bounded newest-first keyset pages of at most 50 and no total count.
+Messages/tombstones are retained for 365 days from original creation; PR #29 adds
+the bounded private cleanup but does not schedule or run it. PR #31 separately
+owns scheduling.
+
+Version 1 has no attachments, images/files, Markdown/link enrichment, reactions,
+typing indicators, audio/video, push, offline send queue, E2EE claim, or general
+private messages. Appropriate terms acceptance, in-app content/user reporting,
+blocking presentation, and an operational moderation process are mandatory before
+public distribution. That public-release gate is deliberately not implemented by
+the foundation.
 
 ### Templates
 
@@ -571,7 +603,8 @@ copies succeed; duplicate-name rows each consume one place.
   authorizes and deploys it; scheduling never invokes cleanup. Environments are
   independent, and Production remains unscheduled until separately authorized.
   Account export v11 adds role-specific sent/received offer projections while
-  leaving v1-v10 unchanged. Flutter requests and strictly validates v11.
+  leaving v1-v10 unchanged. Its shape remains strictly supported by the current
+  v12 Flutter export parser.
 
 #### Public Template reporting and moderation
 
@@ -985,9 +1018,8 @@ Notification links and later feature deep-link contracts remain open.
   automated takedown, account strike/suspension, similarity matching,
   cross-template enforcement, or moderator-management UI is introduced by the
   moderation foundation.
-- No List Chat schema or UI exists yet. Its accepted version-1 direction excludes
-  attachments, images/files, reactions, typing indicators, audio/video, push
-  notifications, and general private messages.
+- The List Chat database/domain foundation has no reachable UI until PR #30 and no
+  scheduled retention until PR #31. Its version-1 exclusions are recorded above.
 
 ## Open product decisions
 
@@ -1008,7 +1040,6 @@ choose them:
   Template v1 contract, Storage cleanup, and legal/compliance export obligations
   beyond the accepted current-aggregate account lifecycle.
 - Which additional locales beyond English and Portuguese ship first.
-- List Chat editing/deletion, retention, limits, archive/delete/account/block
-  lifecycle, unread/badge behavior, notification-centre and export integration,
-  moderation, Realtime recovery, stale clients, offline behavior, and
-  encryption/privacy.
+- The exact terms-acceptance, in-app Chat content/user reporting, moderator
+  workflow, evidence, appeal, and operational-response contract required before
+  public distribution.

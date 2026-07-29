@@ -18,20 +18,24 @@ or Production-released. Production remains fail-closed and unconfigured.
 ## Next delivery sequence
 
 1. PR #28 reconciles documentation and the roadmap.
-2. Perform a read-only List Chat product, security, and architecture preflight.
-3. Implement List Chat through one or more separately reviewed secured PRs.
-4. Freeze feature selection, classifying each remaining idea as required before
+2. The read-only List Chat product/security/architecture preflight resolves the
+   bounded v1 contract.
+3. PR #29 implements the secured database/domain foundation without deployment or
+   reachable UI.
+4. PR #30 implements the Flutter experience and scoped Realtime reconciliation.
+5. PR #31 separately schedules retention after authorized rollout and QA.
+6. Freeze feature selection, classifying each remaining idea as required before
    redesign, post-beta, or rejected; historical ideas are not automatic promises.
-5. Implement only the additional functionality Fernando explicitly selects.
-6. Apply the Figma design system and UI refactor to stable functionality,
+7. Implement only the additional functionality Fernando explicitly selects.
+8. Apply the Figma design system and UI refactor to stable functionality,
    screen by screen.
-7. Finalize branding and adaptive, monochrome, and Play launcher icons.
-8. Revalidate official requirements and implement Android release infrastructure:
+9. Finalize branding and adaptive, monochrome, and Play launcher icons.
+10. Revalidate official requirements and implement Android release infrastructure:
    the supported toolchain, Play Console, Play App Signing and separate upload
    key, protected CI, signed AAB, symbols, versioning, and artifact retention.
-9. Complete beta operations/compliance readiness and an internal Android beta.
-10. Perform separately authorized Production Supabase and Play rollout.
-11. Plan iOS/TestFlight as a later, separately approved release surface.
+11. Complete beta operations/compliance readiness and an internal Android beta.
+12. Perform separately authorized Production Supabase and Play rollout.
+13. Plan iOS/TestFlight as a later, separately approved release surface.
 
 The Android beta-pipeline work previously considered for PR #28 is deferred.
 There is no Play Console developer account and no approved final launcher icon.
@@ -197,21 +201,25 @@ shared-resource blocking, archive/delete, item quantity/order, item-assignment
 permissions/lifecycle/notifications/export, and online assignment concurrency are
 resolved.
 
-### Next capability: planned List Chat
+### Next capability: List Chat in three bounded PRs
 
-List Chat is not implemented. The accepted direction is a separate screen entered
-from each Main List, with one group conversation limited to the current owner and
-accepted participants. Access loss must immediately revoke read, write, and
-Realtime. Version 1 is bounded to text history, created timestamps, keyset
-pagination, Realtime new-message arrival, and per-user unread state; it is not
-general direct/private messaging.
+P-058/A-070 resolve List Chat's database/domain contract. PR #29 adds the
+RPC-only forced-RLS message/state/request model, durable server-owned position
+order, lifecycle-safe idempotent sends/tombstones/unread, export v12, opaque
+`chat_invalidate`, strict Dart repository support, and an unscheduled bounded
+365-day retention function. It does not deploy the migration or expose Chat to a
+user.
 
-The preflight in sequencing step 2 must resolve editing/deletion, retention,
-message length/rate limits, archived/list-delete/account-delete/block lifecycle,
-unread/badge and notification-centre behavior, export, moderation/reporting,
-Realtime authorization/reconnect, stale clients, offline behavior, and
-encryption/privacy. Attachments, images/files, reactions, typing indicators,
-audio/video, push, and general private messages are deferred from version 1.
+PR #30 adds the separate accessible/localized Lists route, controller, composer,
+history/unread UI, and scoped authoritative reconciliation on the existing
+recovered private account channel. PR #31 separately schedules
+`list-chat-retention-daily` at 04:47 UTC after authorized rollout and physical QA.
+
+Attachments, images/files, Markdown enrichment, reactions, typing indicators,
+audio/video, persistent notifications, push, read receipts, offline sends, E2EE
+claims, and general private messages remain outside v1. Terms acceptance,
+content/user reporting, and operational moderation are a mandatory gate before
+public distribution, not part of PR #29.
 
 ## Phase 3 — Templates and community discovery (core scope complete)
 
@@ -441,7 +449,8 @@ does not make them prerequisites for redesign, beta, or Production:
 - observability and analytics; and
 - payment processing or provider integration.
 
-List Chat's bounded v1 is the only accepted next capability. The exact Chat
-product/data/security questions remain open in `DECISIONS.md`; the preflight must
-resolve them before schema or code. Play/signing/AAB/icon/store work is deferred
-by A-069, and Production remains separately authorized.
+List Chat's bounded v1 is the only accepted next capability. P-058/A-070 resolve
+its database/domain foundation; PR #30 client reconciliation and the exact
+public-release reporting/moderation workflow remain open in `DECISIONS.md`.
+Play/signing/AAB/icon/store work is deferred by A-069, and Production remains
+separately authorized.

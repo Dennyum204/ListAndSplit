@@ -20,6 +20,7 @@ class AccountDataExportDocument {
         const [],
     List<AccountSentTemplateOfferExport> sentTemplateOffers = const [],
     List<AccountReceivedTemplateOfferExport> receivedTemplateOffers = const [],
+    List<AccountAuthoredChatMessageExport> authoredChatMessages = const [],
   })  : outgoingBlocks = List.unmodifiable(outgoingBlocks),
         activeRelationships = List.unmodifiable(activeRelationships),
         visibleNotifications = List.unmodifiable(visibleNotifications),
@@ -30,7 +31,8 @@ class AccountDataExportDocument {
         submittedPublicTemplateReports =
             List.unmodifiable(submittedPublicTemplateReports),
         sentTemplateOffers = List.unmodifiable(sentTemplateOffers),
-        receivedTemplateOffers = List.unmodifiable(receivedTemplateOffers) {
+        receivedTemplateOffers = List.unmodifiable(receivedTemplateOffers),
+        authoredChatMessages = List.unmodifiable(authoredChatMessages) {
     if (product != supportedProduct ||
         !supportedSchemaVersions.contains(schemaVersion) ||
         authIdentity.id != profile.id ||
@@ -52,7 +54,13 @@ class AccountDataExportDocument {
         (schemaVersion < 10 && submittedPublicTemplateReports.isNotEmpty) ||
         (schemaVersion < 11 &&
             (sentTemplateOffers.isNotEmpty ||
-                receivedTemplateOffers.isNotEmpty))) {
+                receivedTemplateOffers.isNotEmpty)) ||
+        (schemaVersion < 12 && authoredChatMessages.isNotEmpty) ||
+        authoredChatMessages
+                .map((message) => message.messageId)
+                .toSet()
+                .length !=
+            authoredChatMessages.length) {
       throw const AccountDataExportFailure();
     }
   }
@@ -77,6 +85,7 @@ class AccountDataExportDocument {
         9 => _schemaNineRootKeys,
         10 => _schemaTenRootKeys,
         11 => _schemaElevenRootKeys,
+        12 => _schemaTwelveRootKeys,
         _ => const <String>{},
       },
     );
@@ -145,11 +154,16 @@ class AccountDataExportDocument {
           : _requiredObjects(json, 'received_template_offers')
               .map(AccountReceivedTemplateOfferExport.fromJson)
               .toList(growable: false),
+      authoredChatMessages: schemaVersion < 12
+          ? const []
+          : _requiredObjects(json, 'authored_chat_messages')
+              .map(AccountAuthoredChatMessageExport.fromJson)
+              .toList(growable: false),
     );
   }
 
   static const supportedProduct = 'list_and_split';
-  static const supportedSchemaVersion = 11;
+  static const supportedSchemaVersion = 12;
   static const supportedSchemaVersions = {
     1,
     2,
@@ -161,6 +175,7 @@ class AccountDataExportDocument {
     8,
     9,
     10,
+    11,
     supportedSchemaVersion,
   };
   static const _schemaOneRootKeys = {
@@ -200,6 +215,10 @@ class AccountDataExportDocument {
     'sent_template_offers',
     'received_template_offers',
   };
+  static const _schemaTwelveRootKeys = {
+    ..._schemaElevenRootKeys,
+    'authored_chat_messages',
+  };
 
   final String product;
   final int schemaVersion;
@@ -217,6 +236,7 @@ class AccountDataExportDocument {
       submittedPublicTemplateReports;
   final List<AccountSentTemplateOfferExport> sentTemplateOffers;
   final List<AccountReceivedTemplateOfferExport> receivedTemplateOffers;
+  final List<AccountAuthoredChatMessageExport> authoredChatMessages;
 
   Map<String, dynamic> toJson() => {
         'product': product,
@@ -261,7 +281,120 @@ class AccountDataExportDocument {
           'received_template_offers': receivedTemplateOffers
               .map((offer) => offer.toJson())
               .toList(growable: false),
+        if (schemaVersion >= 12)
+          'authored_chat_messages': authoredChatMessages
+              .map((message) => message.toJson())
+              .toList(growable: false),
       };
+}
+
+class AccountAuthoredChatMessageExport {
+  AccountAuthoredChatMessageExport({
+    required this.messageId,
+    required this.body,
+    required this.createdAt,
+    required this.deletedAt,
+    required this.deletionKind,
+    required this.conversationAvailable,
+    required this.listId,
+    required this.listTitle,
+    required this.listStatus,
+  }) {
+    final isActive = deletionKind == null;
+    final hasAnyConversationContext =
+        listId != null || listTitle != null || listStatus != null;
+    final hasConversationContext =
+        listId != null && listTitle != null && listStatus != null;
+    if (!_uuidPattern.hasMatch(messageId) ||
+        !createdAt.isUtc ||
+        (deletedAt != null &&
+            (!deletedAt!.isUtc || deletedAt!.isBefore(createdAt))) ||
+        isActive != (body != null && deletedAt == null) ||
+        (body != null && !_isValidAuthoredChatBody(body!)) ||
+        (!isActive &&
+            (body != null ||
+                deletedAt == null ||
+                !_authoredChatDeletionKinds.contains(deletionKind))) ||
+        hasAnyConversationContext != hasConversationContext ||
+        conversationAvailable != hasConversationContext ||
+        (listId != null && !_uuidPattern.hasMatch(listId!)) ||
+        (listTitle != null &&
+            (listTitle!.trim() != listTitle ||
+                listTitle!.isEmpty ||
+                listTitle!.runes.length > 80)) ||
+        (listStatus != null &&
+            !_authoredChatListStatuses.contains(listStatus))) {
+      throw const AccountDataExportFailure();
+    }
+  }
+
+  factory AccountAuthoredChatMessageExport.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    _expectExactKeys(json, _keys);
+    final conversationAvailable = _requiredBool(json, 'conversation_available');
+    return AccountAuthoredChatMessageExport(
+      messageId: _requiredUuid(json, 'message_id'),
+      body: _nullableString(json, 'body'),
+      createdAt: _requiredUtcDateTime(json, 'created_at'),
+      deletedAt: _nullableUtcDateTime(json, 'deleted_at'),
+      deletionKind: _nullableString(json, 'deletion_kind'),
+      conversationAvailable: conversationAvailable,
+      listId: _nullableUuid(json, 'list_id'),
+      listTitle: _nullableString(json, 'list_title'),
+      listStatus: _nullableString(json, 'list_status'),
+    );
+  }
+
+  static const _keys = {
+    'message_id',
+    'body',
+    'created_at',
+    'deleted_at',
+    'deletion_kind',
+    'conversation_available',
+    'list_id',
+    'list_title',
+    'list_status',
+  };
+
+  final String messageId;
+  final String? body;
+  final DateTime createdAt;
+  final DateTime? deletedAt;
+  final String? deletionKind;
+  final bool conversationAvailable;
+  final String? listId;
+  final String? listTitle;
+  final String? listStatus;
+
+  Map<String, dynamic> toJson() => {
+        'message_id': messageId,
+        'body': body,
+        'created_at': _encodeDateTime(createdAt),
+        'deleted_at': deletedAt == null ? null : _encodeDateTime(deletedAt!),
+        'deletion_kind': deletionKind,
+        'conversation_available': conversationAvailable,
+        'list_id': listId,
+        'list_title': listTitle,
+        'list_status': listStatus,
+      };
+}
+
+const _authoredChatDeletionKinds = {'sender', 'owner'};
+const _authoredChatListStatuses = {'active', 'archived'};
+
+bool _isValidAuthoredChatBody(String body) {
+  return body.isNotEmpty &&
+      body.runes.length <= 2000 &&
+      body.trim() == body &&
+      body.runes.every(
+        (codePoint) =>
+            codePoint == 0x09 ||
+            codePoint == 0x0a ||
+            (codePoint >= 0x20 && codePoint <= 0x7e) ||
+            codePoint >= 0xa0,
+      );
 }
 
 class AccountTemplateOfferProfileExport {

@@ -554,6 +554,70 @@ void main() {
       }
     });
 
+    test('maps schema-v12 caller-authored Chat without other-user data', () {
+      final json = validAccountDataExportJson(schemaVersion: 12);
+      final document = AccountDataExportDocument.fromJson(json);
+
+      expect(document.schemaVersion, 12);
+      expect(document.authoredChatMessages, hasLength(2));
+      expect(
+        document.authoredChatMessages.first.body,
+        'Bring reusable bags',
+      );
+      expect(document.authoredChatMessages.first.conversationAvailable, isTrue);
+      expect(
+        document.authoredChatMessages.last.conversationAvailable,
+        isFalse,
+      );
+      expect(document.authoredChatMessages.last.listId, isNull);
+      expect(
+        json['authored_chat_messages'].toString(),
+        isNot(contains('sender_')),
+      );
+      expect(
+        json['authored_chat_messages'].toString(),
+        isNot(contains('message_position')),
+      );
+      expect(
+        json['authored_chat_messages'].toString(),
+        isNot(contains('request_id')),
+      );
+      expect(document.toJson(), json);
+    });
+
+    test('schema-v12 rejects malformed or privacy-expanded Chat exports', () {
+      Map<String, dynamic> mutate(
+        int index,
+        void Function(Map<String, dynamic> message) change,
+      ) {
+        final root = validAccountDataExportJson(schemaVersion: 12);
+        final messages =
+            List<dynamic>.from(root['authored_chat_messages'] as List);
+        root['authored_chat_messages'] = messages;
+        final message = Map<String, dynamic>.from(messages[index] as Map);
+        messages[index] = message;
+        change(message);
+        return root;
+      }
+
+      for (final malformed in [
+        mutate(0, (message) => message['sender_username'] = 'private'),
+        mutate(0, (message) => message['message_position'] = 42),
+        mutate(0, (message) => message['body'] = ' padded '),
+        mutate(0, (message) => message['body'] = 'bad\u0007control'),
+        mutate(0, (message) => message['deletion_kind'] = 'sender'),
+        mutate(0, (message) => message['conversation_available'] = false),
+        mutate(1, (message) => message['list_title'] = 'Former list'),
+        mutate(1, (message) => message['deletion_kind'] = 'account'),
+        mutate(1, (message) => message['deleted_at'] = null),
+      ]) {
+        expect(
+          () => AccountDataExportDocument.fromJson(malformed),
+          throwsA(isA<AccountDataExportFailure>()),
+        );
+      }
+    });
+
     test('keeps schema-v1 through v8 export shapes byte-for-byte compatible',
         () {
       for (var version = 1; version <= 8; version += 1) {
@@ -887,9 +951,9 @@ void main() {
       }
     });
 
-    test('continues decoding and round-tripping export schemas 1 through 9',
+    test('continues decoding and round-tripping export schemas 1 through 11',
         () {
-      for (var version = 1; version <= 9; version += 1) {
+      for (var version = 1; version <= 11; version += 1) {
         final json = validAccountDataExportJson(schemaVersion: version);
         final document = AccountDataExportDocument.fromJson(json);
 
@@ -911,7 +975,7 @@ void main() {
     });
 
     test('rejects unsupported schema versions', () {
-      final json = validAccountDataExportJson()..['schema_version'] = 12;
+      final json = validAccountDataExportJson()..['schema_version'] = 13;
 
       expect(
         () => AccountDataExportDocument.fromJson(json),

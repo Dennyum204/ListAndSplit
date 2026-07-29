@@ -341,6 +341,33 @@ Map<String, dynamic> validAccountDataExportJson({
                 ],
               },
             ],
+    if (schemaVersion >= 12)
+      'authored_chat_messages': emptyCollections
+          ? <Object?>[]
+          : [
+              {
+                'message_id': '16161616-1616-4161-8161-161616161616',
+                'body': 'Bring reusable bags',
+                'created_at': '2026-07-29T08:00:00.000Z',
+                'deleted_at': null,
+                'deletion_kind': null,
+                'conversation_available': true,
+                'list_id': '55555555-5555-4555-8555-555555555555',
+                'list_title': 'Groceries',
+                'list_status': 'active',
+              },
+              {
+                'message_id': '17171717-1717-4171-8171-171717171717',
+                'body': null,
+                'created_at': '2026-07-20T08:00:00.000Z',
+                'deleted_at': '2026-07-21T08:00:00.000Z',
+                'deletion_kind': 'owner',
+                'conversation_available': false,
+                'list_id': null,
+                'list_title': null,
+                'list_status': null,
+              },
+            ],
   };
 }
 
