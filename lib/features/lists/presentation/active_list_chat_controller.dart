@@ -115,8 +115,10 @@ class ActiveListChatController extends StateNotifier<ActiveListChatState> {
   final Duration _requestTimeout;
 
   int _loadGeneration = 0;
+  Completer<void>? _loadCompleted;
   Completer<void>? _mutationCompleted;
   Completer<void>? _paginationCompleted;
+  Future<void>? _reconciliationAfterLoad;
   String? _pendingSendBody;
   String? _pendingSendRequestId;
   int _lastMarkedPosition = 0;
@@ -132,6 +134,8 @@ class ActiveListChatController extends StateNotifier<ActiveListChatState> {
     if (_loadRunning) return;
     await _waitForExclusiveOperations();
     if (!mounted || _loadRunning) return;
+    final load = Completer<void>();
+    _loadCompleted = load;
     _loadRunning = true;
     final generation = ++_loadGeneration;
     final existing = state.messages.valueOrNull;
@@ -168,10 +172,32 @@ class ActiveListChatController extends StateNotifier<ActiveListChatState> {
       );
     } finally {
       _loadRunning = false;
+      if (identical(_loadCompleted, load)) {
+        _loadCompleted = null;
+      }
+      if (!load.isCompleted) load.complete();
     }
   }
 
-  Future<void> reconcile() async {
+  Future<void> reconcile() {
+    final load = _loadCompleted;
+    if (load != null) {
+      _reconciliationPending = true;
+      return _reconciliationAfterLoad ??= _reconcileAfterLoad(load);
+    }
+    return _runReconciliation();
+  }
+
+  Future<void> _reconcileAfterLoad(Completer<void> load) async {
+    try {
+      await load.future;
+      if (mounted) await _runReconciliation();
+    } finally {
+      _reconciliationAfterLoad = null;
+    }
+  }
+
+  Future<void> _runReconciliation() async {
     await _waitForExclusiveOperations();
     if (!mounted) return;
     if (_reconciliationRunning) {
@@ -224,8 +250,10 @@ class ActiveListChatController extends StateNotifier<ActiveListChatState> {
       final merged = _mergeAuthoritativeWindow(
         existing,
         refreshedNewestFirst,
+        retainOlderOutsideCoveredWindow: hasMore,
       );
-      final retainedOlder = refreshedNewestFirst.isNotEmpty &&
+      final retainedOlder = hasMore &&
+          refreshedNewestFirst.isNotEmpty &&
           existing.isNotEmpty &&
           existing.first.messagePosition <
               refreshedNewestFirst.last.messagePosition;
@@ -516,8 +544,9 @@ class ActiveListChatController extends StateNotifier<ActiveListChatState> {
 
   List<ActiveListChatMessage> _mergeAuthoritativeWindow(
     List<ActiveListChatMessage> existing,
-    List<ActiveListChatMessage> refreshedNewestFirst,
-  ) {
+    List<ActiveListChatMessage> refreshedNewestFirst, {
+    required bool retainOlderOutsideCoveredWindow,
+  }) {
     if (refreshedNewestFirst.isEmpty) return const [];
     final refreshed = _validatedChronological(refreshedNewestFirst);
     final existingById = {
@@ -535,9 +564,11 @@ class ActiveListChatController extends StateNotifier<ActiveListChatState> {
       }
     }
     final firstCoveredPosition = refreshed.first.messagePosition;
-    final retained = existing
-        .where((message) => message.messagePosition < firstCoveredPosition)
-        .toList(growable: false);
+    final retained = retainOlderOutsideCoveredWindow
+        ? existing
+            .where((message) => message.messagePosition < firstCoveredPosition)
+            .toList(growable: false)
+        : const <ActiveListChatMessage>[];
     return _mergePages(retained, refreshed);
   }
 

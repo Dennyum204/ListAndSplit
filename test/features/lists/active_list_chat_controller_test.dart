@@ -329,6 +329,84 @@ void main() {
     ]);
   });
 
+  test('complete reconciliation removes messages expired by retention',
+      () async {
+    final repository = FakeActiveListChatRepository()
+      ..messages = [
+        for (var sequence = 1; sequence <= 125; sequence += 1)
+          activeListChatTestMessage(sequence: sequence),
+      ];
+    final controller = ActiveListChatController(repository, 'list-1');
+    await controller.load();
+    while (controller.state.hasMore) {
+      await controller.loadOlder();
+    }
+    expect(controller.state.messages.requireValue, hasLength(125));
+
+    repository.messages = [
+      for (var sequence = 21; sequence <= 125; sequence += 1)
+        activeListChatTestMessage(sequence: sequence),
+    ];
+    repository.pageRequests.clear();
+
+    await controller.reconcile();
+
+    expect(repository.pageRequests, [
+      (50, null),
+      (50, 76),
+      (50, 26),
+    ]);
+    expect(
+      controller.state.messages.requireValue
+          .map((message) => message.messagePosition),
+      orderedEquals(List.generate(105, (index) => index + 21)),
+    );
+    expect(controller.state.hasMore, isFalse);
+    expect(controller.state.nextBeforeMessagePosition, isNull);
+  });
+
+  test('multi-page partial reconciliation removes only its covered gaps',
+      () async {
+    final repository = FakeActiveListChatRepository()
+      ..messages = [
+        for (var sequence = 1; sequence <= 160; sequence += 1)
+          activeListChatTestMessage(sequence: sequence),
+      ];
+    final controller = ActiveListChatController(repository, 'list-1');
+    await controller.load();
+    await controller.loadOlder();
+    expect(
+      controller.state.messages.requireValue
+          .map((message) => message.messagePosition),
+      orderedEquals(List.generate(80, (index) => index + 81)),
+    );
+    expect(controller.state.hasMore, isTrue);
+
+    repository.messages = [
+      for (var sequence = 1; sequence <= 160; sequence += 1)
+        if (sequence < 110 || sequence > 115)
+          activeListChatTestMessage(sequence: sequence),
+    ];
+    repository.pageRequests.clear();
+
+    await controller.reconcile();
+
+    expect(repository.pageRequests, [
+      (50, null),
+      (50, 105),
+    ]);
+    expect(
+      controller.state.messages.requireValue
+          .map((message) => message.messagePosition),
+      orderedEquals([
+        ...List.generate(55, (index) => index + 55),
+        ...List.generate(45, (index) => index + 116),
+      ]),
+    );
+    expect(controller.state.hasMore, isTrue);
+    expect(controller.state.nextBeforeMessagePosition, 55);
+  });
+
   test('malformed identity conflict preserves the last good cache', () async {
     final original = activeListChatTestMessage(sequence: 1);
     final repository = FakeActiveListChatRepository()..messages = [original];
@@ -566,6 +644,61 @@ void main() {
     await Future.wait([first, second, third]);
 
     expect(repository.listCalls, 3);
+  });
+
+  test('initial-load invalidations coalesce into one authoritative follow-up',
+      () async {
+    final initialPage = Completer<ActiveListChatPage>();
+    final repository = FakeActiveListChatRepository()
+      ..messages = [
+        for (var sequence = 1; sequence <= 30; sequence += 1)
+          activeListChatTestMessage(sequence: sequence),
+      ];
+    repository.onList = (_, __, ___) {
+      repository.onList = null;
+      return initialPage.future;
+    };
+    final controller = ActiveListChatController(repository, 'list-1');
+
+    final load = controller.load();
+    await _flush();
+    expect(repository.listCalls, 1);
+
+    final reconciliations = [
+      controller.reconcile(),
+      controller.reconcile(),
+      controller.reconcile(),
+    ];
+    repository.messages.add(
+      activeListChatTestMessage(sequence: 31, body: 'Committed later'),
+    );
+    await _flush();
+    expect(repository.listCalls, 1);
+
+    initialPage.complete(
+      ActiveListChatPage(
+        messages: [
+          for (var sequence = 30; sequence >= 1; sequence -= 1)
+            activeListChatTestMessage(sequence: sequence),
+        ],
+        hasMore: false,
+        nextBeforeMessagePosition: null,
+      ),
+    );
+    await Future.wait([load, ...reconciliations]);
+
+    expect(repository.listCalls, 2);
+    expect(
+      controller.state.messages.requireValue
+          .map((message) => message.messagePosition),
+      orderedEquals(List.generate(31, (index) => index + 1)),
+    );
+    expect(
+      controller.state.messages.requireValue
+          .map((message) => message.id)
+          .toSet(),
+      hasLength(31),
+    );
   });
 
   test('session reset clears Chat retry identity, state, and registrations',
