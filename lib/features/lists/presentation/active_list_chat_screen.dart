@@ -647,7 +647,7 @@ class _ChatMessageCard extends StatelessWidget {
           child: Card(
             color: message.isMine
                 ? colors.primaryContainer
-                : colors.surfaceVariant,
+                : colors.secondaryContainer,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 6, 8),
               child: Row(
