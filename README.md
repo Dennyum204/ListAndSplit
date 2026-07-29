@@ -28,7 +28,8 @@ the live item-only source and save an independent private, Uncategorized copy. T
 current source also adds exact-revision reporting, reporter-only hiding, an
 empty-by-default UUID-authorized moderation queue, restriction-backed
 takedown/restoration, safe owner outcomes, and 24-month closed-evidence retention;
-its hosted rollout and physical QA remain separately controlled.
+source merge, environment rollout, moderator operations, and physical QA remain
+distinct states documented by the operational runbook below.
 The template-send database/domain foundation adds immutable friend offers,
 recipient-only atomic private-copy acceptance, sender revocation, persistent
 Received/minimal Sent projections, notification v5, export v11, and private
@@ -51,6 +52,15 @@ The client uses Riverpod application scope and view models, repository boundarie
 Portuguese localization wiring. Supabase is initialized only from public
 compile-time configuration.
 
+The major foundations through PR #26 are implemented in source: authentication,
+profiles, blocking, friendships, notifications, account export and deletion,
+collaborative lists, assignments, General Note and resolved mentions, private and
+public templates, reporting/moderation, template sending, the friends-template
+feed, Split equal/custom expenses and settlements, and English/Portuguese
+presentation. This statement does not imply that every migration has reached
+every environment, that every flow has completed physical QA, or that the app is
+beta- or Production-released.
+
 ## Project identity
 
 | Setting | Value |
@@ -61,6 +71,42 @@ compile-time configuration.
 | Android Production application ID and namespace | `com.ferbatech.listandsplit` |
 | Dart package | `list_and_split` |
 | iOS bundle identifier | `com.ferbatech.listandsplit` |
+
+PR #27 implemented the Android identity boundary. The Dev app uses
+`com.ferbatech.listandsplit.dev`, the `List & Split Dev` label, and
+`com.ferbatech.listandsplit.dev://auth-callback`. The Production app keeps
+`com.ferbatech.listandsplit`, the `List & Split` label, and
+`com.ferbatech.listandsplit://auth-callback`, but remains fail-closed because no
+Production backend contract is configured. PR #27 physical QA passed on one
+physical Android device and one Android emulator for separate installation and
+storage, existing Dev data, session persistence, and Dev callback routing. That
+evidence is not an Android beta or Production release.
+
+## Planned delivery sequence
+
+The next capability is **List Chat**, but it is not implemented. The accepted
+direction is one separate list-scoped group conversation for the owner and current
+accepted participants, entered from its Main List. Version 1 is bounded to text
+history, timestamps, keyset pagination, Realtime arrival, and per-user unread
+state. A dedicated read-only product/security/architecture preflight must resolve
+the remaining contract before schema or code is introduced.
+
+Delivery proceeds in this order:
+
+1. PR #28 reconciles documentation and the roadmap.
+2. Complete the read-only List Chat preflight.
+3. Implement List Chat in one or more separately reviewed secured PRs.
+4. Freeze feature selection and classify remaining ideas as required before
+   redesign, post-beta, or rejected.
+5. Implement only the additional functionality Fernando explicitly selects.
+6. Refactor the stable UI through a Figma design system, screen by screen.
+7. Finalize branding and adaptive, monochrome, and Play launcher icons.
+8. Revalidate current official requirements and implement Android release
+   infrastructure, Play setup/signing, protected CI, signed AABs, symbols,
+   versioning, and artifact retention.
+9. Complete beta operations/compliance readiness and an internal Android beta.
+10. Perform separately authorized Production Supabase and Play rollout.
+11. Plan iOS/TestFlight as a later, separate release surface.
 
 ## Prerequisites
 
@@ -726,6 +772,12 @@ automatic custom-share remainder correction, a mathematically minimum settlement
 solver, SQLite caching/offline
 synchronization, push delivery,
 Firebase setup, administrator-initiated deletion, or a production backend.
+List Chat is planned, not implemented. Its first version explicitly excludes
+attachments, images/files, reactions, typing indicators, audio/video, push
+notifications, and general private messages. Editing/deletion, retention, limits,
+archive/delete/account/block lifecycle, unread/badge behavior, notification-centre
+and export integration, moderation, Realtime recovery, stale clients, offline use,
+and encryption/privacy require the dedicated preflight.
 Private Realtime Broadcast is implemented as best-effort account invalidation:
 the event is `invalidate`, the application payload is exactly `{"v":1}`, and every
 valid event, successful join, or app resume reloads authoritative state through

@@ -3,10 +3,10 @@
 ## Status and authority
 
 This document describes the conceptual model and accepted invariants.
-Git-committed migrations remain the physical schema source of truth. The profile
-and versioned-relationship sections below record sufficiently resolved physical
-contracts for their reviewed migrations; names in later sections remain
-illustrative until their open decisions are accepted.
+Git-committed migrations remain the physical schema source of truth. Sections
+explicitly labelled implemented describe reviewed current contracts; sections
+labelled planned or conceptual do not authorize schema. The current account export
+contract remains schema version `11`, with versions `1` through `10` preserved.
 
 ## Global modeling rules
 
@@ -546,6 +546,26 @@ changed, even when access, assignment, and mention state all change together.
 Profile deletion uses one parent-first coordinator for every surviving list
 referenced by access, assignment, mention, Split history, or completion
 attribution, repairing the former child-first Split/list inversion.
+
+### Planned List Chat concept (no current entity)
+
+No chat conversation, message, unread-state, attachment, or chat-retention entity
+currently exists in the migrations or implemented data model. The accepted product
+direction is conceptually one group conversation per Main List for its current
+owner and accepted participants, with text history, created timestamps, bounded
+keyset pagination, Realtime arrival, and per-user unread state.
+
+The authoritative current list-access relationship must gate reads, writes, and
+Realtime so removal or departure revokes all three immediately. This is a
+conceptual authorization invariant, not a table, column, key, policy, RPC, topic,
+or export design. A dedicated preflight must resolve editing/deletion, retention,
+length/rate limits, archive and list-delete/restore behavior, account
+deletion/anonymization, blocks, unread reset/badges, notification-centre and
+export impact, moderation, Realtime/reconnect, stale clients, offline behavior,
+and encryption/privacy before a physical model is accepted.
+
+Attachments, images/files, reactions, typing indicators, audio/video, push, and
+general private messages remain outside version 1.
 
 ## Private template aggregate and copy semantics
 
@@ -1140,3 +1160,6 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   resolution.
 - Appeal, administrator/compliance, and later moderation-automation contracts
   beyond the accepted Public Template report/review lifecycle.
+- List Chat message/unread identifiers and constraints, RPC/RLS/grant boundary,
+  lifecycle and retention, export/moderation integration, Realtime authorization
+  and recovery, stale-client compatibility, offline behavior, and privacy model.
