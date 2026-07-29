@@ -18,6 +18,7 @@ void main() {
     final repository = SupabaseAuthRepository(
       client,
       _MemoryRecoveryMarker(),
+      authCallbackUri: 'com.example.test://auth-callback',
       authStateChanges: authStates.stream,
     );
     final session = _session();
@@ -38,6 +39,7 @@ void main() {
     final repository = SupabaseAuthRepository(
       client,
       _FailingRecoveryMarker(),
+      authCallbackUri: 'com.example.test://auth-callback',
       authStateChanges: authStates.stream,
     );
 

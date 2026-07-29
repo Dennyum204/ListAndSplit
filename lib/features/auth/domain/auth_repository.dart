@@ -1,7 +1,5 @@
 import 'package:list_and_split/features/auth/domain/auth_session.dart';
 
-const authCallbackUri = 'com.ferbatech.listandsplit://auth-callback';
-
 enum AuthFailureCode {
   verificationRequired,
   generic,

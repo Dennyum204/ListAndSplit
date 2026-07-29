@@ -78,7 +78,7 @@ Future<void> _pumpLifecycle(
     ProviderScope(
       overrides: [
         appConfigurationProvider.overrideWithValue(
-          const AppConfiguration.configured(),
+          const AppConfiguration.devConfigured(),
         ),
         authSessionProvider
             .overrideWith((ref) => Stream.value(verifiedSession)),

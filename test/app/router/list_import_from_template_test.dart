@@ -473,7 +473,7 @@ Future<_Harness> _pumpApp(
   final container = ProviderContainer(
     overrides: [
       appConfigurationProvider.overrideWithValue(
-        const AppConfiguration.configured(),
+        const AppConfiguration.devConfigured(),
       ),
       authRepositoryProvider.overrideWithValue(auth),
       accountDataExportRepositoryProvider.overrideWithValue(

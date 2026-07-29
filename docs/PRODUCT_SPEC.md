@@ -873,11 +873,15 @@ destination. Lists and private Templates have dedicated flows, while the existin
 Community and Profile flows live in their respective tabs. The
 notification centre is opened above the shell from a bell affordance and is not a
 primary tab.
-Authentication uses the mobile callback
-`com.ferbatech.listandsplit://auth-callback`. The application resolves backend
-configuration, authentication, email verification, and profile onboarding before
-allowing access to an authenticated destination. Notification links and later
-feature deep-link contracts remain open.
+Android authentication uses
+`com.ferbatech.listandsplit.dev://auth-callback` in the separate Dev application
+and `com.ferbatech.listandsplit://auth-callback` in Production. The current iOS
+callback remains the unsuffixed URI until later iOS environment work. The
+application resolves and cross-checks its explicit environment, native Android
+identity, backend configuration, authentication, email verification, and profile
+onboarding before allowing access to an authenticated destination. Production
+remains unavailable until an approved Production project contract exists.
+Notification links and later feature deep-link contracts remain open.
 
 ## Cross-cutting behavior
 

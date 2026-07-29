@@ -55,9 +55,11 @@ compile-time configuration.
 
 | Setting | Value |
 | --- | --- |
-| Display name | `List & Split` |
+| Android Dev flavor / display name | `dev` / `List & Split Dev` |
+| Android Dev application ID | `com.ferbatech.listandsplit.dev` |
+| Android Production flavor / display name | `prod` / `List & Split` |
+| Android Production application ID and namespace | `com.ferbatech.listandsplit` |
 | Dart package | `list_and_split` |
-| Android application ID and namespace | `com.ferbatech.listandsplit` |
 | iOS bundle identifier | `com.ferbatech.listandsplit` |
 
 ## Prerequisites
@@ -84,32 +86,62 @@ Install dependencies from the repository root:
 flutter pub get
 ```
 
-Run on an available Android or iOS target:
+Android commands must select one flavor and the matching `APP_ENV`. Omitting the
+flavor or environment, crossing the native flavor and Dart environment, or
+supplying the wrong project fails closed on the non-secret configuration screen.
+The only configured backend contract is currently List & Split Dev. Production
+has no approved Supabase project and remains deliberately unusable.
 
-```text
-flutter run -d <device-id>
+Use environment variables so build commands do not repeat public client
+configuration. These examples contain no real publishable key.
+
+PowerShell:
+
+```powershell
+$env:LIST_AND_SPLIT_URL = "https://lzwsgxziqxpxwyalkfuy.supabase.co"
+$env:LIST_AND_SPLIT_PUBLISHABLE_KEY = "<public-publishable-key>"
+flutter run --flavor dev -d <device-id> `
+  --dart-define=APP_ENV=dev `
+  --dart-define=SUPABASE_URL=$env:LIST_AND_SPLIT_URL `
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=$env:LIST_AND_SPLIT_PUBLISHABLE_KEY
 ```
 
-Authentication requires both public Supabase configuration values. If either is
-missing, the app remains runnable and shows a non-secret development-configuration
-screen rather than entering an authentication flow.
+POSIX shell:
 
-```text
-flutter run -d <device-id> --dart-define=SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_PUBLISHABLE_KEY
+```sh
+export LIST_AND_SPLIT_URL="https://lzwsgxziqxpxwyalkfuy.supabase.co"
+read -r -s LIST_AND_SPLIT_PUBLISHABLE_KEY
+export LIST_AND_SPLIT_PUBLISHABLE_KEY
+flutter run --flavor dev -d <device-id> \
+  --dart-define=APP_ENV=dev \
+  --dart-define=SUPABASE_URL="$LIST_AND_SPLIT_URL" \
+  --dart-define=SUPABASE_PUBLISHABLE_KEY="$LIST_AND_SPLIT_PUBLISHABLE_KEY"
 ```
 
-Use placeholder or local-development values in documentation and source control.
-Keep real environment values outside the repository. Only the public publishable
-key belongs in a Flutter build; never use a secret or `service_role` key.
+Only public publishable client values belong in Flutter; never use a secret or
+`service_role` key. Keep all real values outside source control.
 
-The registered mobile Auth callback is:
+Android registers these exact callbacks while preserving the established
+`auth-callback` host:
 
 ```text
-com.ferbatech.listandsplit://auth-callback
+Dev:        com.ferbatech.listandsplit.dev://auth-callback
+Production: com.ferbatech.listandsplit://auth-callback
 ```
 
-Android and iOS platform files register this URI. Do not change the application or
-bundle identifiers when configuring deep links.
+The Dev package installs beside the legacy unsuffixed Dev build. It uses isolated
+Android storage and intentionally does not inherit, migrate, copy, or inspect the
+legacy installation's session or local data. Full iOS flavor/scheme separation is
+deferred; the current iOS bundle and callback remain unchanged.
+
+A Production-placeholder artifact may be compiled only to verify flavor structure:
+
+```text
+flutter build apk --debug --flavor prod --dart-define=APP_ENV=prod
+```
+
+It reaches only the configuration screen because no Production project contract
+exists. Never point it at List & Split Dev.
 
 ## Verify changes
 
@@ -128,7 +160,7 @@ For platform-affecting changes, also run the relevant build when the local
 toolchain is healthy, for example:
 
 ```text
-flutter build apk --debug
+flutter build apk --debug --flavor dev --dart-define=APP_ENV=dev
 ```
 
 ## Repository layout
@@ -657,8 +689,11 @@ or redirect settings. For each explicitly authorized hosted development project,
 complete these steps in the Supabase Dashboard before testing email verification
 or password recovery:
 
-1. Open **Authentication > URL Configuration** and add
-   `com.ferbatech.listandsplit://auth-callback` to **Redirect URLs**.
+1. Open **Authentication > URL Configuration** and add the exact callback for
+   the client environment to **Redirect URLs**:
+   `com.ferbatech.listandsplit.dev://auth-callback` for Android Dev or
+   `com.ferbatech.listandsplit://auth-callback` for Android Production/current
+   iOS. This repository change does not modify any hosted allowlist.
 2. Open **Authentication > Providers > Email**, enable email/password sign-in and
    **Confirm email**, set the minimum password length to `8`, leave required
    character composition disabled, then save.

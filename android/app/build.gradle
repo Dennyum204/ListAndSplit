@@ -27,6 +27,8 @@ android {
     compileSdk flutter.compileSdkVersion
     ndkVersion flutter.ndkVersion
 
+    flavorDimensions "environment"
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
@@ -50,6 +52,24 @@ android {
         versionName flutterVersionName
     }
 
+    productFlavors {
+        dev {
+            dimension "environment"
+            applicationIdSuffix ".dev"
+            resValue "string", "app_name", "List & Split Dev"
+            manifestPlaceholders = [
+                authRedirectScheme: "com.ferbatech.listandsplit.dev",
+            ]
+        }
+        prod {
+            dimension "environment"
+            resValue "string", "app_name", "List & Split"
+            manifestPlaceholders = [
+                authRedirectScheme: "com.ferbatech.listandsplit",
+            ]
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
@@ -64,3 +84,19 @@ flutter {
 }
 
 dependencies {}
+
+gradle.taskGraph.whenReady { graph ->
+    def ambiguousVariantTasks = [
+        "assembleDebug",
+        "assembleProfile",
+        "assembleRelease",
+        "bundleDebug",
+        "bundleProfile",
+        "bundleRelease",
+    ]
+    if (ambiguousVariantTasks.any { graph.hasTask("${project.path}:${it}") }) {
+        throw new GradleException(
+            "Choose --flavor dev or --flavor prod explicitly; unflavored Android builds are disabled."
+        )
+    }
+}
