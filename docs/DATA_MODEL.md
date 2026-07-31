@@ -605,8 +605,9 @@ All three tables have forced RLS, explicit rejection policies, and no direct API
 grants. Exact hardened RPCs own newest-first pages (maximum 50), send, tombstone,
 mark-read, bounded unread (100/capped), and export v12. A private bounded function
 physically removes message/tombstone rows older than 365 days from original
-creation and dependent requests without rewriting stored read positions; it is
-not scheduled until PR #31.
+creation and dependent requests without rewriting stored read positions. PR #31's
+separate operational migration schedules that unchanged function once daily at
+04:47 UTC only in environments where the migration is explicitly deployed.
 
 Chat content/cursor mutations reuse private account topics with content-free
 `chat_invalidate`/`{"v":1}`. Existing membership/block/archive/list/account

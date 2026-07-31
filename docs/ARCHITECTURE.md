@@ -275,9 +275,13 @@ and shows one privacy-safe localized message.
 
 The private bounded retention function removes at most the requested capped batch
 of rows older than 365 days from original creation and cleans dependent request
-rows without rewriting unread positions. It is unscheduled in PR #29; PR #31 owns
-the separate 04:47 UTC Cron delivery. Terms/reporting/moderation remain a
-public-release gate, not an implemented Chat subsystem.
+rows without rewriting unread positions. PR #31 adds the stable
+`list-chat-retention-daily` postgres Cron job at 04:47 UTC with exact command
+`select * from private.maintain_active_list_chat_retention();`. Its additive
+migration unschedules every same-name predecessor before scheduling once and
+never invokes cleanup during deployment. Per-environment rollout remains
+separately authorized. Terms/reporting/moderation remain a public-release gate,
+not an implemented Chat subsystem.
 
 ## Backend architecture
 
