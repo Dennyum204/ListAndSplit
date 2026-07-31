@@ -23,9 +23,9 @@ or Production-released. Production remains fail-closed and unconfigured.
 3. PR #29 implements the secured database/domain foundation without deployment or
    reachable UI.
 4. PR #30 implements the Flutter experience and scoped Realtime reconciliation;
-   two-device Dev QA passed on 2026-07-29 and source merge remains separately
-   controlled.
-5. PR #31 separately schedules retention after authorized rollout and QA.
+   two-device Dev QA passed on 2026-07-29 and PR #30 is merged.
+5. PR #31 adds the retention schedule in source after QA; each environment rollout
+   remains separately authorized.
 6. Freeze feature selection, classifying each remaining idea as required before
    redesign, post-beta, or rejected; historical ideas are not automatic promises.
 7. Implement only the additional functionality Fernando explicitly selects.
@@ -217,8 +217,9 @@ PR #30 adds the separate accessible/localized Lists route, controller, composer,
 history/unread UI, and scoped authoritative reconciliation on the existing
 recovered private account channel. Its automated verification belongs to the PR,
 and two-device Dev QA passed on 2026-07-29. PR #31 separately schedules
-`list-chat-retention-daily` at 04:47 UTC after separate authorization; the cleanup
-remains unscheduled until then.
+`list-chat-retention-daily` at 04:47 UTC through an additive operational migration.
+Source delivery does not schedule Dev or Production; each rollout remains
+separately authorized.
 
 Attachments, images/files, Markdown enrichment, reactions, typing indicators,
 audio/video, persistent notifications, push, read receipts, offline sends, E2EE
@@ -456,7 +457,8 @@ does not make them prerequisites for redesign, beta, or Production:
 
 List Chat's bounded v1 is the only accepted next capability. P-058/A-070 resolve
 its database/domain foundation and A-071 records PR #30 client reconciliation.
-PR #30 physical QA is complete; PR #31 retention scheduling and the exact
-public-release reporting/moderation workflow remain open.
+PR #30 is merged and its physical QA is complete; A-072 records PR #31's retention
+schedule while environment rollout and the exact public-release
+reporting/moderation workflow remain open.
 Play/signing/AAB/icon/store work is deferred by A-069, and Production remains
 separately authorized.

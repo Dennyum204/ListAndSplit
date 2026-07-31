@@ -382,7 +382,7 @@ List Chat is one list-scoped group conversation for the current owner and accept
 participants, not direct/private friend messaging. PR #29 implements its secured
 database and Dart domain foundation. PR #30 adds the separate Lists route, screen,
 composer, list-specific badge, accessibility/localization work, and scoped client
-reconciliation. Physical-device QA remains a separate delivery gate.
+reconciliation; its two-device Dev QA passed on 2026-07-29.
 
 Messages are immutable plain text with server-created display times and a durable
 server-owned position. CRLF/CR becomes LF; Unicode edge whitespace follows the
@@ -413,8 +413,9 @@ another sender after the caller's monotonic read position. Counting stops at 100
 displayed as `99+`; there are no read receipts or notification-centre rows.
 History uses bounded newest-first keyset pages of at most 50 and no total count.
 Messages/tombstones are retained for 365 days from original creation; PR #29 adds
-the bounded private cleanup but does not schedule or run it. PR #31 separately
-owns scheduling.
+the bounded private cleanup. PR #31 adds a separately deployable daily schedule
+without changing eligibility or immediately invoking cleanup; each environment
+still requires an authorized rollout.
 
 Version 1 has no attachments, images/files, Markdown/link enrichment, reactions,
 typing indicators, audio/video, push, offline send queue, E2EE claim, or general
@@ -1019,8 +1020,9 @@ Notification links and later feature deep-link contracts remain open.
   cross-template enforcement, or moderator-management UI is introduced by the
   moderation foundation.
 - The List Chat client experience introduced by PR #30 completed two-device Dev
-  QA on 2026-07-29. Retention remains unscheduled until PR #31, and the version-1
-  exclusions are recorded above.
+  QA on 2026-07-29. PR #31 adds the separately deployable retention schedule;
+  environment rollout remains separately authorized, and the version-1 exclusions
+  are recorded above.
 
 ## Open product decisions
 

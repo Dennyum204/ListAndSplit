@@ -94,7 +94,8 @@ PR #29 merged. PR #30 adds the Flutter experience and scoped reconciliation. On
 2026-07-29, its identical Dev client passed two-device QA on one Samsung device
 and one Android emulator across access, unread state, bidirectional Realtime,
 pagination, lifecycle, uncertain retry, localization, and accessibility. PR #31
-separately owns retention scheduling.
+adds the separately deployable retention-scheduling migration; this source change
+does not schedule Dev or Production.
 
 Delivery proceeds in this order:
 
@@ -102,7 +103,8 @@ Delivery proceeds in this order:
 2. The List Chat preflight resolves the bounded v1 contract.
 3. PR #29 implements the database/domain foundation without deployment or UI.
 4. PR #30 implements the Flutter experience and scoped Realtime reconciliation.
-5. PR #31 schedules retention only after separately authorized rollout and QA.
+5. PR #31 adds the retention schedule in source; each environment rollout remains
+   separately authorized.
 6. Freeze feature selection and classify remaining ideas as required before
    redesign, post-beta, or rejected.
 7. Implement only the additional functionality Fernando explicitly selects.
@@ -552,6 +554,60 @@ deleted rows, alter the retention function, edit prior migrations, or repair
 migration history. Verify zero same-name jobs afterwards and confirm the other
 jobs and database objects are unchanged.
 
+### List Chat retention operations
+
+Migration `20260731042805_schedule_list_chat_retention.sql` owns one stable daily
+job named `list-chat-retention-daily`. It requires `postgres`, unschedules every
+same-name predecessor through `cron.unschedule`, then schedules exactly:
+
+```sql
+select cron.schedule(
+  'list-chat-retention-daily',
+  '47 4 * * *',
+  'select * from private.maintain_active_list_chat_retention();'
+);
+```
+
+Messages and tombstones remain eligible 365 days after their original
+`created_at`; deletion or tombstoning never resets that clock. The existing
+postgres-only function removes one deterministic bounded batch per call (500 by
+default and at most 1,000) and cleans dependent send-request rows without
+rewriting unread positions. The scheduling migration does not call the function,
+so deployment or replay must not immediately delete even already-eligible data.
+
+Every environment requires separate authorization. Merging the source migration
+does not schedule List & Split Dev or Production, and Production remains
+untouched. For a later authorized Dev rollout:
+
+1. Confirm the linked project identity, clean local/remote migration history, and
+   that this migration is the only pending migration.
+2. Inspect `supabase db push --help`, run
+   `supabase db push --linked --dry-run`, and stop unless it lists only
+   `20260731042805_schedule_list_chat_retention.sql`.
+3. Record privacy-safe aggregate Chat counts and the complete `cron.job` catalog
+   before applying the migration once with `supabase db push --linked`.
+4. Verify the migration appears once; exactly one active `postgres` job has the
+   name, schedule, database, and command above; every other Cron job is unchanged;
+   the actual pg_cron scheduler setting `cron.timezone` is exactly `UTC` or `GMT`
+   (or a documented pre-1.5 pg_cron version uses its older fixed-GMT scheduler);
+   the database/session `TimeZone` setting is not evidence of the Cron timezone;
+   the retention function remains postgres-owned, `SECURITY DEFINER`, empty
+   `search_path`, and executable by no API role; and aggregate Chat counts did not
+   change during scheduling.
+5. Run database lint and security/performance advisors. Do not invoke cleanup as
+   a smoke test.
+6. Inspect the first natural Dev execution separately after the first 04:47 UTC
+   occurrence, using the matching `cron.job_run_details` status and privacy-safe
+   aggregate counts only.
+
+Rollback is forward-only: add a reviewed migration that requires `postgres` and
+calls `cron.unschedule(jobid)` for every job named
+`list-chat-retention-daily`, then verify zero same-name jobs and unchanged
+unrelated jobs. Unscheduling prevents future runs but cannot reconstruct messages,
+tombstones, or request rows already expired and deleted by a completed run.
+Terms acceptance, in-app Chat content/user reporting, blocking presentation, and
+operational moderation remain mandatory before public release.
+
 ### Public Template reporting and moderation physical QA
 
 After the separately authorized development migration, audited moderator grant,
@@ -792,10 +848,11 @@ delivery/recovery, history retention reconciliation, stale-access exits, lifecyc
 transitions, and localized accessible presentation. Version 1 has no message
 editing, attachments, images/files, reactions, typing indicators, audio/video,
 persistent notification rows, push, read receipts, offline send queue, E2EE claim,
-or general private messaging. The private 365-day cleanup remains unscheduled
-until PR #31. Terms acceptance, in-app content/user reporting, blocking
-presentation, and an operational moderation process are mandatory before public
-distribution, but are not implemented by this foundation.
+or general private messaging. PR #31 adds a separately deployable schedule for
+the private bounded 365-day cleanup without changing its behavior. Terms
+acceptance, in-app content/user reporting, blocking presentation, and an
+operational moderation process are mandatory before public distribution, but are
+not implemented by this foundation.
 Private Realtime Broadcast is implemented as best-effort account invalidation on
 one `account:<profile-id>` channel. Global event `invalidate` and Chat-scoped event
 `chat_invalidate` both carry exactly `{"v":1}`. Valid global events, successful

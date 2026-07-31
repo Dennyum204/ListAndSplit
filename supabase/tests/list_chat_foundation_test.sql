@@ -218,8 +218,8 @@ select is(
     from cron.job
     where jobname = 'list-chat-retention-daily'
   ),
-  0::bigint,
-  'PR 29 does not schedule Chat retention'
+  1::bigint,
+  'the later additive operational migration owns Chat retention scheduling'
 );
 select ok(
   pg_catalog.pg_get_functiondef(
