@@ -29,10 +29,25 @@ select is(
   'the active daily 04:47 UTC job runs only the exact cleanup as postgres'
 );
 
-select is(
-  pg_catalog.current_setting('TimeZone'),
-  'UTC',
-  'the scheduling database uses UTC'
+select ok(
+  case
+    when pg_catalog.current_setting('cron.timezone', true) is not null then
+      pg_catalog.current_setting('cron.timezone') in ('UTC', 'GMT')
+    else
+      (
+        select pg_catalog.string_to_array(
+          pg_catalog.regexp_replace(
+            extension_record.extversion,
+            '[^0-9.].*$',
+            ''
+          ),
+          '.'
+        )::integer[] < array[1, 5]::integer[]
+        from pg_catalog.pg_extension as extension_record
+        where extension_record.extname = 'pg_cron'
+      )
+  end,
+  'pg_cron uses an explicit UTC/GMT scheduler or its older fixed-GMT behavior'
 );
 
 select ok(

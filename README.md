@@ -588,6 +588,9 @@ untouched. For a later authorized Dev rollout:
    before applying the migration once with `supabase db push --linked`.
 4. Verify the migration appears once; exactly one active `postgres` job has the
    name, schedule, database, and command above; every other Cron job is unchanged;
+   the actual pg_cron scheduler setting `cron.timezone` is exactly `UTC` or `GMT`
+   (or a documented pre-1.5 pg_cron version uses its older fixed-GMT scheduler);
+   the database/session `TimeZone` setting is not evidence of the Cron timezone;
    the retention function remains postgres-owned, `SECURITY DEFINER`, empty
    `search_path`, and executable by no API role; and aggregate Chat counts did not
    change during scheduling.
