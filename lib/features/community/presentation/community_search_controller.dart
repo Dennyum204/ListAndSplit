@@ -299,7 +299,7 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
       if (!mounted) return false;
       _invalidateManagement();
       _invalidateNotifications();
-      return _refreshAfterAction(
+      return await _refreshAfterAction(
         result,
         successMessage: successMessage,
         failureMessage: CommunitySearchMessage.operationFailed,
