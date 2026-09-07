@@ -7,8 +7,11 @@ typedef AvatarInvoke = Future<FunctionResponse> Function(String method,
 
 class SupabaseProfileAvatarRepository implements ProfileAvatarRepository {
   SupabaseProfileAvatarRepository(this.client,
-      {AvatarInvoke? invoke, Session? Function()? session})
+      {AvatarInvoke? invoke,
+      Session? Function()? session,
+      Duration requestTimeout = const Duration(seconds: 30)})
       : _session = session ?? (() => client.auth.currentSession),
+        _requestTimeout = requestTimeout,
         _invoke = invoke ??
             ((method, headers, body, query) => client.functions.invoke(
                 'profile-avatar',
@@ -19,12 +22,15 @@ class SupabaseProfileAvatarRepository implements ProfileAvatarRepository {
   final SupabaseClient client;
   final AvatarInvoke _invoke;
   final Session? Function() _session;
+  final Duration _requestTimeout;
   @override
   Future<ProfileAvatarMetadata> metadata() async {
     final actor = _session()?.user.id;
     if (actor == null) throw const AvatarFailure(AvatarFailureKind.unavailable);
     try {
-      final result = await client.rpc<Object?>('get_own_profile_avatar');
+      final result = await client
+          .rpc<Object?>('get_own_profile_avatar')
+          .timeout(_requestTimeout);
       if (_session()?.user.id != actor) throw const AvatarFailure();
       return ProfileAvatarMetadata.fromJson(result);
     } catch (_) {
@@ -41,7 +47,7 @@ class SupabaseProfileAvatarRepository implements ProfileAvatarRepository {
           'get',
           {'Authorization': 'Bearer ${session.accessToken}'},
           null,
-          {'kind': target.kind, 'id': target.id});
+          {'kind': target.kind, 'id': target.id}).timeout(_requestTimeout);
       if (_session()?.user.id != session.user.id) return null;
       if (response.status == 404) return null;
       if (response.status != 200 ||
@@ -69,15 +75,16 @@ class SupabaseProfileAvatarRepository implements ProfileAvatarRepository {
     }
     try {
       final response = await _invoke(
-          method,
-          {
-            'Authorization': 'Bearer ${session.accessToken}',
-            'if-match': version.toString(),
-            'x-request-id': requestId,
-            if (bytes != null) 'content-type': 'image/png',
-          },
-          bytes,
-          null);
+              method,
+              {
+                'Authorization': 'Bearer ${session.accessToken}',
+                'if-match': version.toString(),
+                'x-request-id': requestId,
+                if (bytes != null) 'content-type': 'image/png',
+              },
+              bytes,
+              null)
+          .timeout(_requestTimeout);
       if (_session()?.user.id != expectedUser || response.status != 200) {
         throw const AvatarFailure();
       }

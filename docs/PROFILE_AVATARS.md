@@ -79,6 +79,10 @@ and Android gallery cancellation. iOS photo-library permission requires native Q
   Unknown nonfriend profile viewers refresh on resume/reload, not through a new
   public audience. Avatar providers clear on session change, reconciliation and
   disposal; no persistent avatar disk cache is introduced.
+- Client network calls have a 30-second deadline; gallery interaction itself is
+  user-controlled. A timeout stops progress, reports a recoverable failure and
+  refreshes authoritatively. It does not cancel or shorten the server's recovery
+  fence or claim that an uncertain Storage write failed to commit.
 
 ## Authorized account-deletion regression fix
 

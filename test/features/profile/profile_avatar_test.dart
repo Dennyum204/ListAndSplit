@@ -214,6 +214,38 @@ void main() {
       session = fixtureSession();
     });
     tearDown(() => client.dispose());
+    for (final operation in ['read', 'remove', 'export']) {
+      test('stalled $operation request terminates with a recoverable failure',
+          () async {
+        final pending = Completer<FunctionResponse>();
+        Future<FunctionResponse> invoke(
+                String method,
+                Map<String, String> headers,
+                Uint8List? body,
+                Map<String, String>? query) =>
+            pending.future;
+        if (operation == 'export') {
+          final repository = AvatarAccountDataExportRepository(client,
+              session: () => session,
+              invoke: invoke,
+              requestTimeout: Duration.zero);
+          await expectLater(repository.exportOwnAccountData(),
+              throwsA(isA<AccountDataExportFailure>()));
+        } else {
+          final repository = SupabaseProfileAvatarRepository(client,
+              session: () => session,
+              invoke: invoke,
+              requestTimeout: Duration.zero);
+          await expectLater(
+              operation == 'read'
+                  ? repository.read(const AvatarTarget.profile('target'))
+                  : repository.remove(0, 'request', session!.user.id),
+              throwsA(isA<AvatarFailure>()));
+        }
+        // A late response is consumed by the timeout future, never applied to UI.
+        pending.complete(FunctionResponse(status: 200, data: null));
+      });
+    }
     test('uses contextual IDs and captured user authentication without URLs',
         () async {
       final bytes = thumbnail();

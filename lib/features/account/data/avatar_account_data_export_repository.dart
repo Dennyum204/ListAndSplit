@@ -6,8 +6,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AvatarAccountDataExportRepository implements AccountDataExportRepository {
   AvatarAccountDataExportRepository(this.client,
-      {AvatarInvoke? invoke, Session? Function()? session})
+      {AvatarInvoke? invoke,
+      Session? Function()? session,
+      Duration requestTimeout = const Duration(seconds: 30)})
       : _session = session ?? (() => client.auth.currentSession),
+        _requestTimeout = requestTimeout,
         _invoke = invoke ??
             ((method, headers, body, query) => client.functions.invoke(
                 'profile-avatar',
@@ -18,19 +21,21 @@ class AvatarAccountDataExportRepository implements AccountDataExportRepository {
   final SupabaseClient client;
   final Session? Function() _session;
   final AvatarInvoke _invoke;
+  final Duration _requestTimeout;
   @override
   Future<AccountDataExportDocument> exportOwnAccountData() async {
     final session = _session();
     if (session == null) throw const AccountDataExportFailure();
     try {
       final response = await _invoke(
-          'post',
-          {
-            'Authorization': 'Bearer ${session.accessToken}',
-            'x-request-id': secureCreationRequestId()
-          },
-          null,
-          null);
+              'post',
+              {
+                'Authorization': 'Bearer ${session.accessToken}',
+                'x-request-id': secureCreationRequestId()
+              },
+              null,
+              null)
+          .timeout(_requestTimeout);
       if (response.status != 200 ||
           response.data is! Map ||
           _session()?.user.id != session.user.id) {

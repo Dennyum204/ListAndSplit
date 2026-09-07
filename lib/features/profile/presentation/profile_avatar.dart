@@ -21,7 +21,9 @@ final avatarGalleryProvider =
 final avatarBytesProvider = FutureProvider.autoDispose
     .family<Uint8List?, AvatarTarget>((ref, target) async {
   if (!ref.watch(supabaseRuntimeReadyProvider) ||
-      ref.watch(verifiedUserIdProvider) == null) return null;
+      ref.watch(verifiedUserIdProvider) == null) {
+    return null;
+  }
   registerForReconciliation(ref, () async {
     ref.invalidateSelf();
   });
