@@ -34,8 +34,14 @@ void main() {
         notifications: notifications, friendships: friendships);
     final action = find.byKey(const Key('acceptNotification-n-11'));
     await tester.scrollUntilVisible(action, 400);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(action);
+    await tester.pumpAndSettle();
+    expect(action.hitTestable(), findsOneWidget);
     await tester.tap(action);
     await tester.pumpAndSettle();
+    expect(friendships.mutationCalls, hasLength(1));
+    expect(friendships.mutationCalls.single.operation, 'accept');
     final localizations = AppLocalizations.of(
         tester.element(find.byType(NotificationCentreScreen)));
     final feedback = find.text(localizations.operationFailedMessage);
