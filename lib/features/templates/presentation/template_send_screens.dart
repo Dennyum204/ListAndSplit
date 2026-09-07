@@ -101,7 +101,7 @@ class _SharedTemplateSendsScreenState
             child: Container(
               margin: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceVariant,
+                color: Theme.of(context).cardTheme.color,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: TabBar(
