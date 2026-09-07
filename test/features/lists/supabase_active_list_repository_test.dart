@@ -41,7 +41,7 @@ void main() {
       ),
     );
 
-    expect(calls.single.functionName, 'list_active_lists');
+    expect(calls.single.functionName, 'list_active_lists_v2');
     expect(calls.single.params, {
       'requested_status': 'archived',
       'page_size': 20,
@@ -51,6 +51,7 @@ void main() {
     expect(page.lists.single.status, ActiveListStatus.archived);
     expect(page.lists.single.itemCount, 2);
     expect(page.lists.single.completedItemCount, 1);
+    expect(page.lists.single.participantCount, 1);
     expect(page.hasMore, isFalse);
   });
 
@@ -86,6 +87,117 @@ void main() {
     expect(owned.isOwner, isTrue);
     expect(owned.ownerProfileId, isNull);
     expect(owned.callerAccessVersion, isNull);
+    expect(calls.last.functionName, 'get_active_list_v2');
+    expect(calls.last.params, {
+      'target_list_id': '11111111-1111-4111-8111-111111111111',
+    });
+  });
+
+  for (final count in [1, 2, 20]) {
+    test(
+        'v2 list and detail reads require authoritative participant count $count',
+        () async {
+      response = [_summaryRow()..['participant_count'] = count];
+
+      final page = await repository.listLists(
+        status: ActiveListStatus.active,
+        limit: 20,
+      );
+      final summary = await repository.getList(
+        '11111111-1111-4111-8111-111111111111',
+      );
+
+      expect(page.lists.single.participantCount, count);
+      expect(summary.participantCount, count);
+      expect(calls.map((call) => call.functionName), [
+        'list_active_lists_v2',
+        'get_active_list_v2',
+      ]);
+    });
+  }
+
+  for (final invalidCount in <Object?>[null, 0, -1, 21, 1.5, 2.0, '2', true]) {
+    test(
+        'v2 rejects malformed participant count $invalidCount without fallback',
+        () async {
+      response = [_summaryRow()..['participant_count'] = invalidCount];
+
+      await expectLater(
+        repository.listLists(status: ActiveListStatus.active, limit: 20),
+        throwsA(isA<ActiveListFailure>()),
+      );
+      await expectLater(
+        repository.getList('11111111-1111-4111-8111-111111111111'),
+        throwsA(isA<ActiveListFailure>()),
+      );
+      expect(calls.map((call) => call.functionName), [
+        'list_active_lists_v2',
+        'get_active_list_v2',
+      ]);
+    });
+  }
+
+  test(
+      'v2 rejects missing participant count instead of deriving an owner count',
+      () async {
+    response = [_summaryRow()..remove('participant_count')];
+
+    await expectLater(
+      repository.listLists(status: ActiveListStatus.active, limit: 20),
+      throwsA(isA<ActiveListFailure>()),
+    );
+    await expectLater(
+      repository.getList('11111111-1111-4111-8111-111111111111'),
+      throwsA(isA<ActiveListFailure>()),
+    );
+    expect(calls, hasLength(2));
+  });
+
+  test('unchanged legacy mutations keep participant count unknown until reload',
+      () async {
+    const listId = '11111111-1111-4111-8111-111111111111';
+    response = [
+      _summaryRow()
+        ..remove('item_count')
+        ..remove('completed_item_count')
+        ..remove('participant_count'),
+    ];
+
+    final created = await repository.createList(
+      'Groceries',
+      requestId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
+    final renamed = await repository.renameList(
+      listId,
+      'Groceries',
+      expectedVersion: 1,
+    );
+    response = [
+      _summaryRow(
+        status: 'archived',
+        archivedAt: '2026-07-20T10:00:00.000Z',
+      )
+        ..remove('item_count')
+        ..remove('completed_item_count')
+        ..remove('participant_count'),
+    ];
+    final archived = await repository.setArchived(
+      listId,
+      archived: true,
+      expectedVersion: 2,
+    );
+
+    expect(created.participantCount, isNull);
+    expect(renamed.participantCount, isNull);
+    expect(archived.participantCount, isNull);
+    expect(calls.map((call) => call.functionName), [
+      'create_active_list',
+      'rename_active_list',
+      'set_active_list_archived',
+    ]);
+
+    response = [_summaryRow()..['participant_count'] = 3];
+    expect((await repository.getList(listId)).participantCount, 3);
   });
 
   test('reads the dedicated General Note projection strictly', () async {
@@ -775,6 +887,7 @@ Map<String, dynamic> _summaryRow({
       'version': 1,
       'item_count': 2,
       'completed_item_count': 1,
+      'participant_count': 1,
       'created_at': '2026-07-20T08:00:00.000Z',
       'updated_at': '2026-07-20T09:00:00.000Z',
       'archived_at': archivedAt,

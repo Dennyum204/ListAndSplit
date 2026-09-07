@@ -13,6 +13,18 @@ import 'package:list_and_split/features/lists/presentation/active_lists_controll
 import '../../helpers/fakes.dart';
 
 void main() {
+  test('summary updates preserve known and unknown participant counts', () {
+    final known = _summary(participantCount: 3);
+    final renamed = known.copyWith(title: 'Renamed', version: 2);
+    final completed = renamed.copyWith(itemCount: 2, completedItemCount: 1);
+
+    expect(completed.participantCount, 3);
+    expect(completed.title, 'Renamed');
+    expect(completed.version, 2);
+    expect(known.copyWith(participantCount: 4).participantCount, 4);
+    expect(_summary().copyWith(title: 'Legacy').participantCount, isNull);
+  });
+
   test('item model enforces the bounded unique assignee invariant', () {
     final assignees = List.generate(
       21,
@@ -73,6 +85,88 @@ void main() {
 
     expect(controller.state.activeLists.requireValue.single.id, 'list-1');
     expect(controller.state.archivedLists.requireValue, isEmpty);
+  });
+
+  test(
+      'owner and member overview counts reconcile independently without a version change',
+      () async {
+    final ownerRepository = FakeActiveListRepository()
+      ..activeLists = [_summary(participantCount: 2)];
+    final memberRepository = FakeActiveListRepository()
+      ..activeLists = [_summary(isOwner: false, participantCount: 2)];
+    final ownerController = ActiveListsController(
+      ownerRepository,
+      hasAuthenticatedUser: true,
+    );
+    final memberController = ActiveListsController(
+      memberRepository,
+      hasAuthenticatedUser: true,
+    );
+    addTearDown(ownerController.dispose);
+    addTearDown(memberController.dispose);
+    await Future.wait([ownerController.loadAll(), memberController.loadAll()]);
+
+    final ownerRegistry = ReconciliationRegistry()
+      ..register(ownerController.reconcile);
+    final memberRegistry = ReconciliationRegistry()
+      ..register(memberController.reconcile);
+    ownerRepository.activeLists = [_summary(participantCount: 3)];
+    memberRepository.activeLists = [
+      _summary(isOwner: false, participantCount: 3),
+    ];
+
+    await ownerRegistry.reconcile();
+    expect(
+        ownerController.state.activeLists.requireValue.single.participantCount,
+        3);
+    expect(
+        memberController.state.activeLists.requireValue.single.participantCount,
+        2);
+    await memberRegistry.reconcile();
+    expect(
+        memberController.state.activeLists.requireValue.single.participantCount,
+        3);
+
+    ownerRepository.activeLists = [_summary(participantCount: 2)];
+    memberRepository.activeLists = [];
+    await Future.wait([ownerRegistry.reconcile(), memberRegistry.reconcile()]);
+    expect(
+        ownerController.state.activeLists.requireValue.single.participantCount,
+        2);
+    expect(memberController.state.activeLists.requireValue, isEmpty);
+  });
+
+  test(
+      'archived participant count refreshes authoritatively and survives an offline failure',
+      () async {
+    final repository = FakeActiveListRepository()
+      ..archivedLists = [
+        _summary(
+          status: ActiveListStatus.archived,
+          archivedAt: DateTime.utc(2026, 7, 20, 11),
+          participantCount: 2,
+        ),
+      ];
+    final controller = ActiveListsController(
+      repository,
+      hasAuthenticatedUser: true,
+    );
+    addTearDown(controller.dispose);
+    await controller.loadAll();
+
+    repository.failure =
+        const ActiveListFailure(ActiveListFailureCode.transport);
+    await controller.reconcile();
+    expect(
+        controller.state.archivedLists.requireValue.single.participantCount, 2);
+
+    repository.failure = null;
+    repository.archivedLists = [
+      repository.archivedLists.single.copyWith(participantCount: 1),
+    ];
+    await controller.refresh(ActiveListStatus.archived);
+    expect(
+        controller.state.archivedLists.requireValue.single.participantCount, 1);
   });
 
   test('manual overview refresh remains an authoritative fallback', () async {
@@ -1236,6 +1330,7 @@ ActiveListSummary _summary({
   DateTime? archivedAt,
   int version = 1,
   bool isOwner = true,
+  int? participantCount,
 }) {
   return ActiveListSummary(
     id: id,
@@ -1248,6 +1343,7 @@ ActiveListSummary _summary({
     updatedAt: DateTime.utc(2026, 7, 20, 10),
     archivedAt: archivedAt,
     isOwner: isOwner,
+    participantCount: participantCount,
   );
 }
 

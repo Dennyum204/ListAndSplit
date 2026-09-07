@@ -21,6 +21,12 @@ explicit current-member `@mentions`, persistent mention notifications, and
 draft-preserving conflict reconciliation. Private account-scoped Supabase Broadcast
 reconciles connected devices through the existing RPC repositories without carrying
 application data.
+The participant-count foundation adds current owner-plus-accepted-member counts
+through additive v2 list reads and strict Dart repository parsing. Pending
+invitations and former participants do not count; ownership transfer preserves
+the total. Card presentation belongs to the separate Figma UI PR. The migration
+must be deployed to a separately authorized environment before distributing a
+client that uses the new reads. No hosted deployment is part of this foundation.
 Private templates support independent list snapshots and atomic selected-item list
 creation/import. Owners can also publish templates explicitly on their block-aware
 public profiles, where any fully onboarded authenticated nonblocked user may inspect
@@ -108,6 +114,9 @@ Delivery proceeds in this order:
 6. Freeze feature selection and classify remaining ideas as required before
    redesign, post-beta, or rejected.
 7. Implement only the additional functionality Fernando explicitly selects.
+   P-059/A-073 select participant counts as a backend/domain PR followed by a
+   separate Figma UI PR preserving existing behavior. Category icons, avatars,
+   list covers, template images, and other additions remain unselected.
 8. Refactor the stable UI through a Figma design system, screen by screen.
 9. Finalize branding and adaptive, monochrome, and Play launcher icons.
 10. Revalidate current official requirements and implement Android release
@@ -269,6 +278,42 @@ enforce it separately with the local-only values reported by `supabase status`:
 ```text
 flutter test test/local/private_broadcast_transport_smoke_test.dart --dart-define=RUN_LOCAL_REALTIME_SMOKE=true --dart-define=LOCAL_SUPABASE_URL=<local-api-url> --dart-define=LOCAL_SUPABASE_PUBLISHABLE_KEY=<local-publishable-key> --dart-define=LOCAL_SUPABASE_SECRET_KEY=<local-secret-key>
 ```
+
+### Participant-count rollout and manual QA
+
+P-059/A-073 add `list_active_lists_v2` and `get_active_list_v2` while preserving
+legacy read/mutation shapes and account export v12. The stable, postgres-owned
+`SECURITY INVOKER` wrappers derive counts through the existing authorized reads;
+their empty search paths and authenticated-only execution grants add no new
+privileged boundary. There is no stored counter, new table, Storage bucket, or
+new Realtime channel. The Dart repository requires an integer count from 1 to 20
+for v2 reads and leaves the count unknown in unchanged legacy mutation results.
+The separate UI PR presents counts and applies the Figma design to existing
+behavior; it does not add image uploads, category icons, or Chat media.
+
+This backend/domain PR does not deploy its migration. Before distribution,
+separately authorize an environment rollout, compare migration histories, apply
+only the reviewed additive migration, and verify the exact function signatures,
+ownership, invoker mode, search paths, and grants. Existing clients retain their
+legacy reads; a new client requiring v2 must wait for that migration. Rolling
+back to a previous client does not require removing the additive read functions.
+
+After that rollout and the separate UI delivery, use two current clients and
+disposable QA lists:
+
+1. Verify a new owner-only list shows one participant, pending invitations do not
+   change it, and acceptance updates both devices without manual refresh.
+2. Verify leave/removal and block-driven separation refresh the remaining
+   participant's count and remove inaccessible cards from the departing account.
+   Unblocking alone must not restore access or the count.
+3. Transfer ownership and confirm the total stays unchanged. Archive a list with
+   pending invitations, confirm they do not affect the total, then verify archived
+   member leave/removal refreshes it.
+4. Verify refresh, reconnect, and app resume recover authoritative counts. Repeat
+   singular/plural labels in English and Portuguese, light/dark themes, large text,
+   and with a screen reader.
+
+This procedure is a rollout checklist, not a claim that physical QA has passed.
 
 ### Item-assignment manual QA
 

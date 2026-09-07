@@ -169,6 +169,16 @@ duplicate-submit, and stale-conflict state; the repository alone translates
 domain operations to exact Supabase RPC calls. Backend maps/DTOs do not escape the
 data layer.
 
+P-059/A-073 overview participant counts follow the same boundary. New clients
+read `list_active_lists_v2` and `get_active_list_v2`; the data layer requires and
+validates their integer `participant_count` in the range 1-20 before mapping to
+the domain summary. Unchanged legacy mutation summaries may carry an unknown
+count, never an inferred zero or owner-only value. The separate UI PR will render
+known counts on active/archived cards with localized singular/plural text and
+screen-reader semantics. Existing authoritative reloads after mutations and
+through the account reconciliation registry refresh counts; widgets do not
+enumerate member profiles or make per-card network calls.
+
 Assignment presentation remains inside that feature boundary. Item domain models
 contain an immutable current-assignee projection; item create/edit controllers own
 the complete selection, submission guard, stale refresh, and authoritative
@@ -381,6 +391,23 @@ signatures to `authenticated`. Listing is bounded keyset pagination: active list
 use `(updated_at, id)` descending; archived lists use `(archived_at, id)`
 descending. Aggregate counts are returned in the same list query rather than by
 N+1 calls.
+
+The additive `list_active_lists_v2` and `get_active_list_v2` projections derive
+`participant_count` from the sole list owner and current accepted members with
+completed profiles, matching `list_active_list_participants`. Existing
+caller-derived access checks apply before exposing any count. Pending/dormant
+access, deleted profiles, and the transfer-only `owner` access row add nothing;
+ownership transfer preserves the count. Both active and archived reads include
+the value. No stored counter, new table, index, identity field, or authorization
+path is introduced. Legacy list reads and mutation responses retain their exact
+shapes, as does account export v12. The reviewed migration must reach each
+separately authorized environment before distributing a client that requires
+these v2 reads; source delivery alone does not deploy it.
+The wrappers are stable `SECURITY INVOKER` functions owned by `postgres`, with
+empty search paths and exact authenticated-only execution grants. They use the
+existing privileged authorization boundaries without adding their own definer
+authority. The backend/domain PR and the subsequent Figma presentation PR remain
+separate review and delivery units.
 
 Cross-identity mutations use one global hierarchy: non-locking preflight; relevant
 profile rows in UUID order; a canonical relationship-pair advisory lock only for

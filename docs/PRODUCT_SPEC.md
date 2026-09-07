@@ -230,6 +230,24 @@ are not implemented.
 - Active lists are ordered by most recent update, then ID. Archived lists are
   ordered by most recent archive time, then ID. Both use bounded keyset
   pagination and show total/completed item counts.
+- P-059 accepts a current participant count on active and archived overview cards
+  in English/Portuguese singular or plural text with accessible semantics.
+  The backend/domain foundation supplies the count; its presentation is delivered
+  in the separate Figma UI PR. It counts the owner once plus accepted members
+  visible through the existing authorized participant projection. Pending
+  invitations and dormant, former, or
+  deleted participants do not count; the internal transfer-only owner row never
+  duplicates the owner. This differs from the 20-place capacity rule, which also
+  reserves places for pending invitations. It does not indicate online presence
+  or historical participation.
+- The server derives the count from current membership. Acceptance adds a
+  participant; leave, removal, and block/account lifecycle cleanup remove one;
+  ownership transfer preserves the total. Archiving cancels pending invitations
+  without changing the accepted count, while later archived leave/removal still
+  updates it. Existing private invalidation, refresh, reconnect, and resume reads
+  refresh the authoritative count projection; access loss removes the list
+  projection. The client does not guess a value when a legacy mutation summary
+  has no count.
 - Archived lists remain readable and explicitly read-only. Every server mutation,
   including item changes and reorder, is rejected while archived. Restore is the
   only transition out of that state. Deleting a list permanently removes its
@@ -1003,6 +1021,12 @@ Notification links and later feature deep-link contracts remain open.
   authentication in the initial release.
 - No cross-user profile discovery before block-aware access rules exist.
 - No avatar upload or Storage bucket in the initial profile slice.
+- P-059 selects participant counts only, with a backend/domain PR followed by a
+  separate Figma UI PR preserving existing behavior. Category icon selection,
+  avatars, list covers, template images, Chat media, and a Chat enable/disable
+  switch are not included. The count foundation requires a separately authorized
+  migration rollout before a client using v2 reads is distributed; it does not
+  itself deliver the UI refactor or complete the overall feature-freeze review.
 - No production Supabase or Firebase project without separate explicit
   authorization.
 - No promise of fully offline operation until cache and conflict rules are defined.

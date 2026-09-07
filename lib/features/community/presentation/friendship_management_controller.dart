@@ -163,7 +163,7 @@ class FriendshipManagementController
       if (!mounted) return false;
       _invalidateSearch();
       _invalidateNotifications();
-      return _refreshAfterMutation(
+      return await _refreshAfterMutation(
         relationship.id,
         successMessage: FriendshipManagementMessage.blocked,
       );
@@ -200,7 +200,7 @@ class FriendshipManagementController
       if (!mounted) return false;
       _invalidateSearch();
       _invalidateNotifications();
-      return _refreshAfterMutation(
+      return await _refreshAfterMutation(
         relationship.id,
         successMessage: successMessage,
       );
