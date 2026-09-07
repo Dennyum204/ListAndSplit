@@ -31,8 +31,9 @@ or Production-released. Production remains fail-closed and unconfigured.
 7. Implement only the additional functionality Fernando explicitly selects.
    P-059/A-073 select current participant counts through a backend/domain PR;
    the Figma UI PR follows separately and preserves existing behavior.
-8. Apply the Figma design system and UI refactor to stable functionality,
-   screen by screen.
+8. Apply the approved design system and UI refactor to stable functionality,
+   screen by screen. PR #33 uses the supplied light-theme PDF and dark-theme
+   screenshots instead of requiring live Figma access (A-074).
 9. Finalize branding and adaptive, monochrome, and Play launcher icons.
 10. Revalidate official requirements and implement Android release infrastructure:
    the supported toolchain, Play Console, Play App Signing and separate upload
@@ -48,13 +49,19 @@ revalidated when step 8 begins.
 
 The participant-count foundation adds server-derived v2 list/detail reads and
 strict Dart domain/repository integration, preserving legacy APIs and export v12.
-Localized accessible cards belong to the separate Figma UI PR. The foundation
+Localized accessible cards are implemented in the separate PR #33. The foundation
 reuses existing private account reconciliation without a stored counter or Storage
 infrastructure. Its reviewed migration must be deployed to a separately
 authorized environment before distributing the new client; no hosted deployment
 or physical QA is implied by this source change. Category icons, avatars, list
 covers, template images, and changes to Chat remain unselected. The Figma UI
 refactor follows as the second PR and does not introduce those optional features.
+PR #32 is merged. PR #33 implements the reference-driven presentation separately:
+themes/shared controls, authentication, Lists/Chat/Split, Templates/Shared Templates,
+Community, notifications and profiles. Community opens its existing friends-only
+template feed first; exact-username discovery remains available from its Friends
+action. Implementation and automated rendering do not imply completed physical
+QA, hosted participant-count rollout, beta readiness, or final branding.
 
 ## Phase 0 — Bootstrap foundation (implemented)
 

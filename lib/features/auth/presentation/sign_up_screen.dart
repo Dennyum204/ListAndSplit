@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/auth/domain/auth_validation.dart';
 import 'package:list_and_split/features/auth/presentation/auth_actions_controller.dart';
 import 'package:list_and_split/features/auth/presentation/auth_ui.dart';
@@ -36,16 +37,24 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     return FormPageFrame(
       title: localizations.signUpTitle,
       description: localizations.signUpDescription,
+      centerTitle: true,
       child: AutofillGroup(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            TextButton(
+              onPressed:
+                  state.isSubmitting ? null : () => context.go('/sign-in'),
+              child: Text(localizations.alreadyHaveAccountButton),
+            ),
+            const SizedBox(height: 20),
             FormMessageBanner(
               message: state.message == null
                   ? null
                   : authMessageText(localizations, state.message!),
             ),
             TextField(
+              style: AppPalette.inputTextStyle(context),
               key: const Key('signUpEmail'),
               controller: _email,
               enabled: !state.isSubmitting,
@@ -54,6 +63,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               textInputAction: TextInputAction.next,
               autocorrect: false,
               decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.person_outline_rounded),
                 labelText: localizations.emailLabel,
                 errorText: _error(
                   localizations,
@@ -63,6 +73,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             ),
             const SizedBox(height: 16),
             TextField(
+              style: AppPalette.inputTextStyle(context),
               key: const Key('signUpPassword'),
               controller: _password,
               enabled: !state.isSubmitting,
@@ -70,6 +81,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               obscureText: true,
               textInputAction: TextInputAction.next,
               decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.key_outlined),
                 labelText: localizations.passwordLabel,
                 errorText: _error(
                   localizations,
@@ -79,6 +91,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             ),
             const SizedBox(height: 16),
             TextField(
+              style: AppPalette.inputTextStyle(context),
               key: const Key('signUpPasswordConfirmation'),
               controller: _passwordConfirmation,
               enabled: !state.isSubmitting,
@@ -87,6 +100,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _submit(),
               decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.key_outlined),
                 labelText: localizations.confirmPasswordLabel,
                 errorText: _error(
                   localizations,
@@ -94,16 +108,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 48),
             SubmissionButton(
               label: localizations.createAccountButton,
               isSubmitting: state.isSubmitting,
               onPressed: _submit,
-            ),
-            TextButton(
-              onPressed:
-                  state.isSubmitting ? null : () => context.go('/sign-in'),
-              child: Text(localizations.alreadyHaveAccountButton),
             ),
           ],
         ),

@@ -20,8 +20,40 @@ import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fakes.dart';
 import '../../helpers/fake_active_list_chat_repository.dart';
+import '../../support/ui_preview_capture.dart';
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
+
+  for (final mode in [ThemeMode.light, ThemeMode.dark]) {
+    testWidgets('overview ${mode.name} reference progress and count rendering',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repository = FakeActiveListRepository()
+        ..activeLists = [
+          _summary(title: 'Weekend shopping', participantCount: 3),
+          _summary(
+              id: 'list-2', title: 'Trip preparation', participantCount: 2),
+        ];
+      await _pump(tester,
+          repository: repository,
+          child: const ActiveListsScreen(),
+          themeMode: mode);
+      await tester.pumpAndSettle();
+      expect(
+          tester
+              .widget<LinearProgressIndicator>(
+                  find.byKey(const Key('list-progress-list-1')))
+              .value,
+          .5);
+      expect(find.text('3 participants'), findsOneWidget);
+      await captureUiPreview(tester, 'lists-en-${mode.name}-100');
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets('overview renders loading, failure, retry, and empty states',
       (tester) async {
     final repository = FakeActiveListRepository()
@@ -213,6 +245,7 @@ void main() {
             language == 'pt' ? '20 participantes' : '20 participants';
         await tester.ensureVisible(find.text(plural));
         expect(find.text(plural), findsOneWidget);
+        await captureUiPreview(tester, 'lists-$language-${themeMode.name}-200');
         expect(tester.takeException(), isNull);
 
         await tester
@@ -1104,6 +1137,8 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ActiveListDetailScreen)),
     );
+    await tester.ensureVisible(find.byKey(const Key('editGeneralNoteButton')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('editGeneralNoteButton')));
     await tester.pumpAndSettle();
 
@@ -1156,6 +1191,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('generalNoteCard')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Remote clean version'), findsOneWidget);
     expect(find.byKey(const Key('editGeneralNoteButton')), findsNothing);
     expect(find.bySemanticsLabel('General Note, read-only'), findsOneWidget);
@@ -2262,7 +2303,7 @@ Future<void> _pump(
   Locale locale = const Locale('en'),
 }) {
   return tester.pumpWidget(
-    ProviderScope(
+    uiPreviewBoundary(ProviderScope(
       overrides: [
         verifiedUserIdProvider.overrideWithValue('user-1'),
         activeListRepositoryProvider.overrideWithValue(repository),
@@ -2288,7 +2329,7 @@ Future<void> _pump(
         locale: locale,
         home: child,
       ),
-    ),
+    )),
   );
 }
 

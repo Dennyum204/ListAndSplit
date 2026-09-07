@@ -7,6 +7,7 @@ class FormPageFrame extends StatelessWidget {
     required this.child,
     this.leading,
     this.actions,
+    this.centerTitle = false,
     super.key,
   });
 
@@ -15,11 +16,17 @@ class FormPageFrame extends StatelessWidget {
   final Widget child;
   final Widget? leading;
   final List<Widget>? actions;
+  final bool centerTitle;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(leading: leading, actions: actions),
+      appBar: AppBar(
+        leading: leading,
+        actions: actions,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -31,6 +38,7 @@ class FormPageFrame extends StatelessWidget {
                 children: [
                   Text(
                     title,
+                    textAlign: centerTitle ? TextAlign.center : TextAlign.start,
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
@@ -38,6 +46,7 @@ class FormPageFrame extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     description,
+                    textAlign: centerTitle ? TextAlign.center : TextAlign.start,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                           height: 1.4,

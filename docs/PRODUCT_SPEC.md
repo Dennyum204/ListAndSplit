@@ -33,6 +33,15 @@ beta distribution, and Production release remain separate evidence states.
 - English and Portuguese are supported UI languages, while code and content
   structure remain ready for additional locales.
 
+The approved UI refactor uses the supplied light-theme PDF and dark-theme
+screenshots (A-074). The reference palette, rounded controls, four destinations
+and decorative identity initials do not authorize new capabilities. Community
+opens the existing friends-only public-template feed, and its Friends action
+opens exact-username discovery; names never become routing identifiers. Existing
+validation, consent, destructive warnings, error recovery and accessible large-text
+layouts take precedence over simplified static frames. Avatars, content images,
+category icons, Chat media and an Enable Chat setting remain outside this slice.
+
 ## Functional requirements
 
 ### Authentication and profile onboarding

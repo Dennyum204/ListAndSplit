@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/features/moderation/domain/public_template_moderation.dart';
@@ -410,6 +411,9 @@ class _ModerationActionDialogState extends State<_ModerationActionDialog> {
                     PublicTemplateModerationAction.takeDown) ...[
                   const SizedBox(height: 16),
                   DropdownButtonFormField<PublicTemplateReportReason>(
+                    style: AppPalette.inputTextStyle(context),
+                    dropdownColor: AppPalette.inputCream,
+                    iconEnabledColor: AppPalette.navy,
                     key: const Key('moderationOwnerReasonField'),
                     // ignore: deprecated_member_use
                     value: _reason,
@@ -434,6 +438,7 @@ class _ModerationActionDialogState extends State<_ModerationActionDialog> {
                 ],
                 const SizedBox(height: 12),
                 TextFormField(
+                  style: AppPalette.inputTextStyle(context),
                   key: const Key('moderationPrivateNoteField'),
                   controller: _note,
                   minLines: 3,

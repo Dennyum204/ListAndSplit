@@ -10,8 +10,39 @@ import 'package:list_and_split/features/profile/presentation/profile_providers.d
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fakes.dart';
+import '../../support/ui_preview_capture.dart';
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
+  for (final locale in [const Locale('en'), const Locale('pt')]) {
+    for (final mode in [ThemeMode.light, ThemeMode.dark]) {
+      testWidgets(
+          'member cards adapt at 200% ${locale.languageCode} ${mode.name}',
+          (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = _MembersWidgetRepository(isOwner: true);
+        await _pump(tester, repository,
+            themeMode: mode, locale: locale, textScale: 2);
+        expect(find.text('2'), findsOneWidget);
+        await captureUiPreview(
+            tester, 'members-${locale.languageCode}-${mode.name}-large');
+        expect(find.byKey(const Key('removeMember-member-1')), findsOneWidget);
+        final invite = find.byKey(const Key('inviteMember-eligible-1'));
+        await tester.scrollUntilVisible(invite, 250,
+            scrollable: find.byType(Scrollable).first);
+        await tester.pumpAndSettle();
+        expect(invite.hitTestable(), findsOneWidget);
+        expect(tester.getSize(invite).height, greaterThanOrEqualTo(48));
+        expect(tester.takeException(), isNull);
+        expect(repository.removeCalls, 0);
+        expect(repository.transferCalls, 0);
+      });
+    }
+  }
+
   for (final themeMode in [ThemeMode.light, ThemeMode.dark]) {
     testWidgets(
         'owner manages accepted and pending access in ${themeMode.name}',
@@ -221,6 +252,8 @@ Future<void> _pump(
   WidgetTester tester,
   FakeActiveListRepository repository, {
   ThemeMode themeMode = ThemeMode.light,
+  Locale locale = const Locale('en'),
+  double textScale = 1,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -232,6 +265,13 @@ Future<void> _pump(
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: themeMode,
+        locale: locale,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(textScale),
+          ),
+          child: uiPreviewBoundary(child!),
+        ),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: const ActiveListMembersScreen(listId: 'list-1'),

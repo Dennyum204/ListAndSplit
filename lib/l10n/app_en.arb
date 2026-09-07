@@ -73,7 +73,7 @@
   "@confirmPasswordLabel": {
     "description": "Password confirmation field label."
   },
-  "signInTitle": "Welcome back",
+  "signInTitle": "Sign in to your account",
   "@signInTitle": {
     "description": "Sign-in screen title."
   },
@@ -727,6 +727,9 @@
     "placeholders": {"count": {"type": "int"}}
   },
   "listsParticipantCount": "{count, plural, =1{1 participant} other{{count} participants}}",
+  "listSectionLabel": "List",
+  "listChatSectionLabel": "Chat",
+  "listsWelcomeLabel": "Welcome",
   "@listsParticipantCount": {
     "description": "Current list participants, including the owner and accepted members only.",
     "placeholders": {"count": {"type": "int"}}

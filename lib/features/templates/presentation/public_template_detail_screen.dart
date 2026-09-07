@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/templates/domain/public_template.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/public_templates_controller.dart';
 import 'package:list_and_split/features/templates/presentation/template_send_screens.dart';
+import 'package:list_and_split/features/templates/presentation/template_item_tile.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class PublicTemplateDetailScreen extends ConsumerStatefulWidget {
@@ -72,7 +75,7 @@ class _PublicTemplateDetailScreenState
       }
     });
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         title: Text(
           detail?.summary.name ?? localizations.publicTemplatesDetailTitle,
         ),
@@ -160,7 +163,8 @@ class _PublicTemplateDetailScreenState
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      const Icon(Icons.person_outline_rounded),
+                                      IdentityBadge(
+                                          label: loaded.profile.displayName),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
@@ -251,15 +255,10 @@ class _PublicTemplateDetailScreenState
                                 item.name,
                                 quantity,
                               ),
-                              child: Card(
+                              child: TemplateItemTile(
                                 key: Key('publicTemplateItem-$index'),
-                                child: ListTile(
-                                  leading: CircleAvatar(
-                                    child: Text('${index + 1}'),
-                                  ),
-                                  title: Text(item.name, maxLines: 2),
-                                  subtitle: Text(quantity),
-                                ),
+                                name: item.name,
+                                quantity: quantity,
                               ),
                             );
                           },
@@ -312,7 +311,8 @@ class _PublicTemplateDetailScreenState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.publicTemplatesCopyDialogTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.publicTemplatesCopyDialogTitle),
         content: SingleChildScrollView(
           child: Text(localizations.publicTemplatesCopyDialogDescription),
         ),
@@ -346,7 +346,8 @@ class _PublicTemplateDetailScreenState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(
           localizations.communityBlockDialogTitle(detail.profile.username),
         ),
         content: Text(localizations.communityBlockDialogDescription),
@@ -404,7 +405,8 @@ class _PublicTemplateDetailScreenState
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.publicTemplateReportSuccessTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.publicTemplateReportSuccessTitle),
         content: SingleChildScrollView(
           child: Text(localizations.publicTemplateReportSuccessDescription),
         ),
@@ -516,7 +518,8 @@ class _PublicTemplateReportDialogState
     return PopScope(
       canPop: !_isSubmitting,
       child: AlertDialog(
-        title: Text(localizations.publicTemplateReportDialogTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.publicTemplateReportDialogTitle),
         content: SizedBox(
           width: 480,
           child: Form(
@@ -529,6 +532,9 @@ class _PublicTemplateReportDialogState
                   Text(localizations.publicTemplateReportPrivacyDescription),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<PublicTemplateReportReason>(
+                    style: AppPalette.inputTextStyle(context),
+                    dropdownColor: AppPalette.inputCream,
+                    iconEnabledColor: AppPalette.navy,
                     key: const Key('publicTemplateReportReason'),
                     // ignore: deprecated_member_use
                     value: _reason,
@@ -556,6 +562,7 @@ class _PublicTemplateReportDialogState
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
+                    style: AppPalette.inputTextStyle(context),
                     key: const Key('publicTemplateReportExplanation'),
                     controller: _explanation,
                     enabled: !_isSubmitting,

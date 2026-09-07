@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/app.dart';
+import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/app/screens/authenticated_shell.dart';
 import 'package:list_and_split/core/config/configuration_provider.dart';
 import 'package:list_and_split/core/config/supabase_config.dart';
@@ -61,15 +63,45 @@ void main() {
 
     await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
-    expect(find.byType(CommunityScreen), findsOneWidget);
-    expect(
-        find.byKey(const Key('openFriendTemplatesFeedButton')), findsOneWidget);
+    expect(find.byType(FriendPublicTemplateFeedScreen), findsOneWidget);
+    expect(find.byKey(const Key('openCommunityFriendsButton')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('openCommunityFriendsButton')));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
       'preserved_search',
     );
 
-    await tester.tap(find.byKey(const Key('openFriendTemplatesFeedButton')));
+    await tester.tap(find.byKey(const Key('listsDestination')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('communityDestination')));
+    await tester.pumpAndSettle();
+    expect(find.byType(CommunityScreen), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('communityUsername')))
+          .controller!
+          .text,
+      'preserved_search',
+    );
+    for (final manageAction in [
+      const Key('manageFriendshipsButton'),
+      const Key('manageBlockedUsersButton'),
+    ]) {
+      await tester.ensureVisible(find.byKey(manageAction));
+      await tester.tap(find.byKey(manageAction));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Back').first);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('communityUsername')))
+            .controller!
+            .text,
+        'preserved_search',
+      );
+    }
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
     expect(find.byType(FriendPublicTemplateFeedScreen), findsOneWidget);
@@ -101,21 +133,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(FriendPublicTemplateFeedScreen), findsOneWidget);
     expect(feed.calls, 1);
-    await tester.binding.handlePopRoute();
+    // The pre-redesign feed link remains compatible for existing navigation.
+    GoRouter.of(tester.element(find.byType(FriendPublicTemplateFeedScreen)))
+        .push(AppRoutes.friendTemplates);
     await tester.pumpAndSettle();
-    expect(find.byType(CommunityScreen), findsOneWidget);
     expect(
-      tester
-          .widget<EditableText>(
-            find.descendant(
-              of: find.byKey(const Key('communityUsername')),
-              matching: find.byType(EditableText),
-            ),
-          )
-          .controller
-          .text,
-      'preserved_search',
-    );
+        tester
+            .widget<FriendPublicTemplateFeedScreen>(
+                find.byType(FriendPublicTemplateFeedScreen))
+            .isCommunityHome,
+        isFalse);
+    expect(feed.calls, 1);
     expect(tester.takeException(), isNull);
   });
 
@@ -267,6 +295,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('communityDestination')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('openCommunityFriendsButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('communityUsername')), 'public_owner');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('viewPublicProfileButton')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('blockPublicProfileButton')));
@@ -276,7 +310,7 @@ void main() {
 
     expect(community.blockCalls, 1);
     expect(find.byType(PublicTemplateProfileScreen), findsNothing);
-    expect(find.byType(CommunityScreen), findsOneWidget);
+    expect(find.byType(FriendPublicTemplateFeedScreen), findsOneWidget);
     expect(
       find.text('This profile or template is no longer available.'),
       findsOneWidget,
@@ -320,7 +354,7 @@ void main() {
       find.byType(PublicTemplateDetailScreen, skipOffstage: false),
       findsNothing,
     );
-    expect(find.byType(CommunityScreen), findsOneWidget);
+    expect(find.byType(FriendPublicTemplateFeedScreen), findsOneWidget);
     expect(
       find.text('This profile or template is no longer available.'),
       findsOneWidget,
@@ -331,6 +365,8 @@ void main() {
 
 Future<void> _openDiscoveredProfile(WidgetTester tester) async {
   await tester.tap(find.byKey(const Key('communityDestination')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('openCommunityFriendsButton')));
   await tester.pumpAndSettle();
   await tester.enterText(
     find.byKey(const Key('communityUsername')),

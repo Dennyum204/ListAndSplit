@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/community/domain/community_profile.dart';
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/community/presentation/community_search_controller.dart';
@@ -30,119 +32,124 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(communitySearchControllerProvider);
-    return FormPageFrame(
-      title: localizations.communityTitle,
-      description: localizations.communityDescription,
-      actions: const [NotificationBell()],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Align(
-            alignment: AlignmentDirectional.centerEnd,
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                TextButton.icon(
-                  key: const Key('manageFriendshipsButton'),
-                  onPressed: state.isBusy
-                      ? null
-                      : () => context.go(AppRoutes.friendships),
-                  icon: const Icon(Icons.people_alt_outlined),
-                  label: Text(localizations.manageFriendshipsButton),
-                ),
-                TextButton.icon(
-                  key: const Key('manageBlockedUsersButton'),
-                  onPressed: state.isBusy
-                      ? null
-                      : () => context.go(AppRoutes.blockedUsers),
-                  icon: const Icon(Icons.block_rounded),
-                  label: Text(localizations.manageBlockedUsersButton),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          FormMessageBanner(
-            message: state.message == null
-                ? null
-                : communitySearchMessageText(
-                    localizations,
-                    state.message!,
+    return Scaffold(
+      appBar: AppPageHeader(
+        title: Text(localizations.friendshipsFriendsSection),
+        leading: IconButton(
+          onPressed: () => context.canPop()
+              ? context.pop()
+              : context.go(AppRoutes.community),
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+        ),
+        actions: const [NotificationBell()],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(localizations.communityDescription,
+                      style: Theme.of(context).textTheme.bodyMedium),
+                  const SizedBox(height: 16),
+                  FormMessageBanner(
+                    message: state.message == null
+                        ? null
+                        : communitySearchMessageText(
+                            localizations,
+                            state.message!,
+                          ),
                   ),
-          ),
-          TextField(
-            key: const Key('communityUsername'),
-            controller: _username,
-            enabled: !state.isBusy,
-            autocorrect: false,
-            enableSuggestions: false,
-            textCapitalization: TextCapitalization.none,
-            textInputAction: TextInputAction.search,
-            onChanged: (_) => ref
-                .read(communitySearchControllerProvider.notifier)
-                .clearResultForEditedQuery(),
-            onSubmitted: (_) => _search(),
-            decoration: InputDecoration(
-              labelText: localizations.usernameLabel,
-              helperText: localizations.communityUsernameHelper,
-              prefixIcon: const Icon(Icons.person_search_rounded),
-              errorText: state.usernameError == null
-                  ? null
-                  : communityUsernameValidationText(
-                      localizations,
-                      state.usernameError!,
+                  TextField(
+                    key: const Key('communityUsername'),
+                    style: AppPalette.inputTextStyle(context),
+                    controller: _username,
+                    enabled: !state.isBusy,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textCapitalization: TextCapitalization.none,
+                    textInputAction: TextInputAction.search,
+                    onChanged: (_) => ref
+                        .read(communitySearchControllerProvider.notifier)
+                        .clearResultForEditedQuery(),
+                    onSubmitted: (_) => _search(),
+                    decoration: InputDecoration(
+                      labelText: localizations.usernameLabel,
+                      helperText: localizations.communityUsernameHelper,
+                      prefixIcon: const Icon(Icons.person_search_rounded),
+                      errorText: state.usernameError == null
+                          ? null
+                          : communityUsernameValidationText(
+                              localizations,
+                              state.usernameError!,
+                            ),
                     ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          SubmissionButton(
-            label: localizations.communitySearchButton,
-            isSubmitting: state.isSearching,
-            onPressed: state.isBusy ? null : _search,
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Semantics(
-              button: true,
-              label: localizations.friendTemplatesCommunitySemantics,
-              child: ListTile(
-                key: const Key('openFriendTemplatesFeedButton'),
-                minVerticalPadding: 12,
-                leading: const Icon(Icons.dynamic_feed_outlined),
-                title: Text(localizations.friendTemplatesTitle),
-                subtitle: Text(localizations.friendTemplatesCommunityAction),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: state.isBusy
-                    ? null
-                    : () => context.go(AppRoutes.friendTemplates),
+                  ),
+                  const SizedBox(height: 20),
+                  SubmissionButton(
+                    label: localizations.communitySearchButton,
+                    isSubmitting: state.isSearching,
+                    onPressed: state.isBusy ? null : _search,
+                  ),
+                  const SizedBox(height: 16),
+                  if (state.result != null) ...[
+                    const SizedBox(height: 24),
+                    _DiscoveryResultCard(
+                      profile: state.result!,
+                      relationship: state.relationship,
+                      activeAction: state.activeAction,
+                      isBusy: state.isBusy,
+                      onBlock: _confirmBlock,
+                      onSend: () => ref
+                          .read(communitySearchControllerProvider.notifier)
+                          .sendFriendRequest(),
+                      onCancel: () => ref
+                          .read(communitySearchControllerProvider.notifier)
+                          .cancelFriendRequest(),
+                      onAccept: () => ref
+                          .read(communitySearchControllerProvider.notifier)
+                          .acceptFriendRequest(),
+                      onDecline: () => ref
+                          .read(communitySearchControllerProvider.notifier)
+                          .declineFriendRequest(),
+                    ),
+                  ],
+                  const SizedBox(height: 40),
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          key: const Key('manageFriendshipsButton'),
+                          onPressed: state.isBusy
+                              ? null
+                              : () => context.push(AppRoutes.friendships),
+                          icon: const Icon(Icons.people_alt_outlined),
+                          label: Text(localizations.manageFriendshipsButton),
+                        ),
+                        OutlinedButton.icon(
+                          key: const Key('manageBlockedUsersButton'),
+                          onPressed: state.isBusy
+                              ? null
+                              : () => context.push(AppRoutes.blockedUsers),
+                          icon: const Icon(Icons.block_rounded),
+                          label: Text(localizations.manageBlockedUsersButton),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          if (state.result != null) ...[
-            const SizedBox(height: 24),
-            _DiscoveryResultCard(
-              profile: state.result!,
-              relationship: state.relationship,
-              activeAction: state.activeAction,
-              isBusy: state.isBusy,
-              onBlock: _confirmBlock,
-              onSend: () => ref
-                  .read(communitySearchControllerProvider.notifier)
-                  .sendFriendRequest(),
-              onCancel: () => ref
-                  .read(communitySearchControllerProvider.notifier)
-                  .cancelFriendRequest(),
-              onAccept: () => ref
-                  .read(communitySearchControllerProvider.notifier)
-                  .acceptFriendRequest(),
-              onDecline: () => ref
-                  .read(communitySearchControllerProvider.notifier)
-                  .declineFriendRequest(),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -207,23 +214,28 @@ class _DiscoveryResultCard extends StatelessWidget {
     final localizations = AppLocalizations.of(context);
     return Card(
       key: const Key('communitySearchResult'),
+      color: Theme.of(context).colorScheme.secondaryContainer,
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              profile.displayName,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
+            Row(
+              children: [
+                IdentityBadge(label: profile.displayName),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(profile.displayName,
+                          style: Theme.of(context).textTheme.titleMedium),
+                      Text('@${profile.username}',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
                   ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '@${profile.username}',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Wrap(

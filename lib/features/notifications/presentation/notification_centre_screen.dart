@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/notifications/domain/in_app_notification.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_centre_controller.dart';
@@ -42,7 +43,7 @@ class _NotificationCentreScreenState
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(notificationCentreControllerProvider);
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         leading: IconButton(
           onPressed: () {
             if (context.canPop()) {
@@ -71,17 +72,10 @@ class _NotificationCentreScreenState
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 760),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    localizations.notificationsDescription,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                  const SizedBox(height: 12),
                   FormMessageBanner(
                     message: state.message == null
                         ? null
@@ -205,6 +199,7 @@ class _EmptyState extends StatelessWidget {
         key: const Key('notificationsEmptyList'),
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
+          const _NotificationsIntro(),
           const SizedBox(height: 72),
           const Icon(Icons.notifications_none_rounded, size: 52),
           const SizedBox(height: 12),
@@ -242,11 +237,12 @@ class _NotificationList extends ConsumerWidget {
       child: ListView.separated(
         key: const Key('notificationCentreList'),
         physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: notifications.length + 1,
+        itemCount: notifications.length + 2,
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
-          if (index < notifications.length) {
-            final notification = notifications[index];
+          if (index == 0) return const _NotificationsIntro();
+          if (index <= notifications.length) {
+            final notification = notifications[index - 1];
             return _NotificationCard(
               notification: notification,
               isBusy: state.isBusy(notification.id),
@@ -290,6 +286,20 @@ class _NotificationList extends ConsumerWidget {
   }
 }
 
+class _NotificationsIntro extends StatelessWidget {
+  const _NotificationsIntro();
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(AppLocalizations.of(context).notificationsDescription,
+              style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 12),
+        ],
+      );
+}
+
 class _NotificationCard extends ConsumerWidget {
   const _NotificationCard({
     required this.notification,
@@ -320,14 +330,10 @@ class _NotificationCard extends ConsumerWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  child: notification.actorDisplayName == null
-                      ? const Icon(Icons.gavel_rounded)
-                      : Text(
-                          notification.actorDisplayName!.characters.first
-                              .toUpperCase(),
-                        ),
-                ),
+                if (notification.actorDisplayName == null)
+                  const CircleAvatar(child: Icon(Icons.gavel_rounded))
+                else
+                  IdentityBadge(label: notification.actorDisplayName!),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/templates/domain/private_template.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
@@ -81,126 +83,135 @@ class _TemplateSelectionDialogState extends State<TemplateSelectionDialog> {
         (_titleController!.text.trim().isNotEmpty &&
             _titleController!.text.trim().length <= 80);
     return AlertDialog(
-      title: Text(widget.title),
+      titlePadding: EdgeInsets.zero,
+      title: AppDialogTitle(widget.title),
       content: SizedBox(
         width: 520,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (widget.destinationName != null) ...[
-              ListTile(
-                key: const Key('fixedTemplateImportDestination'),
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.checklist_rounded),
-                title: Text(
-                  localizations.templatesImportDestinationLabel(
-                    widget.destinationName!,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.destinationName != null) ...[
+                ListTile(
+                  key: const Key('fixedTemplateImportDestination'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.checklist_rounded),
+                  title: Text(
+                    localizations.templatesImportDestinationLabel(
+                      widget.destinationName!,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 4),
-            ],
-            if (_titleController != null) ...[
-              TextField(
-                key: const Key('templateListTitleField'),
-                controller: _titleController,
-                decoration: InputDecoration(
-                  labelText: localizations.listsTitleLabel,
+                const SizedBox(height: 4),
+              ],
+              if (_titleController != null) ...[
+                TextField(
+                  style: AppPalette.inputTextStyle(context),
+                  key: const Key('templateListTitleField'),
+                  controller: _titleController,
+                  decoration: InputDecoration(
+                    labelText: localizations.listsTitleLabel,
+                  ),
+                  onChanged: (_) => setState(() {}),
                 ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 8),
-            ],
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
+                const SizedBox(height: 8),
+              ],
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                children: [
+                  Text(
                     localizations.templatesSelectionCount(
                       _selection.selectedCount,
                       widget.items.length,
                     ),
                   ),
-                ),
-                TextButton(
-                  onPressed: _submitted
-                      ? null
-                      : () => setState(() {
-                            _selection = TemplateSelection.all(
-                              widget.items.map((item) => item.id),
-                              remainingCapacity: widget.remainingCapacity,
-                            );
-                          }),
-                  child: Text(localizations.templatesSelectAllButton),
-                ),
-                TextButton(
-                  onPressed: _submitted
-                      ? null
-                      : () => setState(() {
-                            _selection = TemplateSelection(
-                              availableItemIds:
-                                  widget.items.map((item) => item.id),
-                              selectedItemIds: const [],
-                              remainingCapacity: widget.remainingCapacity,
-                            );
-                          }),
-                  child: Text(localizations.templatesClearSelectionButton),
-                ),
-              ],
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                localizations.templatesRemainingCapacity(
-                  widget.remainingCapacity,
-                ),
+                  TextButton(
+                    onPressed: _submitted
+                        ? null
+                        : () => setState(() {
+                              _selection = TemplateSelection.all(
+                                widget.items.map((item) => item.id),
+                                remainingCapacity: widget.remainingCapacity,
+                              );
+                            }),
+                    child: Text(localizations.templatesSelectAllButton),
+                  ),
+                  TextButton(
+                    onPressed: _submitted
+                        ? null
+                        : () => setState(() {
+                              _selection = TemplateSelection(
+                                availableItemIds:
+                                    widget.items.map((item) => item.id),
+                                selectedItemIds: const [],
+                                remainingCapacity: widget.remainingCapacity,
+                              );
+                            }),
+                    child: Text(localizations.templatesClearSelectionButton),
+                  ),
+                ],
               ),
-            ),
-            if (_selection.selectedCount > widget.remainingCapacity)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
+              Align(
+                alignment: Alignment.centerLeft,
                 child: Text(
-                  localizations.templatesCapacityExceeded,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
+                  localizations.templatesRemainingCapacity(
+                    widget.remainingCapacity,
                   ),
                 ),
               ),
-            if (!widget.submissionEnabled)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  localizations.templatesUnavailableMessage,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
+              if (_selection.selectedCount > widget.remainingCapacity)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    localizations.templatesCapacityExceeded,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                 ),
-              ),
-            const Divider(),
-            Flexible(
-              child: ListView.builder(
+              if (!widget.submissionEnabled)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    localizations.templatesUnavailableMessage,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              const Divider(),
+              ListView.builder(
                 shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
                 itemCount: widget.items.length,
                 itemBuilder: (context, index) {
                   final item = widget.items[index];
-                  return CheckboxListTile(
-                    key: Key('select-template-item-${item.id}'),
-                    value: _selection.selectedItemIds.contains(item.id),
-                    title: Text(item.name),
-                    subtitle: Text(
-                      widget.duplicateIds.contains(item.id)
-                          ? '${item.quantity.format()} · ${localizations.templatesPossibleDuplicate}'
-                          : item.quantity.format(),
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    child: CheckboxListTile(
+                      key: Key('select-template-item-${item.id}'),
+                      value: _selection.selectedItemIds.contains(item.id),
+                      title: Text(item.name),
+                      subtitle: Text(
+                        widget.duplicateIds.contains(item.id)
+                            ? '${item.quantity.format()} · ${localizations.templatesPossibleDuplicate}'
+                            : item.quantity.format(),
+                      ),
+                      onChanged: _submitted
+                          ? null
+                          : (_) => setState(() {
+                                _selection = _selection.toggled(item.id);
+                              }),
                     ),
-                    onChanged: _submitted
-                        ? null
-                        : (_) => setState(() {
-                              _selection = _selection.toggled(item.id);
-                            }),
                   );
                 },
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: [

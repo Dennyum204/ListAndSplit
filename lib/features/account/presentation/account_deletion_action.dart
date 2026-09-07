@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/account/domain/account_deletion_repository.dart';
 import 'package:list_and_split/features/account/presentation/account_deletion_controller.dart';
@@ -51,8 +52,9 @@ class AccountDeletionAction extends ConsumerWidget {
           child: OutlinedButton.icon(
             key: const Key('deleteAccountButton'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-              side: BorderSide(color: Theme.of(context).colorScheme.error),
+              backgroundColor: const Color(0xFFBD2428),
+              foregroundColor: Colors.white,
+              side: BorderSide.none,
             ),
             onPressed: enabled && !state.isSubmitting
                 ? () => _openDialog(context, ref)
@@ -173,6 +175,7 @@ class _AccountDeletionDialogState
               ),
               const SizedBox(height: 16),
               TextField(
+                style: AppPalette.inputTextStyle(context),
                 key: const Key('accountDeletionConfirmationField'),
                 controller: _confirmation,
                 enabled: !state.isSubmitting,
@@ -191,6 +194,7 @@ class _AccountDeletionDialogState
               ),
               const SizedBox(height: 12),
               TextField(
+                style: AppPalette.inputTextStyle(context),
                 key: const Key('accountDeletionPasswordField'),
                 controller: _password,
                 enabled: !state.isSubmitting,

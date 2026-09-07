@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/features/lists/presentation/active_lists_controller.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
+import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class ActiveListsScreen extends ConsumerStatefulWidget {
@@ -24,9 +27,12 @@ class _ActiveListsScreenState extends ConsumerState<ActiveListsScreen> {
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(activeListsControllerProvider);
     final lists = state.listsFor(_status);
+    final displayName = ref.watch(ownProfileProvider).valueOrNull?.displayName;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(localizations.listsTitle),
+      appBar: AppPageHeader(
+        title: Text(displayName == null || displayName.isEmpty
+            ? localizations.listsTitle
+            : '${localizations.listsWelcomeLabel}, $displayName'),
         actions: const [NotificationBell()],
       ),
       floatingActionButton: _status == ActiveListStatus.active
@@ -120,8 +126,10 @@ class _ActiveListsScreenState extends ConsumerState<ActiveListsScreen> {
           final state = dialogRef.watch(activeListsControllerProvider);
           final localizations = AppLocalizations.of(context);
           return AlertDialog(
-            title: Text(localizations.listsCreateTitle),
+            titlePadding: EdgeInsets.zero,
+            title: AppDialogTitle(localizations.listsCreateTitle),
             content: TextField(
+              style: AppPalette.inputTextStyle(context),
               key: const Key('createListTitle'),
               autofocus: true,
               enabled: !state.isCreating,
@@ -249,17 +257,16 @@ class _ActiveListCard extends StatelessWidget {
             material.formatShortDate(timestamp),
             material.formatTimeOfDay(TimeOfDay.fromDateTime(timestamp)),
           );
+    final colors = Theme.of(context).colorScheme;
     return Semantics(
       button: true,
-      label:
-          '${summary.title}, ${localizations.listsCompletedCount(summary.completedItemCount, summary.itemCount)}',
       child: Card(
         key: Key('list-${summary.id}'),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => context.push('${AppRoutes.lists}/${summary.id}'),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -268,14 +275,32 @@ class _ActiveListCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         summary.title,
-                        style: Theme.of(context).textTheme.titleLarge,
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: colors.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
                       ),
                     ),
                     if (summary.status == ActiveListStatus.archived)
                       const Icon(Icons.archive_outlined, size: 20),
                     const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right_rounded),
+                    Icon(Icons.chevron_right_rounded, color: colors.primary),
                   ],
+                ),
+                const SizedBox(height: 8),
+                ExcludeSemantics(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      key: Key('list-progress-${summary.id}'),
+                      minHeight: 6,
+                      color: AppPalette.orange,
+                      value: summary.itemCount == 0
+                          ? 0
+                          : summary.completedItemCount / summary.itemCount,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -295,7 +320,16 @@ class _ActiveListCard extends StatelessWidget {
                 ),
                 if (participantCount != null) ...[
                   const SizedBox(height: 4),
-                  Text(localizations.listsParticipantCount(participantCount)),
+                  Row(
+                    children: [
+                      const ExcludeSemantics(
+                          child: Icon(Icons.people_outline_rounded, size: 18)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                          child: Text(localizations
+                              .listsParticipantCount(participantCount))),
+                    ],
+                  ),
                 ],
                 const SizedBox(height: 4),
                 Text(

@@ -622,13 +622,18 @@ Future<void> _scrollSplitUntilVisible(
   WidgetTester tester,
   Finder target,
 ) async {
+  final scrollable = find.descendant(
+    of: find.byKey(const Key('splitOverview')),
+    matching: find.byType(Scrollable),
+  );
+  // A completed payment can remove cards above the preserved viewport. Search
+  // from the start so this helper finds both earlier and later authoritative UI.
+  tester.state<ScrollableState>(scrollable).position.jumpTo(0);
+  await tester.pump();
   await tester.scrollUntilVisible(
     target,
     300,
-    scrollable: find.descendant(
-      of: find.byKey(const Key('splitOverview')),
-      matching: find.byType(Scrollable),
-    ),
+    scrollable: scrollable,
     maxScrolls: 30,
   );
   await tester.pumpAndSettle();

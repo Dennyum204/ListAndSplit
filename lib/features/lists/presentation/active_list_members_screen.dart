@@ -2,11 +2,80 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_members_controller.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
+
+class _MemberIdentityCard extends StatelessWidget {
+  const _MemberIdentityCard({
+    required this.leading,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+    super.key,
+  });
+
+  final Widget leading;
+  final Widget title;
+  final Widget subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final stackActions = constraints.maxWidth < 340 ||
+                MediaQuery.textScalerOf(context).scale(14) > 20;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    leading,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          DefaultTextStyle.merge(
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            child: title,
+                          ),
+                          DefaultTextStyle.merge(
+                            style: Theme.of(context).textTheme.bodySmall,
+                            child: subtitle,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!stackActions && trailing != null) ...[
+                      const SizedBox(width: 8),
+                      trailing!,
+                    ],
+                  ],
+                ),
+                if (stackActions && trailing != null) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: trailing!,
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
 
 class ActiveListMembersScreen extends ConsumerWidget {
   const ActiveListMembersScreen({required this.listId, super.key});
@@ -30,7 +99,27 @@ class ActiveListMembersScreen extends ConsumerWidget {
       },
     );
     return Scaffold(
-      appBar: AppBar(title: Text(localizations.listMembersTitle)),
+      appBar: AppPageHeader(
+        title: Text(localizations.listMembersTitle),
+        actions: [
+          if (state.data.valueOrNull case final data?)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 16),
+              child: Semantics(
+                label: localizations
+                    .listsParticipantCount(data.participants.length),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('${data.participants.length}'),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.group_outlined),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
       body: SafeArea(
         child: state.data.when(
           loading: () => Center(
@@ -53,6 +142,7 @@ class ActiveListMembersScreen extends ConsumerWidget {
                 .load(),
             child: ListView(
               key: const Key('listMembersView'),
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
               children: [
                 FormMessageBanner(
@@ -64,9 +154,9 @@ class ActiveListMembersScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 ...data.participants.map(
-                  (profile) => ListTile(
+                  (profile) => _MemberIdentityCard(
                     key: Key('participant-${profile.profileId}'),
-                    leading: const Icon(Icons.person_outline_rounded),
+                    leading: IdentityBadge(label: profile.displayName),
                     title: Text(profile.displayName),
                     subtitle: Text('@${profile.username}'),
                     trailing: profile.isOwner
@@ -130,8 +220,9 @@ class ActiveListMembersScreen extends ConsumerWidget {
                       child: Text(localizations.listNoPendingInvitations),
                     ),
                   ...data.pending.map(
-                    (profile) => ListTile(
+                    (profile) => _MemberIdentityCard(
                       key: Key('pending-${profile.profileId}'),
+                      leading: IdentityBadge(label: profile.displayName),
                       title: Text(profile.displayName),
                       subtitle: Text('@${profile.username}'),
                       trailing: TextButton(
@@ -160,8 +251,9 @@ class ActiveListMembersScreen extends ConsumerWidget {
                       child: Text(localizations.listNoEligibleFriends),
                     ),
                   ...data.eligible.map(
-                    (profile) => ListTile(
+                    (profile) => _MemberIdentityCard(
                       key: Key('eligible-${profile.profileId}'),
+                      leading: IdentityBadge(label: profile.displayName),
                       title: Text(profile.displayName),
                       subtitle: Text('@${profile.username}'),
                       trailing: FilledButton.tonal(
@@ -197,7 +289,8 @@ class ActiveListMembersScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.listRemoveMemberTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.listRemoveMemberTitle),
         content: Text(
             localizations.listRemoveMemberDescription(profile.displayName)),
         actions: [
@@ -231,7 +324,8 @@ class ActiveListMembersScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.listTransferOwnershipTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.listTransferOwnershipTitle),
         content: Text(
           localizations.listTransferOwnershipDescription(profile.displayName),
         ),

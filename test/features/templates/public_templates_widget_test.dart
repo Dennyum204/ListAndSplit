@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
+import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/community/presentation/community_providers.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
@@ -18,8 +20,45 @@ import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fake_public_template_repository.dart';
 import '../../helpers/fakes.dart';
+import '../../support/ui_preview_capture.dart';
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
+  for (final configuration in [
+    (locale: const Locale('en'), dark: false),
+    (locale: const Locale('pt'), dark: true),
+  ]) {
+    testWidgets(
+        'redesigned public identity and template cards fit narrow large-text '
+        '${configuration.locale.languageCode}', (tester) async {
+      final repository = FakePublicTemplateRepository()
+        ..queuePage(
+          _ownerId,
+          PublicTemplatePage(
+            profile: _profile,
+            templates: [_summary(_firstTemplateId)],
+            nextCursor: null,
+          ),
+        );
+      await _pump(
+        tester,
+        repository: repository,
+        locale: configuration.locale,
+        dark: configuration.dark,
+        child: const PublicTemplateProfileScreen(profileId: _ownerId),
+        size: const Size(360, 800),
+      );
+      expect(find.byType(AppPageHeader), findsOneWidget);
+      expect(find.byType(IdentityBadge), findsOneWidget);
+      expect(find.byType(Image), findsNothing);
+      expect(find.byKey(const Key('publicProfileUsername')), findsOneWidget);
+      await captureUiPreview(tester,
+          'public-profile-large-${configuration.dark ? 'dark' : 'light'}');
+      await tester.scrollUntilVisible(
+          find.byKey(const Key('publicTemplate-$_firstTemplateId')), 200);
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets('owned public template exposes the Send action', (tester) async {
     final detail = PublicTemplateDetail(
       profile: _profile,
@@ -514,8 +553,9 @@ Future<void> _pump(
   required bool dark,
   required Widget child,
   String userId = 'viewer-id',
+  Size size = const Size(900, 1200),
 }) async {
-  tester.view.physicalSize = const Size(900, 1200);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -531,15 +571,15 @@ Future<void> _pump(
       ],
       child: MaterialApp(
         locale: locale,
-        theme: ThemeData.light(),
-        darkTheme: ThemeData.dark(),
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
         themeMode: dark ? ThemeMode.dark : ThemeMode.light,
-        builder: (context, materialChild) => MediaQuery(
+        builder: (context, materialChild) => uiPreviewBoundary(MediaQuery(
           data: MediaQuery.of(context).copyWith(
             textScaler: const TextScaler.linear(2),
           ),
           child: materialChild!,
-        ),
+        )),
         localizationsDelegates: const [
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,

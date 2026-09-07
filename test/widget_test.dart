@@ -8,6 +8,7 @@ import 'package:list_and_split/app/router/app_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/core/config/configuration_provider.dart';
 import 'package:list_and_split/core/config/supabase_config.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
 import 'package:list_and_split/features/auth/domain/auth_repository.dart';
 import 'package:list_and_split/features/auth/domain/auth_session.dart';
@@ -24,12 +25,72 @@ import 'package:list_and_split/features/notifications/domain/in_app_notification
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
+import 'package:list_and_split/features/templates/presentation/public_template_providers.dart';
 
 import 'helpers/fakes.dart';
 import 'helpers/fake_private_template_repository.dart';
 import 'helpers/fake_public_template_moderation_repository.dart';
+import 'helpers/fake_friend_public_template_feed_repository.dart';
+import 'support/ui_preview_capture.dart';
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+        'full ${brightness.name} shell keeps readable selection and all four destinations',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.platformBrightnessTestValue = brightness;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+      final auth = FakeAuthRepository(session: verifiedSession);
+      addTearDown(auth.close);
+      await _pumpConfiguredApp(tester,
+          auth: auth,
+          profile: FakeProfileRepository(
+              profile: FakeProfileRepository.completeProfile),
+          lists: FakeActiveListRepository()
+            ..activeLists = [
+              ActiveListSummary(
+                id: 'reference-list',
+                title: 'Weekend shopping',
+                status: ActiveListStatus.active,
+                version: 1,
+                itemCount: 7,
+                completedItemCount: 3,
+                participantCount: 3,
+                archivedAt: null,
+                createdAt: DateTime.utc(2026, 7, 20),
+                updatedAt: DateTime.utc(2026, 7, 20),
+              )
+            ]);
+      const destinations = ['lists', 'templates', 'community', 'profile'];
+      for (var index = 0; index < destinations.length; index++) {
+        final destination =
+            find.byKey(Key('${destinations[index]}Destination'));
+        if (index > 0) {
+          await tester.tap(destination);
+          await tester.pumpAndSettle();
+        }
+        expect(
+            tester
+                .widget<NavigationBar>(find.byType(NavigationBar))
+                .selectedIndex,
+            index);
+        final icon =
+            find.descendant(of: destination, matching: find.byType(Icon)).first;
+        expect(IconTheme.of(tester.element(icon)).color, AppPalette.navy);
+        expect(tester.getSize(destination).height, greaterThanOrEqualTo(48));
+        await captureUiPreview(
+            tester, 'shell-${destinations[index]}-${brightness.name}');
+        expect(tester.takeException(), isNull);
+      }
+    });
+  }
+
   testWidgets('shows an actionable screen when Supabase config is missing',
       (tester) async {
     await tester.pumpWidget(
@@ -68,7 +129,8 @@ void main() {
     final profile = FakeProfileRepository();
     await _pumpConfiguredApp(tester, auth: auth, profile: profile);
 
-    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Sign in to your account'), findsOneWidget);
+    await tester.ensureVisible(find.text('Create account'));
     await tester.tap(find.text('Create account'));
     await tester.pumpAndSettle();
     expect(find.text('Create your account'), findsOneWidget);
@@ -103,6 +165,7 @@ void main() {
       profile: FakeProfileRepository(),
     );
 
+    await tester.ensureVisible(find.text('Create account'));
     await tester.tap(find.text('Create account'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -117,6 +180,7 @@ void main() {
       find.byKey(const Key('signUpPasswordConfirmation')),
       '1234567',
     );
+    await tester.ensureVisible(find.text('Create account'));
     await tester.tap(find.text('Create account'));
     await tester.pumpAndSettle();
 
@@ -132,6 +196,7 @@ void main() {
       find.byKey(const Key('signUpPasswordConfirmation')),
       exactPassword,
     );
+    await tester.ensureVisible(find.text('Create account'));
     await tester.tap(find.text('Create account'));
     await tester.pumpAndSettle();
 
@@ -163,6 +228,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('sign you in'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Create account'));
     await tester.tap(find.text('Create account'));
     await tester.pumpAndSettle();
     expect(find.text('Create your account'), findsOneWidget);
@@ -236,7 +302,7 @@ void main() {
     await tester.tap(find.text('Cancel and sign out'));
     await tester.pumpAndSettle();
     expect(auth.signOutCalls, 1);
-    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Sign in to your account'), findsOneWidget);
     await auth.close();
   });
 
@@ -286,7 +352,7 @@ void main() {
     await tester.tap(find.text('Sign out'));
     await tester.pumpAndSettle();
     expect(auth.signOutCalls, 2);
-    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Sign in to your account'), findsOneWidget);
     await auth.close();
   });
 
@@ -327,7 +393,7 @@ void main() {
     auth.emit(const AuthSessionState.signedOut());
     await tester.pumpAndSettle();
     expect(container.read(pendingVerificationEmailProvider), isNull);
-    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Sign in to your account'), findsOneWidget);
     await auth.close();
   });
 
@@ -521,8 +587,7 @@ void main() {
     expect(find.byKey(const Key('communityDestination')), findsOneWidget);
     expect(find.byKey(const Key('profileDestination')), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
       'draft_query',
@@ -533,8 +598,7 @@ void main() {
     expect(find.text('No private templates yet'), findsOneWidget);
     expect(find.byKey(const Key('notificationBellButton')), findsWidgets);
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     expect(find.text('draft_query'), findsOneWidget);
     await tester.tap(find.byKey(const Key('manageFriendshipsButton')));
     await tester.pumpAndSettle();
@@ -565,8 +629,7 @@ void main() {
       community: community,
     );
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
 
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
@@ -645,8 +708,7 @@ void main() {
       friendships: friendships,
     );
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
       'beta_user',
@@ -710,8 +772,7 @@ void main() {
       friendships: friendships,
     );
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     await tester.tap(find.byKey(const Key('manageFriendshipsButton')));
     await tester.pumpAndSettle();
 
@@ -776,8 +837,7 @@ void main() {
       friendships: friendships,
     );
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     await tester.tap(find.byKey(const Key('manageFriendshipsButton')));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
@@ -822,8 +882,7 @@ void main() {
       friendships: friendships,
     );
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     await tester.tap(find.byKey(const Key('manageFriendshipsButton')));
     await tester.pumpAndSettle();
 
@@ -868,8 +927,7 @@ void main() {
       friendships: friendships,
     );
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
       'beta_user',
@@ -913,8 +971,7 @@ void main() {
       friendships: friendships,
     );
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
       'beta_user',
@@ -944,8 +1001,7 @@ void main() {
       community: community,
     );
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
       'missing_user',
@@ -981,8 +1037,7 @@ void main() {
       community: community,
     );
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     await tester.tap(find.byKey(const Key('manageBlockedUsersButton')));
     await tester.pumpAndSettle();
 
@@ -1024,8 +1079,7 @@ void main() {
       community: community,
     );
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     await tester.tap(find.byKey(const Key('manageBlockedUsersButton')));
     await tester.pumpAndSettle();
     expect(find.text('Something went wrong. Please try again.'), findsWidgets);
@@ -1056,8 +1110,7 @@ void main() {
       community: community,
     );
 
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     await tester.enterText(
       find.byKey(const Key('communityUsername')),
       'beta_user',
@@ -1068,12 +1121,11 @@ void main() {
 
     auth.emit(const AuthSessionState.signedOut());
     await tester.pumpAndSettle();
-    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Sign in to your account'), findsOneWidget);
 
     auth.emit(verifiedSession);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('communityDestination')));
-    await tester.pumpAndSettle();
+    await _openCommunitySearch(tester);
     expect(find.byKey(const Key('communitySearchResult')), findsNothing);
     await auth.close();
   });
@@ -1144,7 +1196,7 @@ void main() {
     await tester.tap(find.text('Sign out'));
     await tester.pumpAndSettle();
     expect(auth.signOutCalls, 1);
-    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Sign in to your account'), findsOneWidget);
     await auth.close();
   });
 
@@ -1304,7 +1356,7 @@ Future<void> _pumpConfiguredApp(
       stateChangedAt: null,
     );
   await tester.pumpWidget(
-    ProviderScope(
+    uiPreviewBoundary(ProviderScope(
       overrides: [
         appConfigurationProvider.overrideWithValue(
           const AppConfiguration.devConfigured(),
@@ -1332,12 +1384,26 @@ Future<void> _pumpConfiguredApp(
         privateTemplateRepositoryProvider.overrideWithValue(
           FakePrivateTemplateRepository(),
         ),
+        friendPublicTemplateFeedRepositoryProvider.overrideWithValue(
+          FakeFriendPublicTemplateFeedRepository(),
+        ),
         publicTemplateModerationRepositoryProvider.overrideWithValue(
           moderation ?? FakePublicTemplateModerationRepository(),
         ),
       ],
       child: const ListAndSplitApp(),
-    ),
+    )),
   );
   await tester.pumpAndSettle();
+}
+
+Future<void> _openCommunitySearch(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('communityDestination')));
+  await tester.pumpAndSettle();
+  final friendsAction = find.byKey(const Key('openCommunityFriendsButton'));
+  if (friendsAction.evaluate().isNotEmpty) {
+    await tester.tap(friendsAction);
+    await tester.pumpAndSettle();
+  }
+  expect(find.byKey(const Key('communityUsername')), findsOneWidget);
 }

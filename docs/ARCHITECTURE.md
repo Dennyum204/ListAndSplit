@@ -26,6 +26,32 @@ the roadmap.
 | Offline direction | Local SQLite cache, introduced in a later phase |
 | Package policy | Current stable compatible releases; no prerelease packages |
 
+## Visual presentation boundary
+
+PR #33 uses Fernando's light-theme `UI refactor .pdf` and eight dark-theme
+screenshots as approved visual references; live Figma access is not required.
+`core/theme/app_palette.dart` owns the cream, navy, orange, blue-card and charcoal
+tokens, while `AppTheme` maps them to Material 3 light/dark component themes.
+`core/presentation/design_widgets.dart` supplies inset rounded page headers,
+section cards, decorative identity initials and dialog title strips. Native
+system bars, existing Material icons and platform typography remain in use; no
+sample portrait, list cover, template image or temporary asset URL is shipped.
+
+Feature widgets compose these primitives around existing Riverpod state and
+repository intents. Immutable-ID routes, guarded dialogs, authoritatively loaded
+data, stale-access exits, idempotent submissions and private Realtime contracts
+remain functional requirements. The four-destination stateful shell is retained;
+Community's initial page is the existing friends-only public-template feed, with
+exact-username discovery at `/community/friends`. Existing profile, feed,
+friendship and blocking paths remain supported. Sibling Chat navigation must
+unmount Chat when leaving it, so hidden pages never mark unseen messages read.
+
+Reference density is adapted for accessible touch targets, scrollable dialogs,
+keyboard insets, translated copy and 200% text. Destructive warnings and complete
+error/loading/read-only states take priority over omissions in static references.
+Optional local widget PNG captures are written outside the repository only; they
+are review aids, not physical-device QA or committed golden baselines.
+
 ## Client composition
 
 The application composition path is intentionally small:
