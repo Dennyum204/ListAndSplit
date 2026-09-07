@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/core/presentation/app_bottom_navigation_bar.dart';
 import 'package:list_and_split/core/theme/app_palette.dart';
@@ -79,10 +78,12 @@ void main() {
               expect(taps, [for (var i = 0; i <= index; i++) i]);
               for (var other = 0; other < 4; other++) {
                 expect(
-                    tester
-                        .getSemantics(find.byKey(Key('destination-$other')))
-                        .hasFlag(SemanticsFlag.isSelected),
-                    other == index);
+                    tester.getSemantics(find.byKey(Key('destination-$other'))),
+                    containsSemantics(
+                      isSelected: other == index,
+                      isButton: true,
+                      hasTapAction: true,
+                    ));
               }
               final pill = find.byKey(Key('navigationPill-$index'));
               expect(tester.widget<Material>(pill).color, AppPalette.orange);
