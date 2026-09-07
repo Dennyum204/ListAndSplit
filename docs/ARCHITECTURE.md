@@ -346,11 +346,24 @@ not an implemented Chat subsystem.
   membership, ownership, or recipient relationship.
 - **Realtime** delivers private, account-scoped, content-free invalidations; RPC
   repositories remain the only state and authorization authority.
-- **Storage** is available for future binary objects, with object policies aligned
-  to the owning application records. No concrete storage use is yet agreed.
+- **Storage** holds P-060/A-075 private profile thumbnails; future binary objects
+  need separately agreed policies aligned to their owning application records.
 - **Database functions** and, where appropriate, **Edge Functions** hold atomic or
   privileged server operations. Authoritative balance and debt calculations run
   server-side and require unit tests.
+
+P-060/A-075 implement a feature-owned avatar repository/controller and private
+Edge byte gateway. Only the verified user wrapper derives the mutation owner;
+client reads resolve contextual authorization twice around server Storage access.
+Private forced-RLS metadata and file ledgers track random keys before upload,
+with server-only fenced-lease RPCs and no external I/O inside SQL transactions.
+The deletion Edge Function acknowledges binary cleanup before Auth deletion;
+failures preserve the account but may have removed the photo. Avatar-aware export
+v13 composes unchanged v12 and only the caller's sanitized thumbnail. Existing
+account invalidations refresh mounted images; session changes discard old bytes,
+and nonfriend public-profile viewers refresh authoritatively on resume/reload.
+No signed URLs, disk avatar cache, stored export, notification or new topic exists.
+See [PROFILE_AVATARS.md](PROFILE_AVATARS.md) for recovery/rollout limitations.
 
 Database migrations committed under `supabase/migrations/` are the only schema
 source of truth. Every schema change must be introduced by a reviewed migration
@@ -829,7 +842,7 @@ template or invitation data.
 friend-visible sent and received projections. Sent export excludes accepted-copy
 identity; received export contains the allowlisted snapshot but no source ID,
 request/fingerprint, or provenance. V1-v10 remain unchanged, and the v11 shape
-remains strictly supported by the current v12 Flutter parser. A private postgres-only
+remains strictly supported by the current v13 Flutter parser. A private postgres-only
 idempotent function deletes terminal offers at least 180 days old and cascades
 snapshots, ledgers, and notifications without touching accepted independent
 copies. A separate forward-only operational migration requires `postgres`,
@@ -1070,7 +1083,7 @@ provenance. Flutter strictly parses v11 and rejects expanded or inconsistent
   ID/title/status when the caller still has access or an unavailable context after
   access loss. It never includes another participant's message or identity, a
   sender name, read state, unread count, request/fingerprint, access boundary, or
-  Realtime data. Flutter strictly parses v12 while retaining v1-v11.
+  Realtime data. Avatar-aware Flutter strictly parses v13 while retaining v1-v12.
 `shared_list_access`
 stays byte-for-byte metadata-only: it contains no assignment array, item data,
 General Note text, mention identity, or corresponding timestamp. Request IDs,
@@ -1158,10 +1171,11 @@ relationship or item disappears, every list owned by the profile and the list's
 items/assignments/mentions, and every private category, template, and template
 item. Moderation evidence survives while reporter, template-owner, and moderator
 Auth/profile references are anonymized with `SET NULL`; no deleted identity
-snapshot is retained. Before a non-owner profile disappears, one parent-first coordinator gathers
-every surviving affected list referenced by participant access, item assignment,
-resolved mention, Split participant history, or item `completed_by`, excluding
-caller-owned lists that will cascade in full. It locks lists in UUID order before
+snapshot is retained. Before a profile disappears, one parent-first coordinator gathers
+every owned and surviving affected list referenced by participant access, Chat,
+item assignment, resolved mention, Split participant history or item `completed_by`.
+Including owned lists fixes the previously reproducible partial-identity FK
+failure before their cascade. It locks all lists together in UUID order before
 their item/access/assignment/mention/Split children in the global order, removes
 current assignment/mention links, preserves note text, and clears Split participant
 profile snapshots while existing expenses, shares, settlements, and reversals
@@ -1599,8 +1613,7 @@ writes are implemented.
 - PostgreSQL-function versus Edge-Function placement for each atomic server action.
 - SQLite library, cache schema, synchronization algorithm, conflict policy, and
   background execution limits.
-- Avatar and other Storage use cases, upload validation, object policies, and
-  retention.
+- Other Storage use cases beyond the accepted P-060/A-075 current-avatar boundary.
 - Logging, analytics, crash reporting, performance budgets, and privacy controls.
 - Notification archive/delete/preferences, later-type payload/localization,
   physical cleanup, and account-lifecycle retention.

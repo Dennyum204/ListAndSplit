@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
@@ -461,7 +462,8 @@ class _BalanceTile extends StatelessWidget {
                 if (participant.isAnonymized)
                   const CircleAvatar(child: Icon(Icons.person_off_outlined))
                 else
-                  IdentityBadge(label: name),
+                  ProfileAvatar(
+                      label: name, target: AvatarTarget.split(participant.id)),
                 const SizedBox(width: 10),
                 Expanded(
                     child: Text(name,
@@ -590,12 +592,22 @@ class _SettlementSuggestionCard extends StatelessWidget {
             ExcludeSemantics(
               child: Row(
                 children: [
-                  IdentityBadge(label: payerName, size: 32),
+                  ProfileAvatar(
+                      label: payerName,
+                      size: 32,
+                      target: payer == null || payer.isAnonymized
+                          ? null
+                          : AvatarTarget.split(payer.id)),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
                     child: Icon(Icons.arrow_forward_rounded),
                   ),
-                  IdentityBadge(label: recipientName, size: 32),
+                  ProfileAvatar(
+                      label: recipientName,
+                      size: 32,
+                      target: recipient == null || recipient.isAnonymized
+                          ? null
+                          : AvatarTarget.split(recipient.id)),
                 ],
               ),
             ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
@@ -333,7 +334,11 @@ class _NotificationCard extends ConsumerWidget {
                 if (notification.actorDisplayName == null)
                   const CircleAvatar(child: Icon(Icons.gavel_rounded))
                 else
-                  IdentityBadge(label: notification.actorDisplayName!),
+                  ProfileAvatar(
+                      label: notification.actorDisplayName!,
+                      target: notification.actorProfileId == null
+                          ? null
+                          : AvatarTarget.profile(notification.actorProfileId!)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

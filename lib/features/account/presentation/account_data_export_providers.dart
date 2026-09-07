@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:list_and_split/core/supabase/supabase_client_provider.dart';
-import 'package:list_and_split/features/account/data/supabase_account_data_export_repository.dart';
+import 'package:list_and_split/features/account/data/avatar_account_data_export_repository.dart';
 import 'package:list_and_split/features/account/data/temporary_account_data_export_share_service.dart';
 import 'package:list_and_split/features/account/domain/account_data_export_repository.dart';
 import 'package:list_and_split/features/account/domain/account_data_export_share_service.dart';
@@ -9,7 +9,7 @@ import 'package:list_and_split/features/profile/presentation/profile_providers.d
 
 final accountDataExportRepositoryProvider =
     Provider<AccountDataExportRepository>(
-  (ref) => SupabaseAccountDataExportRepository(
+  (ref) => AvatarAccountDataExportRepository(
     ref.watch(supabaseClientProvider),
   ),
 );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
@@ -156,7 +157,9 @@ class ActiveListMembersScreen extends ConsumerWidget {
                 ...data.participants.map(
                   (profile) => _MemberIdentityCard(
                     key: Key('participant-${profile.profileId}'),
-                    leading: IdentityBadge(label: profile.displayName),
+                    leading: ProfileAvatar(
+                        label: profile.displayName,
+                        target: AvatarTarget.profile(profile.profileId)),
                     title: Text(profile.displayName),
                     subtitle: Text('@${profile.username}'),
                     trailing: profile.isOwner
@@ -222,7 +225,9 @@ class ActiveListMembersScreen extends ConsumerWidget {
                   ...data.pending.map(
                     (profile) => _MemberIdentityCard(
                       key: Key('pending-${profile.profileId}'),
-                      leading: IdentityBadge(label: profile.displayName),
+                      leading: ProfileAvatar(
+                          label: profile.displayName,
+                          target: AvatarTarget.profile(profile.profileId)),
                       title: Text(profile.displayName),
                       subtitle: Text('@${profile.username}'),
                       trailing: TextButton(
@@ -253,7 +258,9 @@ class ActiveListMembersScreen extends ConsumerWidget {
                   ...data.eligible.map(
                     (profile) => _MemberIdentityCard(
                       key: Key('eligible-${profile.profileId}'),
-                      leading: IdentityBadge(label: profile.displayName),
+                      leading: ProfileAvatar(
+                          label: profile.displayName,
+                          target: AvatarTarget.profile(profile.profileId)),
                       title: Text(profile.displayName),
                       subtitle: Text('@${profile.username}'),
                       trailing: FilledButton.tonal(

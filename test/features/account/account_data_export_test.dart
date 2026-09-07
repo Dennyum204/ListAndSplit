@@ -975,7 +975,7 @@ void main() {
     });
 
     test('rejects unsupported schema versions', () {
-      final json = validAccountDataExportJson()..['schema_version'] = 13;
+      final json = validAccountDataExportJson()..['schema_version'] = 14;
 
       expect(
         () => AccountDataExportDocument.fromJson(json),

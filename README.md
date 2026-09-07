@@ -40,7 +40,7 @@ The template-send database/domain foundation adds immutable friend offers,
 recipient-only atomic private-copy acceptance, sender revocation, persistent
 Received/minimal Sent projections, notification v5, export v11, and private
 Realtime invalidation. Flutter exposes localized Send, Received, Sent,
-Accept/Decline/Revoke and notification routing; the current export-v12 parser
+Accept/Decline/Revoke and notification routing; the current export-v13 parser
 strictly preserves the v11 offer shape.
 the source defines a separately authorized stable daily schedule for the
 postgres-only 180-day terminal cleanup. Each hosted environment must deploy and
@@ -67,6 +67,25 @@ feed, Split equal/custom expenses and settlements, and English/Portuguese
 presentation. This statement does not imply that every migration has reached
 every environment, that every flow has completed physical QA, or that the app is
 beta- or Production-released.
+
+## Current avatar slice (source only)
+
+The separately approved feature stacked on PR #33 adds optional gallery avatars,
+replacement/removal and current photos on authorized Profile, Chat, Split and
+identity surfaces. Images are private sanitized thumbnails; no public/signed URL,
+historical photo, camera, list cover or template image is added. Both-direction
+blocks and deleted-profile anonymity remain authoritative.
+
+Export v13 adds only the caller's current sanitized thumbnail to unchanged v12;
+schemas/RPCs 1-12 remain compatible. Avatar-aware deletion first removes the
+binary; on later failure the account stays but the photo may already be removed.
+The additive migration also fixes the pre-existing owner-Split Auth-deletion
+failure without changing other owners' financial history.
+
+No avatar deployment or physical QA is claimed. See
+[profile avatar operations and rollout gates](docs/PROFILE_AVATARS.md). The
+reviewed migration and both Edge Functions require separately authorized rollout
+before distributing the new client. Production remains untouched.
 
 ## Project identity
 
@@ -115,8 +134,9 @@ Delivery proceeds in this order:
    redesign, post-beta, or rejected.
 7. Implement only the additional functionality Fernando explicitly selects.
    P-059/A-073 select participant counts as a backend/domain PR followed by a
-   separate Figma UI PR preserving existing behavior. Category icons, avatars,
-   list covers, template images, and other additions remain unselected.
+   separate Figma UI PR preserving existing behavior. P-060/A-075 separately
+   select current avatars; category icons, list covers, template images and
+   other additions remain unselected.
 8. Refactor the stable UI through the approved design references, screen by screen.
    PR #33 uses Fernando's supplied light-theme PDF and dark-theme screenshots;
    a live Figma subscription is not required.
@@ -746,7 +766,7 @@ only explicitly authorized disposable identities:
    understandable and deletion closes open evidence. If separately authorized,
    delete only disposable reporter/owner/moderator identities and verify retained
    evidence becomes generic without exposing deleted identity.
-8. Verify the current v12 export retains the caller-only v10 report and
+8. Verify the current v13 export retains the caller-only v10 report and
    role-specific v11 offer projections while another account's reports and all
    moderation evidence, state, identities, notes, restrictions, allowlist, and
    audit data remain absent.
@@ -872,8 +892,8 @@ source/copy provenance, request UUID, or fingerprint.
 retained authored Chat messages, with current minimal list context when access
 still exists or an unavailable marker after access loss. It never exports another
 participant's message, sender name, unread state, request UUID, fingerprint, or
-Realtime data. The Flutter export client strictly parses v12 while retaining
-v1-v11 compatibility.
+Realtime data. The avatar-aware Flutter client strictly parses v13 while retaining
+v1-v12 compatibility; the unchanged v12 RPC remains the base export contract.
 It never exports other users' public templates/reports, target identity, report
 status/group, evidence snapshot/fingerprint, provenance, copy request UUID,
 moderator/private note, decision, restriction, allowlist, or access audit. Shared
@@ -940,7 +960,7 @@ SQL into the Dashboard.
 ## Intentional deferrals
 
 The current slices do not implement unrestricted profile/directory search,
-avatars, a global or ranked public feed, rich-text notes, note
+other image/media features beyond current avatars, a global or ranked public feed, rich-text notes, note
 history/comments, notification archive/preferences, assignment or mention deep
 links, report withdrawal/unhide/appeal/evidence attachments, automated moderation,
 percentage/weight/ratio expense allocation,

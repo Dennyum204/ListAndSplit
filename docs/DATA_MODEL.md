@@ -81,8 +81,32 @@ Cross-user identity is disclosed only through narrow block-aware contracts. Exac
 canonical-username discovery returns at most one fully onboarded profile and only
 its ID, username, and display name. It excludes the caller and any pair with a
 block in either direction. A future support/administrator correction path for
-immutable usernames and avatar storage/lifecycle remain separate open concerns.
+immutable usernames remains open; P-060/A-075 resolve current avatar lifecycle.
 Export is governed by the non-persistent contract below.
+
+### Current profile avatar (P-060/A-075)
+
+`private.profile_avatars` holds the profile FK, version, current opaque file key,
+fenced operation lease/expiry and last successful request UUID/fingerprint.
+`private.profile_avatar_files` records random keys before any upload, with an
+indexed owner FK that restricts profile deletion until Storage cleanup succeeds.
+Both tables force RLS and reject direct client/admin Data API access. Exact
+service-only RPCs serialize operations under profile-first locks; only two files
+may be tracked. The private bucket rejects direct client Storage operations.
+No public profile, Chat, expense or historical snapshot gains an avatar field.
+
+Current image resolution is contextual and block-aware. Profile reads reuse the
+existing completed-profile visibility rule; Chat uses an authorized visible
+message; Split uses a current accessible financial endpoint, with null after
+anonymization. There are no notification rows, new topics or cleanup schedules.
+Owner deletion now includes owned Split parents in the globally ordered cleanup
+lock set, clearing identity fields together before FK cascades. Surviving
+expenses, shares, settlements and reversals retain their financial endpoint IDs.
+
+Export v13 is transient Edge composition of unchanged v12 plus `avatar`: null or
+exactly `mime_type`, `width`, `height`, `data_base64` for the own sanitized PNG.
+No other person's image or Storage key/URL is exported. Schemas 1-12 remain valid.
+See [PROFILE_AVATARS.md](PROFILE_AVATARS.md) for failure and rollout gates.
 
 ### Versioned account export document
 
@@ -173,7 +197,7 @@ identity. Received entries include only offer ID, sender minimal profile, the
 allowlisted immutable name/item/quantity/position snapshot, state/version, and
 times. Neither role receives request UUIDs, fingerprints, source/copy provenance,
 moderation internals, or hidden pair history. That strict v11 shape remains
-readable by the current v12 Flutter parser together with v1-v10.
+readable by the current v13 Flutter parser together with the other legacy schemas.
 
 The separate parameterless `export_own_account_data_v12()` preserves versions `1`
 through `11` and adds one deterministic flat `authored_chat_messages` array. It
@@ -1224,7 +1248,7 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   later aggregates beyond the accepted profile, relationship, notification,
   owner-list, and current-assignment records.
 - Support/administrator correction and audit rules for immutable usernames.
-- Avatar Storage, validation, replacement, retention, and deletion lifecycle.
+- Storage lifecycle for other media beyond P-060/A-075 profile avatars.
 - Global/ranked public-template discovery beyond the accepted chronological
   friends feed.
 - Later notification-type payload/localization, archive/preferences, physical

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
@@ -694,6 +695,13 @@ class _ChatMessageCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (!message.isDeleted) ...[
+                            ProfileAvatar(
+                                label: message.senderDisplayName ?? sender,
+                                target: AvatarTarget.chat(message.id),
+                                size: 32),
+                            const SizedBox(height: 6),
+                          ],
                           Text(
                             sender,
                             style: Theme.of(context)

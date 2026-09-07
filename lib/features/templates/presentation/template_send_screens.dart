@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
@@ -785,7 +786,9 @@ class _TemplateSendCard extends StatelessWidget {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         minVerticalPadding: 12,
-        leading: IdentityBadge(label: profile.displayName),
+        leading: ProfileAvatar(
+            label: profile.displayName,
+            target: AvatarTarget.profile(profile.id)),
         title: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -885,7 +888,9 @@ class _ReceivedHeader extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IdentityBadge(label: detail.summary.sender.displayName),
+                ProfileAvatar(
+                    label: detail.summary.sender.displayName,
+                    target: AvatarTarget.profile(detail.summary.sender.id)),
                 const SizedBox(width: 12),
                 Expanded(
                     child: Text(

@@ -44,6 +44,12 @@ jobs:
       - name: Test account deletion function
         run: deno task --config supabase/functions/delete-account/deno.json --frozen test
 
+      - name: Check profile avatar function
+        run: deno task --config supabase/functions/profile-avatar/deno.json --frozen check
+
+      - name: Test profile avatar function
+        run: deno task --config supabase/functions/profile-avatar/deno.json --frozen test
+
       - name: Start local database
         run: supabase db start
 
