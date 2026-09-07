@@ -28,13 +28,53 @@ class _ActiveListsScreenState extends ConsumerState<ActiveListsScreen> {
     final state = ref.watch(activeListsControllerProvider);
     final lists = state.listsFor(_status);
     final displayName = ref.watch(ownProfileProvider).valueOrNull?.displayName;
-    return Scaffold(
-      appBar: AppPageHeader(
-        title: Text(displayName == null || displayName.isEmpty
-            ? localizations.listsTitle
-            : '${localizations.listsWelcomeLabel}, $displayName'),
+    final PreferredSizeWidget header;
+    if (displayName == null || displayName.isEmpty) {
+      header = AppPageHeader(
+        title: Text(localizations.listsTitle),
         actions: const [NotificationBell()],
-      ),
+      );
+    } else {
+      header = PreferredSize(
+        preferredSize: Size.fromHeight(
+            MediaQuery.textScalerOf(context).scale(24) * 2 + 48),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            child: Material(
+              color: Theme.of(context).appBarTheme.backgroundColor,
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${localizations.listsWelcomeLabel}\n$displayName',
+                        key: const Key('listsGreeting'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context)
+                            .appBarTheme
+                            .titleTextStyle
+                            ?.copyWith(height: 1.2),
+                      ),
+                    ),
+                    const IconTheme(
+                      data: IconThemeData(color: AppPalette.lightText),
+                      child: NotificationBell(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return Scaffold(
+      appBar: header,
       floatingActionButton: _status == ActiveListStatus.active
           ? FloatingActionButton.extended(
               key: const Key('createListButton'),
@@ -126,25 +166,29 @@ class _ActiveListsScreenState extends ConsumerState<ActiveListsScreen> {
           final state = dialogRef.watch(activeListsControllerProvider);
           final localizations = AppLocalizations.of(context);
           return AlertDialog(
+            scrollable: true,
             titlePadding: EdgeInsets.zero,
             title: AppDialogTitle(localizations.listsCreateTitle),
-            content: TextField(
-              style: AppPalette.inputTextStyle(context),
-              key: const Key('createListTitle'),
-              autofocus: true,
-              enabled: !state.isCreating,
-              maxLength: 80,
-              textCapitalization: TextCapitalization.sentences,
-              textInputAction: TextInputAction.done,
-              decoration: InputDecoration(
-                labelText: localizations.listsTitleLabel,
-                helperText: localizations.listsTitleHelper,
+            content: SingleChildScrollView(
+                child: AppDialogField(
+              label: localizations.listsTitleLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('createListTitle'),
+                autofocus: true,
+                enabled: !state.isCreating,
+                maxLength: 80,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(
+                  helperText: localizations.listsTitleHelper,
+                ),
+                onChanged: (value) => title = value,
+                onSubmitted: (_) => _createList(dialogContext, title),
               ),
-              onChanged: (value) => title = value,
-              onSubmitted: (_) => _createList(dialogContext, title),
-            ),
+            )),
             actions: [
-              TextButton(
+              OutlinedButton(
                 onPressed: state.isCreating
                     ? null
                     : () => Navigator.of(dialogContext).pop(),
@@ -258,91 +302,118 @@ class _ActiveListCard extends StatelessWidget {
             material.formatTimeOfDay(TimeOfDay.fromDateTime(timestamp)),
           );
     final colors = Theme.of(context).colorScheme;
+    final ownershipLabel = summary.isOwner
+        ? localizations.listOwnedByYouLabel
+        : localizations.listSharedByLabel(summary.ownerDisplayName ?? '');
+    final semanticLabel = [
+      summary.title,
+      ownershipLabel,
+      localizations.listsItemCount(summary.itemCount),
+      localizations.listsCompletedCount(
+          summary.completedItemCount, summary.itemCount),
+      if (participantCount != null)
+        localizations.listsParticipantCount(participantCount),
+      timestampLabel,
+    ].join('. ');
+    void openList() => context.push('${AppRoutes.lists}/${summary.id}');
     return Semantics(
+      key: Key('list-semantics-${summary.id}'),
       button: true,
-      child: Card(
+      label: semanticLabel,
+      onTap: openList,
+      child: ExcludeSemantics(
+          child: Card(
         key: Key('list-${summary.id}'),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => context.push('${AppRoutes.lists}/${summary.id}'),
+          onTap: openList,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        summary.title,
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: colors.primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                      ),
-                    ),
-                    if (summary.status == ActiveListStatus.archived)
-                      const Icon(Icons.archive_outlined, size: 20),
-                    const SizedBox(width: 4),
-                    Icon(Icons.chevron_right_rounded, color: colors.primary),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ExcludeSemantics(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      key: Key('list-progress-${summary.id}'),
-                      minHeight: 6,
-                      color: AppPalette.orange,
-                      value: summary.itemCount == 0
-                          ? 0
-                          : summary.completedItemCount / summary.itemCount,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  summary.isOwner
-                      ? localizations.listOwnedByYouLabel
-                      : localizations.listSharedByLabel(
-                          summary.ownerDisplayName ?? '',
-                        ),
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${localizations.listsItemCount(summary.itemCount)} · '
-                  '${localizations.listsCompletedCount(summary.completedItemCount, summary.itemCount)}',
-                ),
-                if (participantCount != null) ...[
-                  const SizedBox(height: 4),
-                  Row(
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const ExcludeSemantics(
-                          child: Icon(Icons.people_outline_rounded, size: 18)),
-                      const SizedBox(width: 6),
-                      Expanded(
-                          child: Text(localizations
-                              .listsParticipantCount(participantCount))),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              summary.title,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    color: colors.primary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                          if (participantCount != null) ...[
+                            const SizedBox(width: 8),
+                            Tooltip(
+                              message: localizations
+                                  .listsParticipantCount(participantCount),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '$participantCount',
+                                    key: Key('list-participants-${summary.id}'),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium
+                                        ?.copyWith(color: colors.primary),
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Icon(Icons.people_outline_rounded,
+                                      color: colors.primary, size: 18),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(
+                                key: Key('list-progress-${summary.id}'),
+                                minHeight: 8,
+                                color: AppPalette.orange,
+                                value: summary.itemCount == 0
+                                    ? 0
+                                    : summary.completedItemCount /
+                                        summary.itemCount,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${summary.completedItemCount} / ${summary.itemCount}',
+                            key: Key('list-completion-${summary.id}'),
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
+                                ?.copyWith(color: colors.primary),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-                const SizedBox(height: 4),
-                Text(
-                  timestampLabel,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
                 ),
+                const SizedBox(width: 16),
+                Icon(Icons.chevron_right_rounded,
+                    color: colors.primary, size: 28),
               ],
             ),
           ),
         ),
-      ),
+      )),
     );
   }
 }

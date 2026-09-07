@@ -290,6 +290,12 @@ identity initials share Material 3 tokens. No live Figma access, downloaded mock
 photos, new font package or temporary asset URL is required. Existing loading,
 empty, error, archived, stale and inaccessible states remain supported.
 
+The follow-up references refine the selected navigation pill to include both its
+icon and label. Overview cards show the title, current participant count, compact
+completion progress and chevron; owner/date details remain in the screen-reader
+description instead of adding visible rows. Dialog fields use persistent plain
+captions above the cream input, with no floating caption background.
+
 Use **Profile > Appearance > System / Light / Dark** to choose a theme. System
 follows the device; an explicit choice persists locally across app restarts and
 sign-out. Switching themes does not save profile edits or change account data.
@@ -313,9 +319,13 @@ content. Physical QA has **not** been completed for PR #33:
    static mockups where needed.
    Exercise Profile's Appearance selector, check all tabs update, restart to
    confirm the saved choice, and return to System to follow device brightness.
+   Check that the selected navigation pill encloses its icon and full translated
+   label, and that compact list cards retain meaningful screen-reader summaries.
 3. Exercise category/template create, rename, cancellation, normalized duplicates,
    blank-template Add item, selected-item capacity, copy/send/accept/decline, and
    stale report rejection. Confirm each guarded dialog closes or recovers once.
+   Check that field captions stay above their inputs without a dark rectangle
+   before/after focus, when filled, and when displaying validation errors.
 4. Check active/archive transitions, participant-count changes, General Note,
    assignments, Chat pagination/unread/reconnect and Split expenses/settlements
    on both clients. Leave Chat for Split, send from the other client, and verify

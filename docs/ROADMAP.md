@@ -62,6 +62,9 @@ Community, notifications and profiles. Community opens its existing friends-only
 template feed first; exact-username discovery remains available from its Friends
 action. Implementation and automated rendering do not imply completed physical
 QA, hosted participant-count rollout, beta readiness, or final branding.
+The visual QA follow-up includes whole-destination selection pills, compact list
+overview cards and external unfilled dialog captions. Real avatar uploads require
+a separately resolved Storage/privacy/lifecycle contract; see O-P16/O-A13.
 
 ## Phase 0 — Bootstrap foundation (implemented)
 

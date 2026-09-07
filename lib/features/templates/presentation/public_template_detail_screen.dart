@@ -317,7 +317,7 @@ class _PublicTemplateDetailScreenState
           child: Text(localizations.publicTemplatesCopyDialogDescription),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(localizations.cancelButton),
           ),
@@ -352,7 +352,7 @@ class _PublicTemplateDetailScreenState
         ),
         content: Text(localizations.communityBlockDialogDescription),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(localizations.cancelButton),
           ),
@@ -531,64 +531,64 @@ class _PublicTemplateReportDialogState
                 children: [
                   Text(localizations.publicTemplateReportPrivacyDescription),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<PublicTemplateReportReason>(
-                    style: AppPalette.inputTextStyle(context),
-                    dropdownColor: AppPalette.inputCream,
-                    iconEnabledColor: AppPalette.navy,
-                    key: const Key('publicTemplateReportReason'),
-                    // ignore: deprecated_member_use
-                    value: _reason,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: localizations.publicTemplateReportReasonLabel,
-                    ),
-                    items: [
-                      for (final reason in PublicTemplateReportReason.values)
-                        DropdownMenuItem(
-                          value: reason,
-                          child: Text(
-                            _reportReasonLabel(localizations, reason),
-                            overflow: TextOverflow.ellipsis,
+                  AppDialogField(
+                    label: localizations.publicTemplateReportReasonLabel,
+                    child: DropdownButtonFormField<PublicTemplateReportReason>(
+                      style: AppPalette.inputTextStyle(context),
+                      dropdownColor: AppPalette.inputCream,
+                      iconEnabledColor: AppPalette.navy,
+                      key: const Key('publicTemplateReportReason'),
+                      // ignore: deprecated_member_use
+                      value: _reason,
+                      isExpanded: true,
+                      items: [
+                        for (final reason in PublicTemplateReportReason.values)
+                          DropdownMenuItem(
+                            value: reason,
+                            child: Text(
+                              _reportReasonLabel(localizations, reason),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                    ],
-                    onChanged: _isSubmitting
-                        ? null
-                        : (reason) {
-                            if (reason != null) {
-                              setState(() => _reason = reason);
-                            }
-                          },
+                      ],
+                      onChanged: _isSubmitting
+                          ? null
+                          : (reason) {
+                              if (reason != null) {
+                                setState(() => _reason = reason);
+                              }
+                            },
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
-                    style: AppPalette.inputTextStyle(context),
-                    key: const Key('publicTemplateReportExplanation'),
-                    controller: _explanation,
-                    enabled: !_isSubmitting,
-                    minLines: 3,
-                    maxLines: 6,
-                    maxLength: 500,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      labelText:
-                          localizations.publicTemplateReportExplanationLabel,
-                      helperText:
-                          localizations.publicTemplateReportExplanationHelper,
-                      alignLabelWithHint: true,
+                  AppDialogField(
+                    label: localizations.publicTemplateReportExplanationLabel,
+                    child: TextFormField(
+                      style: AppPalette.inputTextStyle(context),
+                      key: const Key('publicTemplateReportExplanation'),
+                      controller: _explanation,
+                      enabled: !_isSubmitting,
+                      minLines: 3,
+                      maxLines: 6,
+                      maxLength: 500,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        helperText:
+                            localizations.publicTemplateReportExplanationHelper,
+                      ),
+                      validator: (value) {
+                        final normalized = value?.trim() ?? '';
+                        if (_reason.requiresExplanation && normalized.isEmpty) {
+                          return localizations
+                              .publicTemplateReportExplanationRequired;
+                        }
+                        if (normalized.characters.length > 500) {
+                          return localizations
+                              .publicTemplateReportExplanationTooLong;
+                        }
+                        return null;
+                      },
                     ),
-                    validator: (value) {
-                      final normalized = value?.trim() ?? '';
-                      if (_reason.requiresExplanation && normalized.isEmpty) {
-                        return localizations
-                            .publicTemplateReportExplanationRequired;
-                      }
-                      if (normalized.characters.length > 500) {
-                        return localizations
-                            .publicTemplateReportExplanationTooLong;
-                      }
-                      return null;
-                    },
                   ),
                   if (_reason ==
                       PublicTemplateReportReason.copyrightTrademark) ...[
@@ -604,7 +604,7 @@ class _PublicTemplateReportDialogState
           ),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             key: const Key('cancelPublicTemplateReportButton'),
             onPressed: _isSubmitting || _isClosing
                 ? null

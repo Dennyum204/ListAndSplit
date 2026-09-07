@@ -93,6 +93,8 @@ abstract final class AppTheme {
         hintStyle: const TextStyle(color: Color(0xFF5C6470)),
         prefixIconColor: AppPalette.navy,
         suffixIconColor: AppPalette.navy,
+        helperMaxLines: 8,
+        errorMaxLines: 8,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),

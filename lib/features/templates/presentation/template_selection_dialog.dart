@@ -105,14 +105,14 @@ class _TemplateSelectionDialogState extends State<TemplateSelectionDialog> {
                 const SizedBox(height: 4),
               ],
               if (_titleController != null) ...[
-                TextField(
-                  style: AppPalette.inputTextStyle(context),
-                  key: const Key('templateListTitleField'),
-                  controller: _titleController,
-                  decoration: InputDecoration(
-                    labelText: localizations.listsTitleLabel,
+                AppDialogField(
+                  label: localizations.listsTitleLabel,
+                  child: TextField(
+                    style: AppPalette.inputTextStyle(context),
+                    key: const Key('templateListTitleField'),
+                    controller: _titleController,
+                    onChanged: (_) => setState(() {}),
                   ),
-                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 8),
               ],
@@ -215,7 +215,7 @@ class _TemplateSelectionDialogState extends State<TemplateSelectionDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: _submitted ? null : () => Navigator.pop(context),
           child: Text(localizations.cancelButton),
         ),

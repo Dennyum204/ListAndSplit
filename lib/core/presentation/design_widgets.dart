@@ -111,3 +111,28 @@ class AppDialogTitle extends StatelessWidget {
                 color: AppPalette.navy, fontWeight: FontWeight.w700)),
       );
 }
+
+/// Persistent, unfilled field caption, separate from the cream input surface.
+///
+/// The child keeps its editing/focus lifecycle and validation semantics. Omit
+/// its InputDecoration.labelText: the outer semantics supplies the label once,
+/// including when the field is filled, focused, disabled, or showing an error.
+class AppDialogField extends StatelessWidget {
+  const AppDialogField({required this.label, required this.child, super.key});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ExcludeSemantics(
+            child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          ),
+          const SizedBox(height: 8),
+          Semantics(label: label, child: child),
+        ],
+      );
+}

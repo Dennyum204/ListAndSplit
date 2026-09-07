@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/core/presentation/app_bottom_navigation_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -106,7 +107,9 @@ void main() {
 
     expect(find.byType(FriendPublicTemplateFeedScreen), findsOneWidget);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       2,
     );
     expect(
@@ -125,7 +128,9 @@ void main() {
     expect(detail.templateId, _filledTemplateId);
     expect(find.text('Sunscreen'), findsOneWidget);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       2,
     );
 
@@ -167,7 +172,9 @@ void main() {
     expect(find.text('Public Templates'), findsOneWidget);
     expect(find.text('Trip kit'), findsNWidgets(2));
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       2,
     );
     expect(publicTemplates.listCalls, 1);
@@ -192,7 +199,9 @@ void main() {
     expect(find.byKey(const Key('addTemplateItemButton')), findsNothing);
     expect(find.text('Import into existing list'), findsNothing);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       2,
     );
 
@@ -287,7 +296,9 @@ void main() {
     );
     expect(privateDetail.templateId, copied.id);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       1,
     );
 

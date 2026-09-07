@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
@@ -410,56 +411,57 @@ class _ModerationActionDialogState extends State<_ModerationActionDialog> {
                 if (widget.action ==
                     PublicTemplateModerationAction.takeDown) ...[
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<PublicTemplateReportReason>(
-                    style: AppPalette.inputTextStyle(context),
-                    dropdownColor: AppPalette.inputCream,
-                    iconEnabledColor: AppPalette.navy,
-                    key: const Key('moderationOwnerReasonField'),
-                    // ignore: deprecated_member_use
-                    value: _reason,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: localizations.moderationOwnerReasonLabel,
-                    ),
-                    items: [
-                      for (final reason in PublicTemplateReportReason.values)
-                        DropdownMenuItem(
-                          value: reason,
-                          child: Text(
-                            _reasonLabel(localizations, reason),
-                            overflow: TextOverflow.ellipsis,
+                  AppDialogField(
+                    label: localizations.moderationOwnerReasonLabel,
+                    child: DropdownButtonFormField<PublicTemplateReportReason>(
+                      style: AppPalette.inputTextStyle(context),
+                      dropdownColor: AppPalette.inputCream,
+                      iconEnabledColor: AppPalette.navy,
+                      key: const Key('moderationOwnerReasonField'),
+                      // ignore: deprecated_member_use
+                      value: _reason,
+                      isExpanded: true,
+                      items: [
+                        for (final reason in PublicTemplateReportReason.values)
+                          DropdownMenuItem(
+                            value: reason,
+                            child: Text(
+                              _reasonLabel(localizations, reason),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                    ],
-                    onChanged: (reason) {
-                      if (reason != null) setState(() => _reason = reason);
-                    },
+                      ],
+                      onChanged: (reason) {
+                        if (reason != null) setState(() => _reason = reason);
+                      },
+                    ),
                   ),
                 ],
                 const SizedBox(height: 12),
-                TextFormField(
-                  style: AppPalette.inputTextStyle(context),
-                  key: const Key('moderationPrivateNoteField'),
-                  controller: _note,
-                  minLines: 3,
-                  maxLines: 7,
-                  maxLength: 1000,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: InputDecoration(
-                    labelText: localizations.moderationPrivateNoteLabel,
-                    helperText: localizations.moderationPrivateNoteHelper,
-                    alignLabelWithHint: true,
+                AppDialogField(
+                  label: localizations.moderationPrivateNoteLabel,
+                  child: TextFormField(
+                    style: AppPalette.inputTextStyle(context),
+                    key: const Key('moderationPrivateNoteField'),
+                    controller: _note,
+                    minLines: 3,
+                    maxLines: 7,
+                    maxLength: 1000,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      helperText: localizations.moderationPrivateNoteHelper,
+                    ),
+                    validator: (value) {
+                      final normalized = value?.trim() ?? '';
+                      if (normalized.isEmpty) {
+                        return localizations.moderationPrivateNoteRequired;
+                      }
+                      if (normalized.characters.length > 1000) {
+                        return localizations.moderationPrivateNoteTooLong;
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (value) {
-                    final normalized = value?.trim() ?? '';
-                    if (normalized.isEmpty) {
-                      return localizations.moderationPrivateNoteRequired;
-                    }
-                    if (normalized.characters.length > 1000) {
-                      return localizations.moderationPrivateNoteTooLong;
-                    }
-                    return null;
-                  },
                 ),
               ],
             ),
@@ -467,7 +469,7 @@ class _ModerationActionDialogState extends State<_ModerationActionDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           key: const Key('cancelModerationActionButton'),
           onPressed: _isClosing
               ? null

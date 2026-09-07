@@ -37,6 +37,13 @@ section cards, decorative identity initials and dialog title strips. Native
 system bars, existing Material icons and platform typography remain in use; no
 sample portrait, list cover, template image or temporary asset URL is shipped.
 
+`AppBottomNavigationBar` renders each icon and localized label inside the same
+selected pill; the stateful router remains the selection authority. Its height
+grows with text scaling. Compact list cards retain owner/date/count metadata in
+their single accessible summary. `AppDialogField` places an unfilled persistent
+caption above the input and supplies its semantic label once, without taking
+ownership of editing controllers, focus, validation, or submission state.
+
 Feature widgets compose these primitives around existing Riverpod state and
 repository intents. Immutable-ID routes, guarded dialogs, authoritatively loaded
 data, stale-access exits, idempotent submissions and private Realtime contracts

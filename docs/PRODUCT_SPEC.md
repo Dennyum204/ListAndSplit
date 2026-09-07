@@ -42,6 +42,12 @@ validation, consent, destructive warnings, error recovery and accessible large-t
 layouts take precedence over simplified static frames. Avatars, content images,
 category icons, Chat media and an Enable Chat setting remain outside this slice.
 
+The selected bottom-navigation background encloses both icon and translated
+label. List overview cards prioritize name, current participants and completion
+progress; accessible descriptions retain the owner/date context. Dialog field
+captions remain plainly visible above inputs, including while focused or filled,
+without a separate background behind the caption.
+
 ## Functional requirements
 
 ### Authentication and profile onboarding

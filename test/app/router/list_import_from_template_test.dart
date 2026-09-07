@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/core/presentation/app_bottom_navigation_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/app/app.dart';
@@ -278,7 +279,9 @@ void main() {
     expect(notifications.listCalls, isEmpty);
     expect(notifications.markCalls, isEmpty);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       0,
     );
 

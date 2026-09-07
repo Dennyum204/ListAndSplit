@@ -25,6 +25,74 @@ import '../../support/ui_preview_capture.dart';
 void main() {
   setUpAll(prepareUiPreviewFonts);
 
+  for (final language in ['en', 'pt']) {
+    for (final rename in [false, true]) {
+      testWidgets(
+          '${rename ? 'rename' : 'create'} list stays usable with keyboard at 320px and 200% $language',
+          (tester) async {
+        tester.view.physicalSize = const Size(320, 740);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = FakeActiveListRepository()
+          ..activeLists = [_summary()];
+        await _pump(
+          tester,
+          repository: repository,
+          child: rename
+              ? const ActiveListDetailScreen(listId: 'list-1')
+              : const ActiveListsScreen(),
+          themeMode: ThemeMode.dark,
+          textScale: 2,
+          locale: Locale(language),
+          keyboardInset: 280,
+        );
+        await tester.pumpAndSettle();
+        final strings = AppLocalizations.of(tester.element(
+            find.byType(rename ? ActiveListDetailScreen : ActiveListsScreen)));
+        if (rename) {
+          await tester.tap(find.byKey(const Key('listActionsButton')));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text(strings.listRenameButton).last);
+        } else {
+          await tester.tap(find.byKey(const Key('createListButton')));
+        }
+        await tester.pumpAndSettle();
+        final dialog = find.byType(AlertDialog);
+        expect(dialog, findsOneWidget);
+        expect(tester.takeException(), isNull);
+        expect(tester.widget<AlertDialog>(dialog).content,
+            isA<SingleChildScrollView>());
+        final field =
+            find.byKey(Key(rename ? 'renameListTitle' : 'createListTitle'));
+        final editable =
+            find.descendant(of: field, matching: find.byType(EditableText));
+        await tester.ensureVisible(editable);
+        await tester.pumpAndSettle();
+        expect(editable.hitTestable(), findsOneWidget);
+        await tester.enterText(field, 'Unsaved weekend');
+        await tester.pumpAndSettle();
+        expect(tester.widget<EditableText>(editable).controller.text,
+            'Unsaved weekend');
+        await captureUiPreview(tester,
+            'list-${rename ? 'rename' : 'create'}-$language-keyboard-200');
+        final cancel =
+            find.widgetWithText(OutlinedButton, strings.cancelButton);
+        await tester.ensureVisible(cancel);
+        await tester.pumpAndSettle();
+        expect(cancel.hitTestable(), findsOneWidget);
+        expect(tester.getBottomRight(cancel).dy, lessThanOrEqualTo(460));
+        await tester.tap(cancel);
+        await tester.pumpAndSettle();
+        expect(dialog, findsNothing);
+        expect(repository.createCalls, 0);
+        expect(repository.mutationCalls, 0);
+        expect(repository.activeLists.single.title, 'Groceries');
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
   for (final mode in [ThemeMode.light, ThemeMode.dark]) {
     testWidgets('overview ${mode.name} reference progress and count rendering',
         (tester) async {
@@ -49,7 +117,16 @@ void main() {
                   find.byKey(const Key('list-progress-list-1')))
               .value,
           .5);
-      expect(find.text('3 participants'), findsOneWidget);
+      expect(find.byTooltip('3 participants'), findsOneWidget);
+      final card = find.byKey(const Key('list-list-1'));
+      expect(tester.getSize(card).height, lessThan(100));
+      expect(find.text('1 / 2'), findsNWidgets(2));
+      expect(find.textContaining('complete'), findsNothing);
+      expect(find.textContaining('Updated'), findsNothing);
+      expect(find.text('Owned by you'), findsNothing);
+      expect(_listSemanticLabel(tester, 'list-1'), contains('Owned by you'));
+      expect(_listSemanticLabel(tester, 'list-1'), contains('1 of 2 complete'));
+      expect(_listSemanticLabel(tester, 'list-1'), contains('3 participants'));
       await captureUiPreview(tester, 'lists-en-${mode.name}-100');
       expect(tester.takeException(), isNull);
     });
@@ -93,7 +170,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Groceries'), findsOneWidget);
-    expect(find.text('2 items · 1 of 2 complete'), findsOneWidget);
+    expect(find.text('1 / 2'), findsOneWidget);
+    expect(_listSemanticLabel(tester, 'list-1'), contains('1 of 2 complete'));
     expect(find.byKey(const Key('createListButton')), findsOneWidget);
 
     await tester.tap(find.text('Archived'));
@@ -110,7 +188,9 @@ void main() {
         repository: repository, child: const ActiveListsScreen());
     await tester.pumpAndSettle();
 
-    expect(find.text('Shared by Owner User'), findsOneWidget);
+    expect(
+        _listSemanticLabel(tester, 'list-1'), contains('Shared by Owner User'));
+    expect(find.text('Shared by Owner User'), findsNothing);
     expect(find.text('@owner_user'), findsNothing);
   });
 
@@ -141,10 +221,11 @@ void main() {
         repository: repository, child: const ActiveListsScreen());
     await tester.pumpAndSettle();
 
-    expect(find.text('Owned by you'), findsOneWidget);
-    expect(find.text('Shared by Owner User'), findsOneWidget);
-    expect(find.text('1 participant'), findsOneWidget);
-    expect(find.text('20 participants'), findsOneWidget);
+    expect(_listSemanticLabel(tester, 'list-1'), contains('Owned by you'));
+    expect(_listSemanticLabel(tester, 'shared-list'),
+        contains('Shared by Owner User'));
+    expect(find.byTooltip('1 participant'), findsOneWidget);
+    expect(find.byTooltip('20 participants'), findsOneWidget);
     for (final label in ['1 participant', '20 participants']) {
       final countSemantics = find.bySemanticsLabel(RegExp(label));
       expect(countSemantics, findsOneWidget);
@@ -157,8 +238,8 @@ void main() {
     await tester.tap(find.text('Archived'));
     await tester.pumpAndSettle();
     expect(find.text('Previous trip'), findsOneWidget);
-    expect(find.text('3 participants'), findsOneWidget);
-    expect(find.text('20 participants'), findsNothing);
+    expect(find.byTooltip('3 participants'), findsOneWidget);
+    expect(find.byTooltip('20 participants'), findsNothing);
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
@@ -172,8 +253,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Groceries'), findsOneWidget);
-    expect(find.text('Shared by Owner User'), findsOneWidget);
-    expect(find.text('2 items · 1 of 2 complete'), findsOneWidget);
+    expect(
+        _listSemanticLabel(tester, 'list-1'), contains('Shared by Owner User'));
+    expect(find.text('1 / 2'), findsOneWidget);
+    expect(
+        _listSemanticLabel(tester, 'list-1'), isNot(contains('participant')));
     expect(find.textContaining('participant'), findsNothing);
   });
 
@@ -187,19 +271,19 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ActiveListsScreen)),
     );
-    expect(find.text('2 participants'), findsOneWidget);
+    expect(find.byTooltip('2 participants'), findsOneWidget);
 
     repository.activeLists = [_summary(isOwner: false, participantCount: 3)];
     await container.read(reconciliationRegistryProvider).reconcile();
     await tester.pumpAndSettle();
-    expect(find.text('3 participants'), findsOneWidget);
-    expect(find.text('2 participants'), findsNothing);
+    expect(find.byTooltip('3 participants'), findsOneWidget);
+    expect(find.byTooltip('2 participants'), findsNothing);
 
     repository.activeLists = [];
     await container.read(reconciliationRegistryProvider).reconcile();
     await tester.pumpAndSettle();
     expect(find.text('Groceries'), findsNothing);
-    expect(find.text('3 participants'), findsNothing);
+    expect(find.byTooltip('3 participants'), findsNothing);
     expect(find.text('No active lists yet'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -243,8 +327,9 @@ void main() {
 
         final plural =
             language == 'pt' ? '20 participantes' : '20 participants';
-        await tester.ensureVisible(find.text(plural));
-        expect(find.text(plural), findsOneWidget);
+        await tester.ensureVisible(find.byTooltip(plural));
+        expect(find.byTooltip(plural), findsOneWidget);
+        expect(_listSemanticLabel(tester, 'list-1'), contains(plural));
         await captureUiPreview(tester, 'lists-$language-${themeMode.name}-200');
         expect(tester.takeException(), isNull);
 
@@ -252,8 +337,9 @@ void main() {
             .tap(find.text(language == 'pt' ? 'Arquivadas' : 'Archived'));
         await tester.pumpAndSettle();
         final singular = language == 'pt' ? '1 participante' : '1 participant';
-        await tester.ensureVisible(find.text(singular));
-        expect(find.text(singular), findsOneWidget);
+        await tester.ensureVisible(find.byTooltip(singular));
+        expect(find.byTooltip(singular), findsOneWidget);
+        expect(_listSemanticLabel(tester, 'archived-list'), contains(singular));
         expect(tester.takeException(), isNull);
       });
     }
@@ -1845,11 +1931,11 @@ void main() {
     );
     expect(
       tester
-          .widget<TextButton>(
+          .widget<OutlinedButton>(
             find
                 .ancestor(
                   of: find.text('Cancel').last,
-                  matching: find.byType(TextButton),
+                  matching: find.byType(OutlinedButton),
                 )
                 .last,
           )
@@ -2094,6 +2180,11 @@ void main() {
   });
 }
 
+String _listSemanticLabel(WidgetTester tester, String id) => tester
+    .widget<Semantics>(find.byKey(Key('list-semantics-$id')))
+    .properties
+    .label!;
+
 class _RevokedAccessRepository extends FakeActiveListRepository {
   _RevokedAccessRepository() {
     activeLists = [_summary(isOwner: false)];
@@ -2300,6 +2391,7 @@ Future<void> _pump(
   required Widget child,
   ThemeMode themeMode = ThemeMode.light,
   double textScale = 1,
+  double keyboardInset = 0,
   Locale locale = const Locale('en'),
 }) {
   return tester.pumpWidget(
@@ -2321,6 +2413,7 @@ Future<void> _pump(
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(textScale),
+            viewInsets: EdgeInsets.only(bottom: keyboardInset),
           ),
           child: child!,
         ),

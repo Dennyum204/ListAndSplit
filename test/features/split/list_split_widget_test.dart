@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
@@ -49,6 +50,63 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(repository.overview.expenses.single.amountMinor,
             expense.amountMinor);
+      });
+      testWidgets(
+          'expense modal keeps plain external labels at 200% ${locale.languageCode} dark=$dark',
+          (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = FakeListSplitRepository();
+        await _pump(tester, repository,
+            locale: locale, dark: dark, textScale: 2, redesignedTheme: true);
+        await tester.tap(find.byKey(const Key('addExpenseButton')));
+        await tester.pumpAndSettle();
+        final dialog = find.byType(AlertDialog);
+        final localizations = AppLocalizations.of(tester.element(dialog));
+        for (final entry in {
+          'splitExpenseDescriptionField':
+              localizations.splitExpenseDescriptionLabel,
+          'splitExpenseAmountField':
+              localizations.splitExpenseAmountLabel('CHF'),
+          'splitExpensePayerField': localizations.splitExpensePayerLabel,
+        }.entries) {
+          final field = find.byKey(Key(entry.key));
+          final caption =
+              find.ancestor(of: field, matching: find.byType(AppDialogField));
+          expect(caption, findsOneWidget);
+          expect(tester.widget<AppDialogField>(caption).label, entry.value);
+          final captionText = tester.widget<Text>(
+              find.descendant(of: caption, matching: find.text(entry.value)));
+          expect(captionText.style?.background, isNull);
+          expect(captionText.style?.backgroundColor, isNull);
+          if (entry.key != 'splitExpensePayerField') {
+            expect(
+                tester.widget<TextField>(field).decoration?.labelText, isNull);
+          } else {
+            expect(
+                tester
+                    .widget<DropdownButtonFormField<String>>(field)
+                    .decoration
+                    .labelText,
+                isNull);
+          }
+        }
+        await tester.enterText(
+            find.byKey(const Key('splitExpenseDescriptionField')),
+            'Unsaved dinner');
+        await tester.pumpAndSettle();
+        await captureUiPreview(tester,
+            'expense-dialog-${locale.languageCode}-${dark ? 'dark' : 'light'}-large');
+        final cancel =
+            find.widgetWithText(OutlinedButton, localizations.cancelButton);
+        await tester.ensureVisible(cancel);
+        await tester.tap(cancel);
+        await tester.pumpAndSettle();
+        expect(dialog, findsNothing);
+        expect(repository.createCalls, 0);
+        expect(tester.takeException(), isNull);
       });
     }
   }
@@ -130,9 +188,12 @@ void main() {
       find.byKey(const Key('splitExpenseAmountField')),
       '10.01',
     );
-    await tester.tap(
-      find.byKey(const ValueKey('splitBeneficiary-$splitOwnerParticipantId')),
-    );
+    final ownerBeneficiary =
+        find.byKey(const ValueKey('splitBeneficiary-$splitOwnerParticipantId'));
+    await tester.ensureVisible(ownerBeneficiary);
+    await tester.pumpAndSettle();
+    expect(ownerBeneficiary.hitTestable(), findsOneWidget);
+    await tester.tap(ownerBeneficiary);
     await tester.pump();
     await tester.tap(find.byKey(const Key('saveSplitExpenseButton')));
     await tester.pumpAndSettle();

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/core/presentation/app_bottom_navigation_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/app/app.dart';
@@ -47,7 +48,9 @@ void main() {
     expect(find.byType(SharedTemplateSendsScreen), findsOneWidget);
     expect(find.text('Duplicate name'), findsOneWidget);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       1,
     );
     await tester.tap(find.text('Duplicate name'));
@@ -58,7 +61,9 @@ void main() {
         findsOneWidget);
     expect(sends.detailIds, [_routeSendId]);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       1,
     );
     await tester.binding.handlePopRoute();
@@ -129,7 +134,9 @@ void main() {
     expect(find.byType(ActiveListsScreen), findsNothing);
     expect(find.text('Existing shopping list'), findsNothing);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       1,
     );
 
@@ -206,7 +213,9 @@ void main() {
     expect(find.byType(ActiveListsScreen), findsNothing);
     expect(lists.createCalls, 0);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       1,
     );
   });
@@ -236,7 +245,9 @@ void main() {
       findsOneWidget,
     );
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       1,
     );
     expect(tester.takeException(), isNull);

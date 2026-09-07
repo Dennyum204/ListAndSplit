@@ -324,23 +324,27 @@ class ActiveListDetailScreen extends ConsumerWidget {
               dialogRef.watch(activeListDetailControllerProvider(listId));
           final localizations = AppLocalizations.of(context);
           return AlertDialog(
+            scrollable: true,
             titlePadding: EdgeInsets.zero,
             title: AppDialogTitle(localizations.listRenameTitle),
-            content: TextFormField(
-              style: AppPalette.inputTextStyle(context),
-              key: const Key('renameListTitle'),
-              initialValue: title,
-              autofocus: true,
-              enabled: !state.isMutating,
-              maxLength: 80,
-              decoration: InputDecoration(
-                labelText: localizations.listsTitleLabel,
-                helperText: localizations.listsTitleHelper,
+            content: SingleChildScrollView(
+                child: AppDialogField(
+              label: localizations.listsTitleLabel,
+              child: TextFormField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('renameListTitle'),
+                initialValue: title,
+                autofocus: true,
+                enabled: !state.isMutating,
+                maxLength: 80,
+                decoration: InputDecoration(
+                  helperText: localizations.listsTitleHelper,
+                ),
+                onChanged: (value) => title = value,
               ),
-              onChanged: (value) => title = value,
-            ),
+            )),
             actions: [
-              TextButton(
+              OutlinedButton(
                 onPressed: state.isMutating
                     ? null
                     : () => Navigator.of(dialogContext).pop(),
@@ -1067,24 +1071,26 @@ class _GeneralNoteDialogState extends ConsumerState<_GeneralNoteDialog> {
                 ),
                 const SizedBox(height: 12),
               ],
-              TextField(
-                style: AppPalette.inputTextStyle(context),
-                key: const Key('generalNoteField'),
-                controller: _text,
-                focusNode: _focusNode,
-                autofocus: true,
-                enabled: formEnabled,
-                minLines: 6,
-                maxLines: 12,
-                textCapitalization: TextCapitalization.sentences,
-                keyboardType: TextInputType.multiline,
-                inputFormatters: const [_GeneralNoteCodePointFormatter()],
-                decoration: InputDecoration(
-                  labelText: localizations.generalNoteFieldLabel,
-                  helperText: localizations.generalNoteFieldHelper,
-                  errorText: (_showValidation || overLimit) && overLimit
-                      ? localizations.generalNoteCharacterLimitError
-                      : null,
+              AppDialogField(
+                label: localizations.generalNoteFieldLabel,
+                child: TextField(
+                  style: AppPalette.inputTextStyle(context),
+                  key: const Key('generalNoteField'),
+                  controller: _text,
+                  focusNode: _focusNode,
+                  autofocus: true,
+                  enabled: formEnabled,
+                  minLines: 6,
+                  maxLines: 12,
+                  textCapitalization: TextCapitalization.sentences,
+                  keyboardType: TextInputType.multiline,
+                  inputFormatters: const [_GeneralNoteCodePointFormatter()],
+                  decoration: InputDecoration(
+                    helperText: localizations.generalNoteFieldHelper,
+                    errorText: (_showValidation || overLimit) && overLimit
+                        ? localizations.generalNoteCharacterLimitError
+                        : null,
+                  ),
                 ),
               ),
               const SizedBox(height: 4),
@@ -1225,7 +1231,7 @@ class _GeneralNoteDialogState extends ConsumerState<_GeneralNoteDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           key: const Key('cancelGeneralNoteButton'),
           onPressed:
               state.isMutating || _submitted || _closing ? null : _closeNow,
@@ -1718,65 +1724,74 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              style: AppPalette.inputTextStyle(context),
-              key: const Key('itemNameField'),
-              controller: _name,
-              autofocus: true,
-              enabled: formEnabled,
-              maxLength: 120,
-              textCapitalization: TextCapitalization.sentences,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: localizations.itemNameLabel,
-                helperText: localizations.itemNameHelper,
-                errorText: _showValidation && !nameValid
-                    ? localizations.listInvalidInputMessage
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              style: AppPalette.inputTextStyle(context),
-              key: const Key('itemQuantityField'),
-              controller: _quantity,
-              enabled: formEnabled,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: localizations.itemQuantityLabel,
-                helperText: localizations.itemQuantityHelper,
-                errorText: _showValidation && quantity == null
-                    ? localizations.listInvalidInputMessage
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<ListUnit?>(
-              iconEnabledColor: AppPalette.navy,
-              style: AppPalette.inputTextStyle(context),
-              dropdownColor: AppPalette.inputCream,
-              key: const Key('itemUnitField'),
-              // Keep the initializer supported by the Flutter 3.19 floor.
-              // ignore: deprecated_member_use
-              value: _unit,
-              decoration:
-                  InputDecoration(labelText: localizations.itemUnitLabel),
-              items: [
-                DropdownMenuItem(
-                  value: null,
-                  child: Text(localizations.itemNoUnit),
+            AppDialogField(
+              label: localizations.itemNameLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('itemNameField'),
+                controller: _name,
+                autofocus: true,
+                enabled: formEnabled,
+                maxLength: 120,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  helperText: localizations.itemNameHelper,
+                  errorText: _showValidation && !nameValid
+                      ? localizations.listInvalidInputMessage
+                      : null,
                 ),
-                ...ListUnit.values.map(
-                  (unit) => DropdownMenuItem(
-                    value: unit,
-                    child: Text(_unitLabel(localizations, unit)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            AppDialogField(
+              label: localizations.itemQuantityLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('itemQuantityField'),
+                controller: _quantity,
+                enabled: formEnabled,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  helperText: localizations.itemQuantityHelper,
+                  errorText: _showValidation && quantity == null
+                      ? localizations.listInvalidInputMessage
+                      : null,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            AppDialogField(
+              label: localizations.itemUnitLabel,
+              child: DropdownButtonFormField<ListUnit?>(
+                isExpanded: true,
+                isDense: false,
+                iconEnabledColor: AppPalette.navy,
+                style: AppPalette.inputTextStyle(context),
+                dropdownColor: AppPalette.inputCream,
+                key: const Key('itemUnitField'),
+                // Keep the initializer supported by the Flutter 3.19 floor.
+                // ignore: deprecated_member_use
+                value: _unit,
+                decoration: const InputDecoration(),
+                items: [
+                  DropdownMenuItem(
+                    value: null,
+                    child: Text(localizations.itemNoUnit),
                   ),
-                ),
-              ],
-              onChanged:
-                  formEnabled ? (value) => setState(() => _unit = value) : null,
+                  ...ListUnit.values.map(
+                    (unit) => DropdownMenuItem(
+                      value: unit,
+                      child: Text(_unitLabel(localizations, unit)),
+                    ),
+                  ),
+                ],
+                onChanged: formEnabled
+                    ? (value) => setState(() => _unit = value)
+                    : null,
+              ),
             ),
             const SizedBox(height: 12),
             Align(
@@ -1840,7 +1855,7 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: formEnabled ? _closeNow : null,
           child: Text(localizations.cancelButton),
         ),
@@ -2163,37 +2178,41 @@ class _SaveTemplateDialogState extends State<_SaveTemplateDialog> {
           children: [
             Text(localizations.templatesSaveListDescription),
             const SizedBox(height: 12),
-            TextField(
-              style: AppPalette.inputTextStyle(context),
-              key: const Key('saveListTemplateNameField'),
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: localizations.templatesNameLabel,
+            AppDialogField(
+              label: localizations.templatesNameLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('saveListTemplateNameField'),
+                controller: _nameController,
+                decoration: const InputDecoration(),
+                onChanged: (_) => setState(() {}),
               ),
-              onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String?>(
-              iconEnabledColor: AppPalette.navy,
-              style: AppPalette.inputTextStyle(context),
-              dropdownColor: AppPalette.inputCream,
-              // ignore: deprecated_member_use
-              value: _categoryId,
-              decoration: InputDecoration(
-                labelText: localizations.templatesCategoryLabel,
-              ),
-              items: [
-                DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text(localizations.templatesNoCategoryLabel),
-                ),
-                for (final category in widget.categories)
+            AppDialogField(
+              label: localizations.templatesCategoryLabel,
+              child: DropdownButtonFormField<String?>(
+                isExpanded: true,
+                isDense: false,
+                iconEnabledColor: AppPalette.navy,
+                style: AppPalette.inputTextStyle(context),
+                dropdownColor: AppPalette.inputCream,
+                // ignore: deprecated_member_use
+                value: _categoryId,
+                decoration: const InputDecoration(),
+                items: [
                   DropdownMenuItem<String?>(
-                    value: category.id,
-                    child: Text(category.name),
+                    value: null,
+                    child: Text(localizations.templatesNoCategoryLabel),
                   ),
-              ],
-              onChanged: (value) => setState(() => _categoryId = value),
+                  for (final category in widget.categories)
+                    DropdownMenuItem<String?>(
+                      value: category.id,
+                      child: Text(category.name),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _categoryId = value),
+              ),
             ),
             const SizedBox(height: 8),
             Row(
@@ -2252,7 +2271,7 @@ class _SaveTemplateDialogState extends State<_SaveTemplateDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: () => Navigator.pop(context),
           child: Text(localizations.cancelButton),
         ),

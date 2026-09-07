@@ -646,7 +646,7 @@ class _CategoryManagementSheet extends ConsumerWidget {
         title: AppDialogTitle(localizations.templatesDeleteCategoryTitle),
         content: Text(localizations.templatesDeleteCategoryDescription),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(localizations.cancelButton),
           ),
@@ -706,18 +706,20 @@ class _CategoryNameDialogState extends State<_CategoryNameDialog> {
     return AlertDialog(
       titlePadding: EdgeInsets.zero,
       title: AppDialogTitle(widget.title),
-      content: TextField(
-        style: AppPalette.inputTextStyle(context),
-        key: const Key('categoryNameField'),
-        controller: _nameController,
-        autofocus: true,
-        decoration: InputDecoration(
-          labelText: localizations.templatesCategoryNameLabel,
+      content: SingleChildScrollView(
+        child: AppDialogField(
+          label: localizations.templatesCategoryNameLabel,
+          child: TextField(
+            style: AppPalette.inputTextStyle(context),
+            key: const Key('categoryNameField'),
+            controller: _nameController,
+            autofocus: true,
+            onSubmitted: _isClosing ? null : _close,
+          ),
         ),
-        onSubmitted: _isClosing ? null : _close,
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           key: const Key('cancelCategoryNameButton'),
           onPressed: _isClosing ? null : _close,
           child: Text(localizations.cancelButton),
@@ -783,45 +785,45 @@ class _NamedCategoryDialogState extends State<_NamedCategoryDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              style: AppPalette.inputTextStyle(context),
-              key: const Key('templateNameField'),
-              controller: _nameController,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: localizations.templatesNameLabel,
+            AppDialogField(
+              label: localizations.templatesNameLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('templateNameField'),
+                controller: _nameController,
+                autofocus: true,
               ),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String?>(
-              style: AppPalette.inputTextStyle(context),
-              dropdownColor: AppPalette.inputCream,
-              iconEnabledColor: AppPalette.navy,
-              key: const Key('templateCategoryField'),
-              // ignore: deprecated_member_use
-              value: _categoryId,
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: localizations.templatesCategoryLabel,
-              ),
-              items: [
-                DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text(localizations.templatesNoCategoryLabel),
-                ),
-                for (final category in widget.categories)
+            AppDialogField(
+              label: localizations.templatesCategoryLabel,
+              child: DropdownButtonFormField<String?>(
+                style: AppPalette.inputTextStyle(context),
+                dropdownColor: AppPalette.inputCream,
+                iconEnabledColor: AppPalette.navy,
+                key: const Key('templateCategoryField'),
+                // ignore: deprecated_member_use
+                value: _categoryId,
+                isExpanded: true,
+                items: [
                   DropdownMenuItem<String?>(
-                    value: category.id,
-                    child: Text(category.name),
+                    value: null,
+                    child: Text(localizations.templatesNoCategoryLabel),
                   ),
-              ],
-              onChanged: (value) => setState(() => _categoryId = value),
+                  for (final category in widget.categories)
+                    DropdownMenuItem<String?>(
+                      value: category.id,
+                      child: Text(category.name),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _categoryId = value),
+              ),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: () => Navigator.pop(context),
           child: Text(localizations.cancelButton),
         ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
@@ -24,6 +25,65 @@ import '../../support/ui_preview_capture.dart';
 
 void main() {
   setUpAll(prepareUiPreviewFonts);
+  for (final dark in [false, true]) {
+    for (final textScale in [1.0, 2.0]) {
+      testWidgets(
+          'category dialog has a clean external label '
+          '${dark ? 'dark' : 'light'} at ${textScale * 100} percent',
+          (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = FakePrivateTemplateRepository();
+        await _pump(
+          tester,
+          repository: repository,
+          lists: FakeActiveListRepository(),
+          child: const TemplatesScreen(),
+          dark: dark,
+          textScale: textScale,
+        );
+        await tester.tap(
+          find.byKey(const Key('manageTemplateCategoriesButton')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Create category'));
+        await tester.pumpAndSettle();
+
+        final field = find.byKey(const Key('categoryNameField'));
+        final label = find.descendant(
+          of: find.byType(AppDialogField),
+          matching: find.text('Category name'),
+        );
+        expect(label, findsOneWidget);
+        expect(tester.widget<TextField>(field).decoration?.labelText, isNull);
+        expect(tester.widget<TextField>(field).decoration?.label, isNull);
+        expect(tester.widget<Text>(label).style?.backgroundColor, isNull);
+        expect(tester.getBottomLeft(label).dy,
+            lessThan(tester.getTopLeft(field).dy));
+
+        final cancel = find.byKey(const Key('cancelCategoryNameButton'));
+        final confirm = find.byKey(const Key('confirmCategoryNameButton'));
+        expect(tester.widget(cancel), isA<OutlinedButton>());
+        expect(tester.getSize(cancel).height, greaterThanOrEqualTo(48));
+        expect(tester.getSize(confirm).height, greaterThanOrEqualTo(48));
+        expect(tester.takeException(), isNull);
+
+        await tester.enterText(field, 'Weekend');
+        await tester.pumpAndSettle();
+        expect(label, findsOneWidget);
+        expect(tester.getBottomLeft(label).dy,
+            lessThan(tester.getTopLeft(field).dy));
+        await captureUiPreview(tester,
+            'category-clean-label-${dark ? 'dark' : 'light'}-${(textScale * 100).round()}');
+        await tester.tap(cancel);
+        await tester.pumpAndSettle();
+        expect(repository.categories, isEmpty);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
   for (final dark in [false, true]) {
     testWidgets('reference catalog at normal text ${dark ? 'dark' : 'light'}',
         (tester) async {

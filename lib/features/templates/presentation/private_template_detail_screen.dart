@@ -381,7 +381,7 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
           ),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(localizations.cancelButton),
           ),
@@ -428,7 +428,7 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
           ),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(localizations.cancelButton),
           ),
@@ -483,7 +483,7 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
         title: AppDialogTitle(localizations.templatesDeleteButton),
         content: Text(item.name),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(localizations.cancelButton),
           ),
@@ -644,42 +644,42 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
               ),
               const SizedBox(height: 12),
             ],
-            TextField(
-              style: AppPalette.inputTextStyle(context),
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: localizations.templatesNameLabel,
+            AppDialogField(
+              label: localizations.templatesNameLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                controller: _nameController,
               ),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String?>(
-              style: AppPalette.inputTextStyle(context),
-              dropdownColor: AppPalette.inputCream,
-              iconEnabledColor: AppPalette.navy,
-              // ignore: deprecated_member_use
-              value: _categoryId,
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: localizations.templatesCategoryLabel,
-              ),
-              items: [
-                DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text(localizations.templatesNoCategoryLabel),
-                ),
-                for (final category in widget.categories)
+            AppDialogField(
+              label: localizations.templatesCategoryLabel,
+              child: DropdownButtonFormField<String?>(
+                style: AppPalette.inputTextStyle(context),
+                dropdownColor: AppPalette.inputCream,
+                iconEnabledColor: AppPalette.navy,
+                // ignore: deprecated_member_use
+                value: _categoryId,
+                isExpanded: true,
+                items: [
                   DropdownMenuItem<String?>(
-                    value: category.id,
-                    child: Text(category.name),
+                    value: null,
+                    child: Text(localizations.templatesNoCategoryLabel),
                   ),
-              ],
-              onChanged: (value) => setState(() => _categoryId = value),
+                  for (final category in widget.categories)
+                    DropdownMenuItem<String?>(
+                      value: category.id,
+                      child: Text(category.name),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _categoryId = value),
+              ),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: () => Navigator.pop(context),
           child: Text(localizations.cancelButton),
         ),
@@ -740,33 +740,36 @@ class _TemplateItemDialogState extends State<_TemplateItemDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              style: AppPalette.inputTextStyle(context),
-              key: const Key('templateItemNameField'),
-              controller: _nameController,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: localizations.templatesItemNameLabel,
+            AppDialogField(
+              label: localizations.templatesItemNameLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('templateItemNameField'),
+                controller: _nameController,
+                autofocus: true,
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
-              style: AppPalette.inputTextStyle(context),
-              key: const Key('templateItemQuantityField'),
-              controller: _quantityController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: localizations.templatesItemQuantityLabel,
-                errorText:
-                    _valid ? null : localizations.templatesInvalidInputMessage,
+            AppDialogField(
+              label: localizations.templatesItemQuantityLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('templateItemQuantityField'),
+                controller: _quantityController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  errorText: _valid
+                      ? null
+                      : localizations.templatesInvalidInputMessage,
+                ),
               ),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: () => Navigator.pop(context),
           child: Text(localizations.cancelButton),
         ),

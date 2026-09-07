@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:list_and_split/core/presentation/app_bottom_navigation_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/app/app.dart';
@@ -63,7 +64,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(container.read(appRouterProvider), same(router));
     expect(
-        tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+        tester
+            .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+            .selectedIndex,
         3);
     expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
         ThemeMode.dark);
@@ -77,7 +80,9 @@ void main() {
     expect(auth.signOutCalls, 0);
     await tester.tap(find.byKey(const Key('templatesDestination')));
     await tester.pumpAndSettle();
-    expect(Theme.of(tester.element(find.byType(NavigationBar))).brightness,
+    expect(
+        Theme.of(tester.element(find.byType(AppBottomNavigationBar)))
+            .brightness,
         Brightness.dark);
     await tester.tap(find.byKey(const Key('profileDestination')));
     await tester.pumpAndSettle();
@@ -141,7 +146,8 @@ void main() {
         }
         expect(
             tester
-                .widget<NavigationBar>(find.byType(NavigationBar))
+                .widget<AppBottomNavigationBar>(
+                    find.byType(AppBottomNavigationBar))
                 .selectedIndex,
             index);
         final icon =

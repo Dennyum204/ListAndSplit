@@ -296,7 +296,7 @@ class ReceivedTemplateSendScreen extends ConsumerWidget {
         title: AppDialogTitle(localizations.templateSendDeclineDialogTitle),
         content: Text(localizations.templateSendDeclineDialogDescription),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(localizations.cancelButton),
           ),
@@ -375,34 +375,35 @@ class _TemplateSendDialogState extends ConsumerState<_TemplateSendDialog> {
                 ),
                 data: (loaded) => loaded.isEmpty
                     ? Text(localizations.templateSendNoEligibleFriends)
-                    : InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: localizations.templateSendRecipientLabel,
-                        ),
-                        isEmpty: _recipientId == null,
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            style: AppPalette.inputTextStyle(context),
-                            dropdownColor: AppPalette.inputCream,
-                            iconEnabledColor: AppPalette.navy,
-                            key: const Key('templateSendRecipientField'),
-                            value: _recipientId,
-                            isExpanded: true,
-                            items: [
-                              for (final recipient in loaded)
-                                DropdownMenuItem(
-                                  value: recipient.id,
-                                  child: Text(
-                                    '${recipient.displayName} '
-                                    '(@${recipient.username})',
-                                    overflow: TextOverflow.ellipsis,
+                    : AppDialogField(
+                        label: localizations.templateSendRecipientLabel,
+                        child: InputDecorator(
+                          decoration: const InputDecoration(),
+                          isEmpty: _recipientId == null,
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              style: AppPalette.inputTextStyle(context),
+                              dropdownColor: AppPalette.inputCream,
+                              iconEnabledColor: AppPalette.navy,
+                              key: const Key('templateSendRecipientField'),
+                              value: _recipientId,
+                              isExpanded: true,
+                              items: [
+                                for (final recipient in loaded)
+                                  DropdownMenuItem(
+                                    value: recipient.id,
+                                    child: Text(
+                                      '${recipient.displayName} '
+                                      '(@${recipient.username})',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
-                            ],
-                            onChanged: state.isSending
-                                ? null
-                                : (value) =>
-                                    setState(() => _recipientId = value),
+                              ],
+                              onChanged: state.isSending
+                                  ? null
+                                  : (value) =>
+                                      setState(() => _recipientId = value),
+                            ),
                           ),
                         ),
                       ),
@@ -467,7 +468,7 @@ class _TemplateSendDialogState extends ConsumerState<_TemplateSendDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: state.isSending ? null : () => Navigator.pop(context),
           child: Text(localizations.cancelButton),
         ),
@@ -631,7 +632,7 @@ class _SentSendsView extends ConsumerWidget {
           ),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(localizations.cancelButton),
           ),
