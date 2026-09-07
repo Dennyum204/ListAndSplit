@@ -79,6 +79,9 @@ void main() {
               for (var other = 0; other < 4; other++) {
                 expect(
                     tester.getSemantics(find.byKey(Key('destination-$other'))),
+                    // isSemantics is unavailable at the Flutter 3.19 floor.
+                    // Keep all selection/button/action assertions on both SDKs.
+                    // ignore: deprecated_member_use
                     containsSemantics(
                       isSelected: other == index,
                       isButton: true,
