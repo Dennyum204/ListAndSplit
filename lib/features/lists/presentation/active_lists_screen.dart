@@ -235,6 +235,7 @@ class _ActiveListCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final material = MaterialLocalizations.of(context);
+    final participantCount = summary.participantCount;
     final timestamp = (summary.status == ActiveListStatus.active
             ? summary.updatedAt
             : summary.archivedAt!)
@@ -292,6 +293,10 @@ class _ActiveListCard extends StatelessWidget {
                   '${localizations.listsItemCount(summary.itemCount)} · '
                   '${localizations.listsCompletedCount(summary.completedItemCount, summary.itemCount)}',
                 ),
+                if (participantCount != null) ...[
+                  const SizedBox(height: 4),
+                  Text(localizations.listsParticipantCount(participantCount)),
+                ],
                 const SizedBox(height: 4),
                 Text(
                   timestampLabel,

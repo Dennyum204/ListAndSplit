@@ -82,6 +82,150 @@ void main() {
     expect(find.text('@owner_user'), findsNothing);
   });
 
+  testWidgets(
+      'overview shows current participant counts for owned, shared, and archived lists',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    final repository = FakeActiveListRepository()
+      ..activeLists = [
+        _summary(participantCount: 1),
+        _summary(
+          id: 'shared-list',
+          title: 'Shared trip',
+          isOwner: false,
+          participantCount: 20,
+        ),
+      ]
+      ..archivedLists = [
+        _summary(
+          id: 'archived-list',
+          title: 'Previous trip',
+          status: ActiveListStatus.archived,
+          archivedAt: DateTime.utc(2026, 7, 20, 11),
+          participantCount: 3,
+        ),
+      ];
+    await _pump(tester,
+        repository: repository, child: const ActiveListsScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Owned by you'), findsOneWidget);
+    expect(find.text('Shared by Owner User'), findsOneWidget);
+    expect(find.text('1 participant'), findsOneWidget);
+    expect(find.text('20 participants'), findsOneWidget);
+    for (final label in ['1 participant', '20 participants']) {
+      final countSemantics = find.bySemanticsLabel(RegExp(label));
+      expect(countSemantics, findsOneWidget);
+      expect(
+        RegExp(label).allMatches(tester.getSemantics(countSemantics).label),
+        hasLength(1),
+      );
+    }
+
+    await tester.tap(find.text('Archived'));
+    await tester.pumpAndSettle();
+    expect(find.text('Previous trip'), findsOneWidget);
+    expect(find.text('3 participants'), findsOneWidget);
+    expect(find.text('20 participants'), findsNothing);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets('overview does not invent a count for a legacy list summary',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary(isOwner: false)];
+    await _pump(tester,
+        repository: repository, child: const ActiveListsScreen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Groceries'), findsOneWidget);
+    expect(find.text('Shared by Owner User'), findsOneWidget);
+    expect(find.text('2 items · 1 of 2 complete'), findsOneWidget);
+    expect(find.textContaining('participant'), findsNothing);
+  });
+
+  testWidgets('mounted overview reconciles participant counts and access loss',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary(isOwner: false, participantCount: 2)];
+    await _pump(tester,
+        repository: repository, child: const ActiveListsScreen());
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ActiveListsScreen)),
+    );
+    expect(find.text('2 participants'), findsOneWidget);
+
+    repository.activeLists = [_summary(isOwner: false, participantCount: 3)];
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+    expect(find.text('3 participants'), findsOneWidget);
+    expect(find.text('2 participants'), findsNothing);
+
+    repository.activeLists = [];
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+    expect(find.text('Groceries'), findsNothing);
+    expect(find.text('3 participants'), findsNothing);
+    expect(find.text('No active lists yet'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final language in ['en', 'pt']) {
+    for (final themeMode in [ThemeMode.light, ThemeMode.dark]) {
+      testWidgets(
+          'participant counts support $language, ${themeMode.name}, and 200% text',
+          (tester) async {
+        tester.view.physicalSize = const Size(375, 812);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+        final repository = FakeActiveListRepository()
+          ..activeLists = [
+            _summary(
+              title: 'A shared list with a longer title',
+              isOwner: false,
+              participantCount: 20,
+            ),
+          ]
+          ..archivedLists = [
+            _summary(
+              id: 'archived-list',
+              status: ActiveListStatus.archived,
+              archivedAt: DateTime.utc(2026, 7, 20, 11),
+              participantCount: 1,
+            ),
+          ];
+        await _pump(
+          tester,
+          repository: repository,
+          child: const ActiveListsScreen(),
+          locale: Locale(language),
+          themeMode: themeMode,
+          textScale: 2,
+        );
+        await tester.pumpAndSettle();
+
+        final plural =
+            language == 'pt' ? '20 participantes' : '20 participants';
+        await tester.ensureVisible(find.text(plural));
+        expect(find.text(plural), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        await tester
+            .tap(find.text(language == 'pt' ? 'Arquivadas' : 'Archived'));
+        await tester.pumpAndSettle();
+        final singular = language == 'pt' ? '1 participante' : '1 participant';
+        await tester.ensureVisible(find.text(singular));
+        expect(find.text(singular), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
   testWidgets('create validates input, preserves it, and blocks duplicate taps',
       (tester) async {
     final repository = FakeActiveListRepository()
@@ -2155,6 +2299,7 @@ ActiveListSummary _summary({
   DateTime? archivedAt,
   int version = 3,
   bool isOwner = true,
+  int? participantCount,
 }) {
   return ActiveListSummary(
     id: id,
@@ -2163,6 +2308,7 @@ ActiveListSummary _summary({
     version: version,
     itemCount: 2,
     completedItemCount: 1,
+    participantCount: participantCount,
     createdAt: DateTime.utc(2026, 7, 20, 9),
     updatedAt: DateTime.utc(2026, 7, 20, 10),
     archivedAt: archivedAt,

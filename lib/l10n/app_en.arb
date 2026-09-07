@@ -726,6 +726,11 @@
   "@listsItemCount": {
     "placeholders": {"count": {"type": "int"}}
   },
+  "listsParticipantCount": "{count, plural, =1{1 participant} other{{count} participants}}",
+  "@listsParticipantCount": {
+    "description": "Current list participants, including the owner and accepted members only.",
+    "placeholders": {"count": {"type": "int"}}
+  },
   "listsCompletedCount": "{completed} of {total} complete",
   "@listsCompletedCount": {
     "placeholders": {

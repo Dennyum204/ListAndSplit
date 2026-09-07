@@ -188,6 +188,7 @@
   "listsLoadMoreButton": "Carregar mais",
   "listsLoadingMoreLabel": "A carregar mais listas",
   "listsItemCount": "{count, plural, =0{Sem itens} =1{1 item} other{{count} itens}}",
+  "listsParticipantCount": "{count, plural, =1{1 participante} other{{count} participantes}}",
   "listsCompletedCount": "{completed} de {total} concluídos",
   "listsUpdatedAt": "Atualizada em {date} às {time}",
   "listsArchivedAt": "Arquivada em {date} às {time}",
