@@ -1007,6 +1007,11 @@ Notification links and later feature deep-link contracts remain open.
 ### Accessibility and localization
 
 - Material 3 light and dark themes are part of the application foundation.
+- Profile includes an Appearance selector for System (default), Light and Dark.
+  The choice applies immediately across the app and is saved only on this device,
+  surviving app restarts and sign-out without modifying the account or export.
+  An unavailable saved preference falls back to System; failed saves restore the
+  previous selection and show a localized, retryable error.
 - User-facing strings are supplied in English and Portuguese and remain structured
   for additional locales.
 - New flows should support semantic labels, scalable text, adequate contrast, and

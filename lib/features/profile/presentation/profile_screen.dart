@@ -17,6 +17,7 @@ import 'package:list_and_split/features/notifications/presentation/notification_
 import 'package:list_and_split/features/profile/presentation/profile_controller.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_ui.dart';
+import 'package:list_and_split/features/settings/presentation/theme_preference_selector.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -201,7 +202,9 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                       icon: const Icon(Icons.gavel_rounded),
                       label: Text(localizations.moderationSettingsAction),
                     ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 20),
+                  const ThemePreferenceSelector(),
+                  const SizedBox(height: 20),
                   TextButton.icon(
                     key: const Key('profileSignOutButton'),
                     onPressed: isBusy

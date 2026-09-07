@@ -1,6 +1,12 @@
 {
   "@@locale": "en",
   "appTitle": "List & Split",
+  "appearanceTitle": "Appearance",
+  "appearanceDeviceHelper": "Choose the theme for this device. System follows your device settings.",
+  "appearanceSystem": "System",
+  "appearanceLight": "Light",
+  "appearanceDark": "Dark",
+  "appearanceSaveFailed": "We couldn't save your theme. Your previous theme is still selected. Please try again.",
   "@appTitle": {
     "description": "The application display title."
   },

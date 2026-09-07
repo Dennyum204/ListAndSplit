@@ -52,6 +52,13 @@ error/loading/read-only states take priority over omissions in static references
 Optional local widget PNG captures are written outside the repository only; they
 are review aids, not physical-device QA or committed golden baselines.
 
+Device-local appearance is owned by `features/settings`: a repository wraps the
+existing SharedPreferences dependency and an app-scoped Riverpod controller
+restores/serializes the System/Light/Dark preference. `MaterialApp.router` watches
+the selected mode without recreating the router or account state. Profile renders
+the localized selector; widgets never access storage directly. No backend field,
+export contract, dependency, or cross-device synchronization is introduced.
+
 ## Client composition
 
 The application composition path is intentionally small:

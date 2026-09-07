@@ -24,6 +24,8 @@ import 'package:list_and_split/features/moderation/presentation/public_template_
 import 'package:list_and_split/features/notifications/domain/in_app_notification.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+import 'package:list_and_split/features/settings/domain/theme_preference.dart';
+import 'package:list_and_split/features/settings/presentation/theme_preference_controller.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_providers.dart';
 
@@ -31,10 +33,72 @@ import 'helpers/fakes.dart';
 import 'helpers/fake_private_template_repository.dart';
 import 'helpers/fake_public_template_moderation_repository.dart';
 import 'helpers/fake_friend_public_template_feed_repository.dart';
+import 'helpers/fake_theme_preference_repository.dart';
 import 'support/ui_preview_capture.dart';
 
 void main() {
   setUpAll(prepareUiPreviewFonts);
+
+  testWidgets(
+      'Profile theme selection preserves router, tab, draft and session',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final profile =
+        FakeProfileRepository(profile: FakeProfileRepository.completeProfile);
+    final appearance = FakeThemePreferenceRepository();
+    addTearDown(auth.close);
+    await _pumpConfiguredApp(tester,
+        auth: auth, profile: profile, appearance: appearance);
+    final appElement = tester.element(find.byType(ListAndSplitApp));
+    final container = ProviderScope.containerOf(appElement);
+    final router = container.read(appRouterProvider);
+    await tester.tap(find.byKey(const Key('profileDestination')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('profileDisplayName')), 'Unsaved display name');
+    final darkChoice = find.byKey(const Key('themePreference-dark'));
+    await tester.ensureVisible(darkChoice);
+    await tester.pumpAndSettle();
+    await tester.tap(darkChoice);
+    await tester.pumpAndSettle();
+    expect(container.read(appRouterProvider), same(router));
+    expect(
+        tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+        3);
+    expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
+        ThemeMode.dark);
+    expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('profileDisplayName')))
+            .controller!
+            .text,
+        'Unsaved display name');
+    expect(profile.updateCalls, 0);
+    expect(auth.signOutCalls, 0);
+    await tester.tap(find.byKey(const Key('templatesDestination')));
+    await tester.pumpAndSettle();
+    expect(Theme.of(tester.element(find.byType(NavigationBar))).brightness,
+        Brightness.dark);
+    await tester.tap(find.byKey(const Key('profileDestination')));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('profileDisplayName')))
+            .controller!
+            .text,
+        'Unsaved display name');
+    expect(tester.takeException(), isNull);
+
+    // Recreate the app's provider scope to simulate a new process reading storage.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _pumpConfiguredApp(tester,
+        auth: auth, profile: profile, appearance: appearance);
+    expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
+        ThemeMode.dark);
+    expect(auth.signOutCalls, 0);
+    expect(appearance.writes, [ThemePreference.dark]);
+    expect(tester.takeException(), isNull);
+  });
 
   for (final brightness in Brightness.values) {
     testWidgets(
@@ -1345,6 +1409,7 @@ Future<void> _pumpConfiguredApp(
   FakeNotificationRepository? notifications,
   FakeActiveListRepository? lists,
   FakePublicTemplateModerationRepository? moderation,
+  ThemePreferenceRepository? appearance,
 }) async {
   final defaultFriendships = FakeFriendshipRepository()
     ..summaryResult = const FriendshipSummary(
@@ -1358,6 +1423,9 @@ Future<void> _pumpConfiguredApp(
   await tester.pumpWidget(
     uiPreviewBoundary(ProviderScope(
       overrides: [
+        themePreferenceRepositoryProvider.overrideWithValue(
+          appearance ?? FakeThemePreferenceRepository(),
+        ),
         appConfigurationProvider.overrideWithValue(
           const AppConfiguration.devConfigured(),
         ),

@@ -1,6 +1,12 @@
 {
   "@@locale": "pt",
   "appTitle": "List & Split",
+  "appearanceTitle": "Aparência",
+  "appearanceDeviceHelper": "Escolhe o tema para este dispositivo. Sistema segue as definições do dispositivo.",
+  "appearanceSystem": "Sistema",
+  "appearanceLight": "Claro",
+  "appearanceDark": "Escuro",
+  "appearanceSaveFailed": "Não foi possível guardar o tema. O tema anterior continua selecionado. Tenta novamente.",
   "foundationTagline": "Planeiem em conjunto. Acertem contas com simplicidade.",
   "foundationDescription": "Um espaço partilhado para listas, modelos reutilizáveis e os pequenos detalhes que mantêm todos em sintonia.",
   "foundationReady": "Base pronta",

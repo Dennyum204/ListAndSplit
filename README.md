@@ -290,6 +290,10 @@ identity initials share Material 3 tokens. No live Figma access, downloaded mock
 photos, new font package or temporary asset URL is required. Existing loading,
 empty, error, archived, stale and inaccessible states remain supported.
 
+Use **Profile > Appearance > System / Light / Dark** to choose a theme. System
+follows the device; an explicit choice persists locally across app restarts and
+sign-out. Switching themes does not save profile edits or change account data.
+
 Community's initial page is now the existing friends-only template feed. Its
 Friends action opens exact-username discovery; friendship/block management and
 public-profile/template paths remain available. List, Chat and Split controls
@@ -307,6 +311,8 @@ content. Physical QA has **not** been completed for PR #33:
    keyboard insets, scroll reachability, screen-reader names, focus, touch targets
    and contrast. Safety copy and accessible spacing intentionally exceed the
    static mockups where needed.
+   Exercise Profile's Appearance selector, check all tabs update, restart to
+   confirm the saved choice, and return to System to follow device brightness.
 3. Exercise category/template create, rename, cancellation, normalized duplicates,
    blank-template Add item, selected-item capacity, copy/send/accept/decline, and
    stale report rejection. Confirm each guarded dialog closes or recovers once.
