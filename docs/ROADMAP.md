@@ -29,6 +29,8 @@ or Production-released. Production remains fail-closed and unconfigured.
 6. Freeze feature selection, classifying each remaining idea as required before
    redesign, post-beta, or rejected; historical ideas are not automatic promises.
 7. Implement only the additional functionality Fernando explicitly selects.
+   P-059/A-073 select current participant counts through a backend/domain PR;
+   the Figma UI PR follows separately and preserves existing behavior.
 8. Apply the Figma design system and UI refactor to stable functionality,
    screen by screen.
 9. Finalize branding and adaptive, monochrome, and Play launcher icons.
@@ -43,6 +45,16 @@ The Android beta-pipeline work previously considered for PR #28 is deferred.
 There is no Play Console developer account and no approved final launcher icon.
 Earlier toolchain recommendations are provisional research only and must be
 revalidated when step 8 begins.
+
+The participant-count foundation adds server-derived v2 list/detail reads and
+strict Dart domain/repository integration, preserving legacy APIs and export v12.
+Localized accessible cards belong to the separate Figma UI PR. The foundation
+reuses existing private account reconciliation without a stored counter or Storage
+infrastructure. Its reviewed migration must be deployed to a separately
+authorized environment before distributing the new client; no hosted deployment
+or physical QA is implied by this source change. Category icons, avatars, list
+covers, template images, and changes to Chat remain unselected. The Figma UI
+refactor follows as the second PR and does not introduce those optional features.
 
 ## Phase 0 — Bootstrap foundation (implemented)
 
@@ -455,10 +467,13 @@ does not make them prerequisites for redesign, beta, or Production:
 - observability and analytics; and
 - payment processing or provider integration.
 
-List Chat's bounded v1 is the only accepted next capability. P-058/A-070 resolve
-its database/domain foundation and A-071 records PR #30 client reconciliation.
+List Chat's bounded v1 is implemented in source. P-058/A-070 resolve its
+database/domain foundation and A-071 records PR #30 client reconciliation.
 PR #30 is merged and its physical QA is complete; A-072 records PR #31's retention
 schedule while environment rollout and the exact public-release
 reporting/moderation workflow remain open.
+P-059/A-073 select participant counts as the next bounded addition before the UI
+refactor. Other ideas remain subject to the feature-freeze review and explicit
+selection; their presence in the backlog is not authorization to implement them.
 Play/signing/AAB/icon/store work is deferred by A-069, and Production remains
 separately authorized.

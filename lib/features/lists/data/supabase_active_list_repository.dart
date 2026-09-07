@@ -28,7 +28,7 @@ class SupabaseActiveListRepository implements ActiveListRepository {
     try {
       final rows = _rows(
         await _rpc(
-          'list_active_lists',
+          'list_active_lists_v2',
           params: {
             'requested_status': status.wireValue,
             'page_size': limit,
@@ -52,7 +52,7 @@ class SupabaseActiveListRepository implements ActiveListRepository {
       return _summaryWithCounts(
         _singleRow(
           await _rpc(
-            'get_active_list',
+            'get_active_list_v2',
             params: {'target_list_id': listId},
           ),
         ),
@@ -558,6 +558,7 @@ class SupabaseActiveListRepository implements ActiveListRepository {
         json,
         itemCount: _nonNegativeInt(json['item_count']),
         completedItemCount: _nonNegativeInt(json['completed_item_count']),
+        participantCount: _participantCount(json['participant_count']),
       );
 
   static ActiveListSummary _summaryWithoutCounts(Map<String, dynamic> json) =>
@@ -567,6 +568,7 @@ class SupabaseActiveListRepository implements ActiveListRepository {
     Map<String, dynamic> json, {
     required int itemCount,
     required int completedItemCount,
+    int? participantCount,
   }) {
     final status = ActiveListStatus.fromWire(_string(json['status']));
     final archivedAt = _nullableDateTime(json['archived_at']);
@@ -605,6 +607,7 @@ class SupabaseActiveListRepository implements ActiveListRepository {
       ownerUsername: ownerUsername,
       ownerDisplayName: ownerDisplayName,
       callerAccessVersion: callerAccessVersion,
+      participantCount: participantCount,
     );
   }
 
@@ -828,6 +831,13 @@ class SupabaseActiveListRepository implements ActiveListRepository {
   static int _nonNegativeInt(Object? value) {
     if (value is! int || value < 0) {
       throw const FormatException('invalid non-negative integer');
+    }
+    return value;
+  }
+
+  static int _participantCount(Object? value) {
+    if (value is! int || value < 1 || value > 20) {
+      throw const FormatException('invalid participant count');
     }
     return value;
   }

@@ -34,6 +34,7 @@ class ActiveListSummary {
     this.ownerUsername,
     this.ownerDisplayName,
     this.callerAccessVersion,
+    this.participantCount,
   });
 
   final String id;
@@ -51,6 +52,9 @@ class ActiveListSummary {
   final String? ownerDisplayName;
   final int? callerAccessVersion;
 
+  /// Current owner plus accepted members, or unknown in legacy mutation results.
+  final int? participantCount;
+
   ActiveListCursor get cursor => ActiveListCursor(
         sortAt: status == ActiveListStatus.active ? updatedAt : archivedAt!,
         id: id,
@@ -62,6 +66,7 @@ class ActiveListSummary {
     int? version,
     int? itemCount,
     int? completedItemCount,
+    int? participantCount,
     DateTime? updatedAt,
     DateTime? archivedAt,
     bool clearArchivedAt = false,
@@ -81,6 +86,7 @@ class ActiveListSummary {
       ownerUsername: ownerUsername,
       ownerDisplayName: ownerDisplayName,
       callerAccessVersion: callerAccessVersion,
+      participantCount: participantCount ?? this.participantCount,
     );
   }
 }

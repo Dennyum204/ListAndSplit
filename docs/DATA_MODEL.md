@@ -6,7 +6,7 @@ This document describes the conceptual model and accepted invariants.
 Git-committed migrations remain the physical schema source of truth. Sections
 explicitly labelled implemented describe reviewed current contracts; sections
 labelled planned or conceptual do not authorize schema. The current account export
-contract remains schema version `11`, with versions `1` through `10` preserved.
+contract remains schema version `12`, with versions `1` through `11` preserved.
 
 ## Global modeling rules
 
@@ -374,6 +374,22 @@ valid transitions. Active listing orders by `(updated_at, id)` descending;
 archived listing orders by `(archived_at, id)` descending. Both use a bounded
 exclusive keyset cursor and aggregate item total/completed counts in the same
 projection.
+
+P-059/A-073 add a derived `participant_count` to the source's version-2 list and
+detail read projections, not to the stored `active_lists` row. It counts the
+authoritative owner once plus current `member` access rows whose profiles are
+completed, matching the existing authorized participant projection. Pending,
+declined, cancelled, removed, left, deleted, and transfer-only `owner` rows add
+nothing. This is distinct from reserved capacity, which includes pending rows.
+The count applies to active and archived lists, remains unchanged by ownership
+transfer, and is recalculated after membership/lifecycle changes. No counter
+maintenance, historical count, identity projection, or export field is added.
+Legacy list/mutation RPC shapes and export v12 remain unchanged. The new read
+RPCs require a separately authorized migration rollout before new-client use.
+They are invoker-rights wrappers of existing authorized reads, not additional
+privileged table access. The Dart domain permits an unknown count only for legacy
+mutation summaries, while v2 read parsing requires 1-20. The separate Figma UI PR
+owns card presentation; this foundation changes no image or icon data model.
 
 Membership and friendship are distinct. Ending friendship cancels pending list
 invitations but preserves accepted membership; blocking applies the accepted
@@ -1217,6 +1233,6 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   resolution.
 - Appeal, administrator/compliance, and later moderation-automation contracts
   beyond the accepted Public Template report/review lifecycle.
-- PR #30 List Chat client reconciliation/stale-access state and any later offline
-  cache/mutation model.
+- Any later List Chat offline cache/mutation model; PR #30's online client
+  reconciliation and stale-access state are resolved by A-071.
 - Public-release List Chat terms/reporting/moderation entities and retention.
