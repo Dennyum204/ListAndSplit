@@ -31,8 +31,9 @@ class LanguagePreferenceSelector extends ConsumerWidget {
               // ignore: deprecated_member_use
               value: state.preference,
               isExpanded: true,
-              decoration:
-                  InputDecoration(helperText: strings.languageDeviceHelper),
+              decoration: InputDecoration(
+                  contentPadding: AppDialogField.dropdownPadding,
+                  helperText: strings.languageDeviceHelper),
               items: [
                 for (final preference in LanguagePreference.values)
                   DropdownMenuItem(

@@ -283,6 +283,7 @@ class _PrivateTemplateCatalogState extends State<_PrivateTemplateCatalog> {
                 value: state.sort,
                 isExpanded: true,
                 decoration: const InputDecoration(
+                  contentPadding: AppDialogField.dropdownPadding,
                   isDense: true,
                 ),
                 items: [
@@ -809,6 +810,8 @@ class _NamedCategoryDialogState extends State<_NamedCategoryDialog> {
                 // ignore: deprecated_member_use
                 value: _categoryId,
                 isExpanded: true,
+                decoration: const InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding),
                 items: [
                   DropdownMenuItem<String?>(
                     value: null,

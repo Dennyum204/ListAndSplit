@@ -129,6 +129,11 @@ class AppDialogTitle extends StatelessWidget {
 class AppDialogField extends StatelessWidget {
   const AppDialogField({required this.label, required this.child, super.key});
 
+  /// Non-dense dropdowns retain their 48dp minimum and grow with scaled text.
+  /// Only their surrounding padding shrinks; captions stay outside the fill.
+  static const dropdownPadding =
+      EdgeInsets.symmetric(horizontal: 16, vertical: 4);
+
   final String label;
   final Widget child;
 

@@ -75,6 +75,7 @@ class ActiveListDetailScreen extends ConsumerWidget {
           if (detail != null)
             IconButton(
               key: const Key('listMembersButton'),
+              disabledColor: AppPalette.lightText,
               onPressed: state.isMutating
                   ? null
                   : () => context.push(
@@ -96,7 +97,8 @@ class ActiveListDetailScreen extends ConsumerWidget {
           if (detail != null && detail.summary.isOwner)
             PopupMenuButton<_ListAction>(
               key: const Key('listActionsButton'),
-              icon: const Icon(Icons.settings_outlined),
+              icon: const Icon(Icons.settings_outlined,
+                  color: AppPalette.lightText),
               enabled: !state.isMutating,
               onSelected: (action) => _handleAction(context, ref, action),
               itemBuilder: (context) => [
@@ -138,7 +140,8 @@ class ActiveListDetailScreen extends ConsumerWidget {
           if (detail != null && !detail.summary.isOwner)
             PopupMenuButton<_ListAction>(
               key: const Key('memberListActionsButton'),
-              icon: const Icon(Icons.settings_outlined),
+              icon: const Icon(Icons.settings_outlined,
+                  color: AppPalette.lightText),
               enabled: !state.isMutating,
               onSelected: (action) => _handleAction(context, ref, action),
               itemBuilder: (_) => [
@@ -681,6 +684,10 @@ class _QuickAddItemState extends ConsumerState<_QuickAddItem> {
                   minimumSize: const Size(48, 48),
                   backgroundColor: AppPalette.inputCream,
                   foregroundColor: AppPalette.navy,
+                  disabledBackgroundColor:
+                      valid && !atCapacity ? AppPalette.inputCream : null,
+                  disabledForegroundColor:
+                      valid && !atCapacity ? AppPalette.navy : null,
                 ),
                 icon: const Icon(Icons.add_rounded, size: 30),
               ),
@@ -922,6 +929,10 @@ class _GeneralNoteCard extends StatelessWidget {
               alignment: AlignmentDirectional.centerEnd,
               child: TextButton.icon(
                 key: const Key('editGeneralNoteButton'),
+                style: TextButton.styleFrom(
+                  disabledForegroundColor:
+                      Theme.of(context).colorScheme.primary,
+                ),
                 onPressed: isBusy
                     ? null
                     : () => showDialog<void>(
@@ -1649,6 +1660,37 @@ class _ItemCard extends ConsumerWidget {
           child: Checkbox(
             key: Key('completeItem-${item.id}'),
             value: item.isCompleted,
+            // Disabling the mutation callback must not dim unchecked outlines.
+            // Archived controls still use the normal disabled appearance.
+            side: readOnly
+                ? null
+                // Retain the Flutter 3.19 floor.
+                // ignore: deprecated_member_use
+                : MaterialStateBorderSide.resolveWith((states) {
+                    // ignore: deprecated_member_use
+                    if (states.contains(MaterialState.selected)) {
+                      return const BorderSide(
+                          width: 0, color: Colors.transparent);
+                    }
+                    final colors = Theme.of(context).colorScheme;
+                    // ignore: deprecated_member_use
+                    if (states.contains(MaterialState.error)) {
+                      return BorderSide(color: colors.error, width: 2);
+                    }
+                    final interactive =
+                        // ignore: deprecated_member_use
+                        states.contains(MaterialState.pressed) ||
+                            // ignore: deprecated_member_use
+                            states.contains(MaterialState.hovered) ||
+                            // ignore: deprecated_member_use
+                            states.contains(MaterialState.focused);
+                    return BorderSide(
+                      color: interactive
+                          ? colors.onSurface
+                          : colors.onSurfaceVariant,
+                      width: 2,
+                    );
+                  }),
             // A pending mutation disables interaction without flashing every
             // checkbox into the disabled palette and back.
             fillColor: readOnly
@@ -1696,6 +1738,8 @@ class _ItemCard extends ConsumerWidget {
             if (!readOnly)
               PopupMenuButton<String>(
                 key: Key('itemActions-${item.id}'),
+                icon: Icon(Icons.more_vert,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
                 enabled: !isBusy,
                 onSelected: (action) {
                   if (action == 'edit') {
@@ -1886,7 +1930,9 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
                 // Keep the initializer supported by the Flutter 3.19 floor.
                 // ignore: deprecated_member_use
                 value: _unit,
-                decoration: const InputDecoration(),
+                decoration: const InputDecoration(
+                  contentPadding: AppDialogField.dropdownPadding,
+                ),
                 items: [
                   DropdownMenuItem(
                     value: null,
@@ -2310,7 +2356,9 @@ class _SaveTemplateDialogState extends State<_SaveTemplateDialog> {
                 dropdownColor: AppPalette.inputCream,
                 // ignore: deprecated_member_use
                 value: _categoryId,
-                decoration: const InputDecoration(),
+                decoration: const InputDecoration(
+                  contentPadding: AppDialogField.dropdownPadding,
+                ),
                 items: [
                   DropdownMenuItem<String?>(
                     value: null,

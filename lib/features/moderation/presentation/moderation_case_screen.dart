@@ -422,6 +422,8 @@ class _ModerationActionDialogState extends State<_ModerationActionDialog> {
                       // ignore: deprecated_member_use
                       value: _reason,
                       isExpanded: true,
+                      decoration: const InputDecoration(
+                          contentPadding: AppDialogField.dropdownPadding),
                       items: [
                         for (final reason in PublicTemplateReportReason.values)
                           DropdownMenuItem(

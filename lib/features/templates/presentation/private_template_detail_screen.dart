@@ -662,6 +662,8 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
                 // ignore: deprecated_member_use
                 value: _categoryId,
                 isExpanded: true,
+                decoration: const InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding),
                 items: [
                   DropdownMenuItem<String?>(
                     value: null,

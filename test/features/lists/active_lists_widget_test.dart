@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -24,6 +26,77 @@ import '../../support/ui_preview_capture.dart';
 
 void main() {
   setUpAll(prepareUiPreviewFonts);
+
+  for (final dark in [false, true]) {
+    testWidgets(
+        'unchanged icons retain paint through completion transitions dark=$dark',
+        (tester) async {
+      tester.view.physicalSize = const Size(400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repository = _CompletionTransitionRepository()
+        ..activeLists = [_summary()]
+        ..itemsByList['list-1'] = [
+          _item(),
+          _item(id: 'untouched', name: 'Untouched')
+        ];
+      await _pump(tester,
+          repository: repository,
+          themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+          child: const ActiveListDetailScreen(listId: 'list-1'));
+      await tester.pumpAndSettle();
+      final target = find.byKey(const Key('completeItem-item-1'));
+      final untouched = find.byKey(const Key('completeItem-untouched'));
+      final identity = tester.element(untouched);
+      final position = tester.getTopLeft(untouched);
+      final regions = {
+        'members': find.byKey(const Key('listMembersButton')),
+        'settings': find.byKey(const Key('listActionsButton')),
+        'checkbox': untouched,
+        'item menu': find.byKey(const Key('itemActions-untouched')),
+        'drag handle': find.byIcon(Icons.drag_handle_rounded).last,
+      };
+      final baseline = await _iconPaint(tester, regions);
+      for (final value in [true, false]) {
+        repository.mutationGate = Completer<void>();
+        repository.readGate = Completer<void>();
+        await tester.tap(target);
+        await tester.pumpAndSettle();
+        expect(tester.widget<Checkbox>(untouched).onChanged, isNull);
+        expect(
+            tester.widget<IconButton>(regions['members']!).onPressed, isNull);
+        final attempts = repository.attempts;
+        await tester.tap(target);
+        await tester.pump();
+        expect(repository.attempts, attempts);
+        expect(await _iconPaint(tester, regions), baseline,
+            reason: 'Pending completion must not dim unrelated icons.');
+        repository.mutationGate!.complete();
+        await tester.pumpAndSettle();
+        expect(await _iconPaint(tester, regions), baseline,
+            reason:
+                'Success before authoritative reads must retain icon paint.');
+        repository.readGate!.complete();
+        await tester.pumpAndSettle();
+        expect(tester.widget<Checkbox>(target).value, value);
+        expect(await _iconPaint(tester, regions), baseline,
+            reason: 'Reconciliation must retain unrelated icon paint.');
+        expect(tester.element(untouched), same(identity));
+        expect(tester.getTopLeft(untouched), position);
+      }
+      repository.readGate = null;
+      repository.itemsByList['list-1']![1] =
+          _item(id: 'untouched', name: 'Remote name');
+      final container = ProviderScope.containerOf(
+          tester.element(find.byType(ActiveListDetailScreen)));
+      await container.read(reconciliationRegistryProvider).reconcile();
+      await tester.pumpAndSettle();
+      expect(find.text('Remote name'), findsOneWidget);
+      expect(tester.element(untouched), same(identity));
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets(
       'completion preserves row position and identity through reconciliation',
@@ -2374,6 +2447,62 @@ class _QuickAddRepository extends FakeActiveListRepository {
         unit: unit,
         assigneeProfileIds: assigneeProfileIds,
         requestId: requestId);
+  }
+}
+
+Future<Map<String, int>> _iconPaint(
+    WidgetTester tester, Map<String, Finder> regions) async {
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(const ValueKey('uiPreviewBoundary')));
+  final rectangles =
+      regions.map((key, finder) => MapEntry(key, tester.getRect(finder)));
+  return (await tester.runAsync(() async {
+    final image = await boundary.toImage();
+    try {
+      final bytes =
+          (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!
+              .buffer
+              .asUint8List();
+      return rectangles.map((key, rect) {
+        var hash = 0;
+        for (var y = rect.top.ceil(); y < rect.bottom.floor(); y++) {
+          for (var x = rect.left.ceil(); x < rect.right.floor(); x++) {
+            for (var channel = 0; channel < 4; channel++) {
+              hash = 0x1fffffff &
+                  (hash * 31 + bytes[(y * image.width + x) * 4 + channel]);
+            }
+          }
+        }
+        return MapEntry(key, hash);
+      });
+    } finally {
+      image.dispose();
+    }
+  }))!;
+}
+
+class _CompletionTransitionRepository extends FakeActiveListRepository {
+  Completer<void>? mutationGate;
+  Completer<void>? readGate;
+  int attempts = 0;
+
+  @override
+  Future<ActiveListSummary> getList(String listId) async {
+    await readGate?.future;
+    return super.getList(listId);
+  }
+
+  @override
+  Future<ActiveListItem> setItemCompleted(String listId, String itemId,
+      {required bool completed,
+      required int expectedListVersion,
+      required int expectedItemVersion}) async {
+    attempts++;
+    await mutationGate?.future;
+    return super.setItemCompleted(listId, itemId,
+        completed: completed,
+        expectedListVersion: expectedListVersion,
+        expectedItemVersion: expectedItemVersion);
   }
 }
 

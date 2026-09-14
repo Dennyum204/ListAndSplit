@@ -16,6 +16,51 @@ void main() {
   for (final locale in ['en', 'pt']) {
     for (final dark in [false, true]) {
       testWidgets(
+          'dropdown is compact and grows without clipping $locale dark=$dark',
+          (tester) async {
+        tester.view.physicalSize = const Size(320, 720);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = FakeLanguagePreferenceRepository()
+          ..preference = LanguagePreference.values.byName(locale);
+        double? normalHeight;
+        for (final scale in [1.0, 2.0, 3.0]) {
+          await _pump(tester, repository, dark: dark, scale: scale);
+          final selected = find.text(locale == 'en' ? 'English' : 'Português');
+          final container =
+              InputDecorator.containerOf(tester.element(selected))!;
+          final bounds = container.localToGlobal(Offset.zero) & container.size;
+          final textBounds = tester.getRect(selected);
+          final icon = find.descendant(
+              of: find.byKey(const Key('languagePreference')),
+              matching: find.byIcon(Icons.arrow_drop_down));
+          expect(bounds.height, greaterThanOrEqualTo(48));
+          expect(textBounds.top, greaterThanOrEqualTo(bounds.top));
+          expect(textBounds.bottom, lessThanOrEqualTo(bounds.bottom));
+          expect(textBounds.center.dy, closeTo(bounds.center.dy, 1));
+          expect(tester.getCenter(icon).dy, closeTo(bounds.center.dy, 1));
+          if (scale == 1) {
+            normalHeight = bounds.height;
+            expect(bounds.height, lessThanOrEqualTo(60));
+          } else if (scale == 3) {
+            expect(bounds.height, greaterThan(normalHeight!));
+          }
+          final paragraph = tester.renderObject<RenderParagraph>(selected);
+          final naturalText = TextPainter(
+            text: paragraph.text,
+            textDirection: paragraph.textDirection,
+            textScaler: paragraph.textScaler,
+          )..layout(maxWidth: paragraph.size.width);
+          expect(
+              paragraph.size.height, greaterThanOrEqualTo(naturalText.height));
+          naturalText.dispose();
+          await captureUiPreview(tester,
+              'compact-dropdown-$locale-${dark ? 'dark' : 'light'}-${(scale * 100).round()}');
+          expect(tester.takeException(), isNull);
+        }
+      });
+      testWidgets(
           'language dropdown captions and selection fit 200% $locale dark=$dark',
           (tester) async {
         tester.view.physicalSize = const Size(320, 720);

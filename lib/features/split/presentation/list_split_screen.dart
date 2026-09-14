@@ -268,7 +268,9 @@ class _DisabledSplitStateState extends ConsumerState<_DisabledSplitState> {
                     // Keep the initializer supported by the Flutter 3.19 floor.
                     // ignore: deprecated_member_use
                     value: _currency,
-                    decoration: const InputDecoration(),
+                    decoration: const InputDecoration(
+                      contentPadding: AppDialogField.dropdownPadding,
+                    ),
                     items: [
                       for (final currency in SplitCurrency.values)
                         DropdownMenuItem(
@@ -393,7 +395,9 @@ class _SplitSummaryCard extends ConsumerWidget {
               // Keep the initializer supported by the Flutter 3.19 floor.
               // ignore: deprecated_member_use
               value: selected,
-              decoration: const InputDecoration(),
+              decoration: const InputDecoration(
+                contentPadding: AppDialogField.dropdownPadding,
+              ),
               items: [
                 for (final currency in SplitCurrency.values)
                   DropdownMenuItem(value: currency, child: Text(currency.code)),
@@ -958,6 +962,7 @@ class _SettlementFormDialogState extends ConsumerState<SettlementFormDialog> {
                       ? _payerId
                       : null,
                   decoration: InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding,
                     errorText: _showValidation && !endpointsValid
                         ? localizations.splitSettlementEndpointsInvalid
                         : null,
@@ -993,7 +998,9 @@ class _SettlementFormDialogState extends ConsumerState<SettlementFormDialog> {
                       recipientChoices.any((entry) => entry.id == _recipientId)
                           ? _recipientId
                           : null,
-                  decoration: const InputDecoration(),
+                  decoration: const InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding,
+                  ),
                   items: [
                     for (final participant in recipientChoices)
                       DropdownMenuItem(
@@ -1738,6 +1745,7 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
                   // ignore: deprecated_member_use
                   value: payerValid ? _payerId : null,
                   decoration: InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding,
                     errorText: _showValidation && !payerValid
                         ? localizations.splitPayerRequiredMessage
                         : null,
