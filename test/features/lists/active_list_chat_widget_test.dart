@@ -298,6 +298,11 @@ void main() {
       find.bySemanticsLabel('Open list chat'),
       findsOneWidget,
     );
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Open list chat')).rect.size,
+      tester.getSize(find.byKey(const Key('listChatButton'))),
+      reason: 'Chat accessibility focus must cover only its own button',
+    );
   });
 
   testWidgets('ordinary unread count is displayed exactly', (tester) async {

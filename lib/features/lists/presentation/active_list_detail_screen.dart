@@ -517,6 +517,7 @@ class _ListChatButton extends ConsumerWidget {
         ? () => context.go(AppRoutes.listChat(listId))
         : null;
     return Semantics(
+      container: true,
       button: true,
       selected: selected,
       enabled: onOpen != null,
