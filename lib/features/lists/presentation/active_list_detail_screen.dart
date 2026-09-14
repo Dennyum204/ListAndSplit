@@ -1660,6 +1660,8 @@ class _ItemCard extends ConsumerWidget {
           child: Checkbox(
             key: Key('completeItem-${item.id}'),
             value: item.isCompleted,
+            checkColor:
+                readOnly ? null : Theme.of(context).colorScheme.onPrimary,
             // Disabling the mutation callback must not dim unchecked outlines.
             // Archived controls still use the normal disabled appearance.
             side: readOnly

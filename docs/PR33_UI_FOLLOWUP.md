@@ -6,7 +6,7 @@ camera/audio, avatar and template-image controls. Live Figma is not required.
 
 | Reference item | Delivery and source behavior |
 | --- | --- |
-| 1 Checkbox flicker | PR #33: remove the routine success banner that shifted keyed rows 60px; keep members/settings/item-menu icons and unchecked checkbox outlines visually stable while mutation callbacks are guarded. Retain authoritative completion/reconciliation, scroll state and recoverable failures. |
+| 1 Checkbox flicker | PR #33: remove the routine success banner that shifted keyed rows 60px; keep members/settings/item-menu icons, unchecked checkbox outlines and already-checked ticks visually stable while mutation callbacks are guarded. Retain authoritative completion/reconciliation, scroll state and recoverable failures. |
 | 2 Unassigned rows | PR #33: hide visible assignment text/icon and spacing when empty; preserve semantic assignment context, assigned identities and editing. |
 | 3 Fast item creation | PR #33: shared +/keyboard quick-add, quantity 1, no unit/assignment, existing controller/request recovery, guarded submission and revision-aware draft clearing; detailed edit remains. |
 | 4 Split | PR #33: horizontal balance strip, payer-to-recipient suggestions and compact transactions using existing real contracts/initials. Preserve settlement confirmation/history/reversal and integer currencies; no money transfer. |
@@ -37,6 +37,8 @@ The Samsung recording at the previous head reproduced four toggles: transient
 disabled colors affected the members icon, settings gear, unchecked outlines and
 item overflow menus. Drag handles and the notification bell stayed stable. The
 cause was the pending mutation palette, not a need to suppress reconciliation.
+The SDK also changes already-checked tick colors when disabled; regression
+coverage includes those ticks and preserves their enabled color during saves.
 Regression tests gate mutation completion and the following authoritative read,
 compare unchanged icon pixels in both themes at each transition, verify duplicate
 guards and stable elements/positions, and then reconcile a remote item edit.

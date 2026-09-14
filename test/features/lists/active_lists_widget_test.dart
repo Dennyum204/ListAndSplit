@@ -39,7 +39,8 @@ void main() {
         ..activeLists = [_summary()]
         ..itemsByList['list-1'] = [
           _item(),
-          _item(id: 'untouched', name: 'Untouched')
+          _item(id: 'untouched', name: 'Untouched'),
+          _item(id: 'checked', name: 'Already checked', completed: true),
         ];
       await _pump(tester,
           repository: repository,
@@ -54,6 +55,7 @@ void main() {
         'members': find.byKey(const Key('listMembersButton')),
         'settings': find.byKey(const Key('listActionsButton')),
         'checkbox': untouched,
+        'checkmark': find.byKey(const Key('completeItem-checked')),
         'item menu': find.byKey(const Key('itemActions-untouched')),
         'drag handle': find.byIcon(Icons.drag_handle_rounded).last,
       };
@@ -2780,6 +2782,7 @@ ActiveListItem _item({
   String id = 'item-1',
   String name = 'Coffee',
   int version = 2,
+  bool completed = false,
   List<ActiveListAssignee> assignees = const [],
 }) {
   return ActiveListItem(
@@ -2789,8 +2792,8 @@ ActiveListItem _item({
     unit: ListUnit.pack,
     position: 1,
     version: version,
-    completedAt: null,
-    completedBy: null,
+    completedAt: completed ? DateTime.utc(2026, 7, 20, 10) : null,
+    completedBy: completed ? 'user-1' : null,
     createdAt: DateTime.utc(2026, 7, 20, 9),
     updatedAt: DateTime.utc(2026, 7, 20, 10),
     assignees: assignees,
