@@ -181,6 +181,13 @@ permission behavior, two-device photo refresh and temporary Storage/Auth failure
 remain required QA before release; device QA uses the verified Dev build. No automated moderation of photos or
 broader legal-compliance guarantee is implied by this feature.
 
+The Flutter transport sends PNG uploads with the exact `Content-Type` spelling
+required by the pinned Functions SDK; its default otherwise overwrites the MIME
+with `application/octet-stream`. A loopback HTTP regression exercises the actual
+SDK, binary upload body and binary read response. Gallery QA exposed this client
+issue after the backend-only lifecycle checks passed. It requires a client update,
+not another migration or function deployment.
+
 The cross-service sequencing follows the official
 [Auth deletion constraints](https://supabase.com/docs/guides/auth/managing-user-data#deleting-users)
 and [Edge worker limits](https://supabase.com/docs/guides/functions/limits).

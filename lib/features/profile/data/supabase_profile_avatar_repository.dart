@@ -80,7 +80,9 @@ class SupabaseProfileAvatarRepository implements ProfileAvatarRepository {
                 'Authorization': 'Bearer ${session.accessToken}',
                 'if-match': version.toString(),
                 'x-request-id': requestId,
-                if (bytes != null) 'content-type': 'image/png',
+                // FunctionsClient checks this exact spelling before choosing its
+                // default binary MIME. Lowercase is overwritten as octet-stream.
+                if (bytes != null) 'Content-Type': 'image/png',
               },
               bytes,
               null)
