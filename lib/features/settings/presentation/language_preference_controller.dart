@@ -71,7 +71,9 @@ class LanguagePreferenceController
     if (!mounted || state.isLoading || state.isSaving) return;
     if (state.preference == preference &&
         !state.saveFailed &&
-        !state.readFailed) return;
+        !state.readFailed) {
+      return;
+    }
     final previous = state.preference;
     state = LanguagePreferenceState(preference: preference, isSaving: true);
     try {

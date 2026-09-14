@@ -599,7 +599,9 @@ class _QuickAddItemState extends ConsumerState<_QuickAddItem> {
         detail.summary.status != ActiveListStatus.active ||
         detail.items.length >= activeListItemCapacity ||
         draft.trim().isEmpty ||
-        draft.trim().length > 120) return;
+        draft.trim().length > 120) {
+      return;
+    }
     final revision = _draftRevision;
     setState(() => _submitting = true);
     final result = await ref
@@ -613,7 +615,9 @@ class _QuickAddItemState extends ConsumerState<_QuickAddItem> {
       _submitting = false;
       if (result == ActiveListMutationOutcome.succeeded &&
           revision == _draftRevision &&
-          _name.text == draft) _name.clear();
+          _name.text == draft) {
+        _name.clear();
+      }
     });
     if (result == ActiveListMutationOutcome.succeeded) _focus.requestFocus();
   }
