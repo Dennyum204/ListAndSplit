@@ -2,7 +2,7 @@
 
 ## Approved contract (2026-09-08)
 
-P-060: Fernando selected an optional current gallery photograph, replacement and
+P-062: Fernando selected an optional current gallery photograph, replacement and
 removal, used on existing authorized identity surfaces including Profile, Chat
 and Split. Any verified, completed caller authorized to view a profile may view
 its current avatar. Friendship is not required; either-direction blocks deny
@@ -14,7 +14,7 @@ account. A failure preserves the account for retry, but its photograph may alrea
 have been removed. The existing confirmation, fresh-session check, caller-only
 hard deletion and database anonymization remain mandatory.
 
-A-075: A private Storage bucket holds bounded canonical 256x256 PNG thumbnails.
+A-076: A private Storage bucket holds bounded canonical 256x256 PNG thumbnails.
 Gallery input is resized and re-encoded locally; the server independently checks
 the complete PNG structure, CRCs, dimensions, decompressed size and filters and
 rejects metadata, animation and trailing content. Original images and EXIF/GPS
@@ -41,6 +41,23 @@ the own image. Export RPCs and document versions 1-12 remain compatible. No othe
 person's image, asset path or bearer URL enters an export.
 
 ## Delivery and rollout gates
+
+The September 14 integration normally merges PR #33's completed UI branch into
+PR #34. Avatar decision IDs are now P-062/A-076 to avoid collisions with the base
+branch's quick-add/language decisions; the approved avatar contracts are unchanged.
+Profile offers Add or Update based on current own metadata, and Remove only when
+an image exists. The redesigned Chat, Split balances/suggestions/transactions and
+Community reuse the contextual avatar component. Anonymized identities keep the
+generic fallback. Captioned compact dropdowns, language, quick-add and stable list
+icons remain inherited from PR #33.
+
+Initials remain visible until an authorized image finishes decoding. Ordinary
+parent rebuilds preserve the mounted image and do not refetch it. Photos still
+clear during authoritative access revalidation, session/target changes and failed
+reads. A brief initials fallback while authorization is rechecked is intentional;
+stale photos are not retained to hide a privacy-sensitive transition. Editor
+metadata retains its same-account labels during refresh, but clears on account
+changes/errors and reconciles with the latest result.
 
 This is a separate draft feature stacked on PR #33, not a deployment. The reviewed
 additive migration, avatar Edge Function and updated delete-account Edge Function
@@ -96,6 +113,13 @@ identity fields together before FK actions. No historical migration, expense RPC
 amount, share, settlement or reversal is rewritten.
 
 ## Local verification and operational recovery
+
+The Supabase CI job now starts an isolated runner-local database, Auth and Storage
+stack, runs the complete pgTAP suite, then invokes the existing loopback-only avatar
+integration test. It captures/masks ephemeral local credentials and restricts Deno
+network access to loopback port 54321. It never links to or deploys a hosted project.
+See [the concrete Dev rollout plan](PROFILE_AVATARS_DEV_ROLLOUT.md) before requesting
+separate deployment authorization.
 
 Run the normal Flutter checks and both frozen Deno task suites. The local pgTAP
 avatar suites exercise authorization, private catalog grants, version/request

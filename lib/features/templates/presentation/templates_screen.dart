@@ -56,6 +56,7 @@ class TemplatesScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'createPrivateTemplate',
         key: const Key('createTemplateButton'),
         onPressed:
             state.isMutating ? null : () => _showCreateTemplate(context, ref),
@@ -270,38 +271,41 @@ class _PrivateTemplateCatalogState extends State<_PrivateTemplateCatalog> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-          child: DropdownButtonFormField<PrivateTemplateSort>(
-            style: AppPalette.inputTextStyle(context),
-            dropdownColor: AppPalette.inputCream,
-            iconEnabledColor: AppPalette.navy,
-            key: const Key('templateSortField'),
-            // ignore: deprecated_member_use
-            value: state.sort,
-            isExpanded: true,
-            decoration: InputDecoration(
-              labelText: localizations.templatesSortLabel,
-              isDense: true,
-            ),
-            items: [
-              DropdownMenuItem(
-                value: PrivateTemplateSort.recent,
-                child: Text(localizations.templatesSortRecent),
-              ),
-              DropdownMenuItem(
-                value: PrivateTemplateSort.alphabetic,
-                child: Text(localizations.templatesSortAlphabetic),
-              ),
-              DropdownMenuItem(
-                value: PrivateTemplateSort.newest,
-                child: Text(localizations.templatesSortNewest),
-              ),
-            ],
-            onChanged: state.isMutating
-                ? null
-                : (sort) {
-                    if (sort != null) widget.onSort(sort);
-                  },
-          ),
+          child: AppDialogField(
+              label: localizations.templatesSortLabel,
+              child: DropdownButtonFormField<PrivateTemplateSort>(
+                isDense: false,
+                style: AppPalette.inputTextStyle(context),
+                dropdownColor: AppPalette.inputCream,
+                iconEnabledColor: AppPalette.navy,
+                key: const Key('templateSortField'),
+                // ignore: deprecated_member_use
+                value: state.sort,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  contentPadding: AppDialogField.dropdownPadding,
+                  isDense: true,
+                ),
+                items: [
+                  DropdownMenuItem(
+                    value: PrivateTemplateSort.recent,
+                    child: Text(localizations.templatesSortRecent),
+                  ),
+                  DropdownMenuItem(
+                    value: PrivateTemplateSort.alphabetic,
+                    child: Text(localizations.templatesSortAlphabetic),
+                  ),
+                  DropdownMenuItem(
+                    value: PrivateTemplateSort.newest,
+                    child: Text(localizations.templatesSortNewest),
+                  ),
+                ],
+                onChanged: state.isMutating
+                    ? null
+                    : (sort) {
+                        if (sort != null) widget.onSort(sort);
+                      },
+              )),
         ),
         const SizedBox(height: 8),
         Expanded(
@@ -798,6 +802,7 @@ class _NamedCategoryDialogState extends State<_NamedCategoryDialog> {
             AppDialogField(
               label: localizations.templatesCategoryLabel,
               child: DropdownButtonFormField<String?>(
+                isDense: false,
                 style: AppPalette.inputTextStyle(context),
                 dropdownColor: AppPalette.inputCream,
                 iconEnabledColor: AppPalette.navy,
@@ -805,6 +810,8 @@ class _NamedCategoryDialogState extends State<_NamedCategoryDialog> {
                 // ignore: deprecated_member_use
                 value: _categoryId,
                 isExpanded: true,
+                decoration: const InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding),
                 items: [
                   DropdownMenuItem<String?>(
                     value: null,

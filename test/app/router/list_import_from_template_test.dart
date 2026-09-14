@@ -143,6 +143,10 @@ void main() {
 
     await tester.tap(find.byKey(const Key('allTemplatesFilter')));
     await tester.pumpAndSettle();
+    await Scrollable.ensureVisible(
+        tester.element(find.byKey(Key('template-${blank.id}'))),
+        alignment: .5);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(Key('template-${blank.id}')));
     await tester.pumpAndSettle();
     expect(find.text('0 of 0 selected'), findsOneWidget);

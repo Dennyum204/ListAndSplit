@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
 import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/supabase/supabase_client_provider.dart';
 import 'package:list_and_split/features/profile/data/avatar_gallery.dart';
 import 'package:list_and_split/features/profile/data/supabase_profile_avatar_repository.dart';
@@ -14,14 +15,28 @@ import 'package:list_and_split/features/profile/domain/profile_avatar.dart';
 import 'package:list_and_split/features/profile/presentation/avatar_controller.dart';
 import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+import 'package:list_and_split/features/profile/presentation/profile_screen.dart';
+import 'package:list_and_split/features/profile/domain/user_profile.dart';
+import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
+import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
+import 'package:list_and_split/features/moderation/presentation/public_template_moderation_providers.dart';
+import 'package:list_and_split/features/settings/presentation/language_preference_controller.dart';
+import 'package:list_and_split/features/settings/presentation/theme_preference_controller.dart';
 import 'package:list_and_split/features/account/data/avatar_account_data_export_repository.dart';
 import 'package:list_and_split/features/account/domain/account_data_export.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../account/account_data_export_fixtures.dart';
+import '../../helpers/fakes.dart';
+import '../../helpers/fake_public_template_moderation_repository.dart';
+import '../../helpers/fake_language_preference_repository.dart';
+import '../../helpers/fake_theme_preference_repository.dart';
+import '../../support/ui_preview_capture.dart';
 
-Uint8List thumbnail() => createAvatarThumbnail(
-    Uint8List.fromList(image.encodePng(image.Image(width: 300, height: 150))));
+Uint8List thumbnail() => createAvatarThumbnail(Uint8List.fromList(
+    image.encodePng(image.fill(image.Image(width: 300, height: 150),
+        color: image.ColorRgb8(54, 116, 145)))));
 Session fixtureSession([String id = '11111111-1111-4111-8111-111111111111']) =>
     Session(
         accessToken: 'local-test-token',
@@ -43,13 +58,14 @@ class Gallery implements AvatarGallery {
 
 class Repository implements ProfileAvatarRepository {
   int writes = 0, reads = 0;
+  bool hasImage = true;
   Object? failure;
   Uint8List? bytes;
   Completer<ProfileAvatarMetadata>? pending;
   Completer<Uint8List?>? pendingRead;
   @override
   Future<ProfileAvatarMetadata> metadata() async =>
-      const ProfileAvatarMetadata(version: 7, hasImage: true);
+      ProfileAvatarMetadata(version: 7, hasImage: hasImage);
   @override
   Future<Uint8List?> read(AvatarTarget target) async {
     reads++;
@@ -77,6 +93,7 @@ class Repository implements ProfileAvatarRepository {
 }
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
   test('gallery creates a bounded metadata-free square PNG', () {
     final bytes = thumbnail();
     final decoded = image.decodePng(bytes)!;
@@ -381,6 +398,131 @@ void main() {
   for (final dark in [false, true]) {
     for (final locale in ['en', 'pt']) {
       testWidgets(
+          'redesigned Profile integrates avatars, drafts and language $locale dark=$dark',
+          (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repo = Repository()..bytes = thumbnail();
+        final registry = ReconciliationRegistry();
+        final auth = FakeAuthRepository();
+        addTearDown(auth.close);
+        final profile = UserProfile(
+            id: 'viewer',
+            username: 'viewer',
+            displayName: 'Viewer',
+            onboardingCompletedAt: DateTime.utc(2026));
+        await tester.pumpWidget(ProviderScope(
+            overrides: [
+              supabaseRuntimeReadyProvider.overrideWithValue(true),
+              verifiedUserIdProvider.overrideWithValue('viewer'),
+              profileAvatarRepositoryProvider.overrideWithValue(repo),
+              avatarGalleryProvider.overrideWithValue(Gallery()),
+              reconciliationRegistryProvider.overrideWithValue(registry),
+              authRepositoryProvider.overrideWithValue(auth),
+              profileRepositoryProvider
+                  .overrideWithValue(FakeProfileRepository(profile: profile)),
+              accountDataExportRepositoryProvider
+                  .overrideWithValue(FakeAccountDataExportRepository()),
+              accountDataExportShareServiceProvider
+                  .overrideWithValue(FakeAccountDataExportShareService()),
+              notificationRepositoryProvider
+                  .overrideWithValue(FakeNotificationRepository()),
+              publicTemplateModerationRepositoryProvider
+                  .overrideWithValue(FakePublicTemplateModerationRepository()),
+              languagePreferenceRepositoryProvider
+                  .overrideWithValue(FakeLanguagePreferenceRepository()),
+              themePreferenceRepositoryProvider
+                  .overrideWithValue(FakeThemePreferenceRepository()),
+            ],
+            child: MaterialApp(
+              theme: dark ? AppTheme.dark : AppTheme.light,
+              locale: Locale(locale),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: const TextScaler.linear(2)),
+                child: uiPreviewBoundary(child!),
+              ),
+              home: const ProfileScreen(),
+            )));
+        await tester.pumpAndSettle();
+        final strings =
+            AppLocalizations.of(tester.element(find.byType(ProfileScreen)));
+        expect(find.text(strings.avatarUpdate), findsOneWidget);
+        expect(find.byKey(const Key('removeAvatarButton')), findsOneWidget);
+        expect(tester.widget<ProfileAvatar>(find.byType(ProfileAvatar)).target,
+            const AvatarTarget.profile('viewer'));
+        await tester.runAsync(() => precacheImage(MemoryImage(repo.bytes!),
+            tester.element(find.byType(ProfileAvatar))));
+        await tester.pumpAndSettle();
+        expect(tester.widget<RawImage>(find.byType(RawImage)).image, isNotNull);
+        await captureUiPreview(
+            tester, 'avatar-profile-$locale-${dark ? 'dark' : 'light'}-large');
+        final draft = find.byKey(const Key('profileDisplayName'));
+        await tester.ensureVisible(draft);
+        await tester.enterText(draft, 'Unsaved display name');
+        repo.hasImage = false;
+        repo.bytes = null;
+        await registry.reconcile();
+        await tester.pumpAndSettle();
+        expect(find.text(strings.avatarAdd), findsOneWidget);
+        expect(find.byKey(const Key('removeAvatarButton')), findsNothing);
+        expect(tester.widget<TextField>(draft).controller!.text,
+            'Unsaved display name');
+        final language = find.byKey(const Key('languagePreference'));
+        await tester.ensureVisible(language);
+        await tester.pumpAndSettle();
+        expect(language.hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+      testWidgets(
+          'avatar add/update/remove follows current metadata $locale dark=$dark',
+          (tester) async {
+        final repo = Repository()..hasImage = false;
+        final gallery = Gallery()..bytes = null;
+        final registry = ReconciliationRegistry();
+        await tester.pumpWidget(ProviderScope(
+            overrides: [
+              supabaseRuntimeReadyProvider.overrideWithValue(true),
+              verifiedUserIdProvider.overrideWithValue('viewer'),
+              profileAvatarRepositoryProvider.overrideWithValue(repo),
+              avatarGalleryProvider.overrideWithValue(gallery),
+              reconciliationRegistryProvider.overrideWithValue(registry),
+            ],
+            child: MaterialApp(
+              theme: dark ? AppTheme.dark : AppTheme.light,
+              locale: Locale(locale),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const Scaffold(body: AvatarEditorActions()),
+            )));
+        await tester.pumpAndSettle();
+        final strings = AppLocalizations.of(
+            tester.element(find.byType(AvatarEditorActions)));
+        expect(find.text(strings.avatarAdd), findsOneWidget);
+        expect(find.byKey(const Key('removeAvatarButton')), findsNothing);
+        await tester.tap(find.byKey(const Key('changeAvatarButton')));
+        await tester.pumpAndSettle();
+        expect(repo.writes, 0);
+        expect(find.text(strings.avatarSaved), findsNothing);
+        expect(find.text(strings.avatarAdd), findsOneWidget);
+        // Another device's current metadata controls which actions are offered.
+        repo.hasImage = true;
+        await registry.reconcile();
+        await tester.pumpAndSettle();
+        expect(find.text(strings.avatarUpdate), findsOneWidget);
+        expect(find.byKey(const Key('removeAvatarButton')), findsOneWidget);
+        repo.hasImage = false;
+        await registry.reconcile();
+        await tester.pumpAndSettle();
+        expect(find.text(strings.avatarAdd), findsOneWidget);
+        expect(find.byKey(const Key('removeAvatarButton')), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+      testWidgets(
           'avatar actions $locale dark=$dark at 200% text remain accessible',
           (tester) async {
         final repo = Repository();
@@ -462,6 +604,52 @@ void main() {
                     target: AvatarTarget.profile('viewer'))))));
     await tester.pumpAndSettle();
     expect(find.byType(Image), findsOneWidget);
+    repo.bytes = null;
+    await registry.reconcile();
+    await tester.pumpAndSettle();
+    expect(find.byType(Image), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+      'avatar identity is stable on rebuild and fails closed during revalidation',
+      (tester) async {
+    final repo = Repository()..bytes = thumbnail();
+    final registry = ReconciliationRegistry();
+    final rebuild = ValueNotifier(0);
+    addTearDown(rebuild.dispose);
+    await tester.pumpWidget(ProviderScope(
+        overrides: [
+          supabaseRuntimeReadyProvider.overrideWithValue(true),
+          verifiedUserIdProvider.overrideWithValue('viewer'),
+          profileAvatarRepositoryProvider.overrideWithValue(repo),
+          reconciliationRegistryProvider.overrideWithValue(registry),
+        ],
+        child: MaterialApp(
+            home: Scaffold(
+                body: ValueListenableBuilder<int>(
+          valueListenable: rebuild,
+          builder: (_, __, ___) => const ProfileAvatar(
+              label: 'Viewer', target: AvatarTarget.profile('viewer')),
+        )))));
+    await tester.pumpAndSettle();
+    final photo = tester.element(find.byType(Image));
+    final size = tester.getSize(find.byType(ProfileAvatar));
+    rebuild.value++;
+    await tester.pumpAndSettle();
+    expect(tester.element(find.byType(Image)), same(photo));
+    expect(repo.reads, 1);
+    repo.pendingRead = Completer();
+    await registry.reconcile();
+    await tester.pump();
+    expect(find.byType(Image), findsNothing);
+    expect(find.byType(IdentityBadge), findsOneWidget);
+    expect(tester.getSize(find.byType(ProfileAvatar)), size);
+    repo.pendingRead!.completeError(const AvatarFailure());
+    await tester.pumpAndSettle();
+    expect(find.byType(Image), findsNothing);
+    expect(find.byType(IdentityBadge), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    repo.pendingRead = null;
     repo.bytes = null;
     await registry.reconcile();
     await tester.pumpAndSettle();

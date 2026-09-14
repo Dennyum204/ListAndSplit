@@ -78,7 +78,7 @@ without a separate background behind the caption.
 - The initial profile capability is owner-only. Users can read and update only
   their own approved fields; cross-user search/discovery is deferred until it can
   account for blocking.
-- Optional current avatars are implemented in the separate P-060/A-075 source
+- Optional current avatars are implemented in the separate P-062/A-076 source
   slice: gallery selection, replacement/removal, and current images on Profile,
   Chat, Split and existing authorized identity cards. The initial profile slice
   did not include avatars. Deployment and physical QA remain separate gates.
@@ -245,6 +245,18 @@ without a separate background behind the caption.
   not a claim of complete legal or regulatory compliance. Hosted deletion QA uses
   separately authorized disposable accounts and must never delete or modify
   Fernando or Susana.
+
+### Fast active-list item entry
+
+Inline quick-add accepts an item name and submits through either + or the keyboard.
+It uses quantity 1, leaves unit and assignments unset, and retains the detailed
+item editor for later changes. Existing name normalization, duplicate-name support,
+limits, capacity, committed creation order, permissions and request-id recovery
+remain authoritative. Guard repeated submissions, preserve all failed/uncertain
+drafts, clear only an unchanged successfully submitted draft, and keep focus ready
+for the next item. Unassigned rows omit the visible icon/text and unused space;
+assigned identities and meaningful screen-reader context remain available.
+Completion/reopen must not shift the viewport to announce routine success.
 
 ### Active and shared lists
 
@@ -1027,6 +1039,13 @@ Notification links and later feature deep-link contracts remain open.
 ### Accessibility and localization
 
 - Material 3 light and dark themes are part of the application foundation.
+- Profile includes a Language dropdown near Appearance: System (default), English
+  and Português (European Portuguese). It updates the whole app immediately while
+  preserving navigation, authentication, selected tab and unsaved forms. System
+  follows device locale changes with the existing English/Portuguese fallback.
+  The choice persists locally across restart/sign-out, is not account/export data,
+  and has recoverable localized storage-failure feedback. No phone setting changes
+  or restart are required.
 - Profile includes an Appearance selector for System (default), Light and Dark.
   The choice applies immediately across the app and is saved only on this device,
   surviving app restarts and sign-out without modifying the account or export.
@@ -1058,7 +1077,7 @@ Notification links and later feature deep-link contracts remain open.
 - P-059 selects participant counts only, with a backend/domain PR followed by a
   separate Figma UI PR preserving existing behavior. Category icon selection,
   avatars, list covers, template images, Chat media, and a Chat enable/disable
-  switch are not included in that count/refactor delivery. P-060/A-075 separately
+  switch are not included in that count/refactor delivery. P-062/A-076 separately
   select current avatars. The count foundation requires a separately authorized
   migration rollout before a client using v2 reads is distributed; it does not
   itself deliver the UI refactor or complete the overall feature-freeze review.
@@ -1090,7 +1109,7 @@ choose them:
 
 - A support or administrator correction process for immutable usernames, including
   its authorization and audit requirements.
-- Other image/media lifecycles beyond P-060/A-075's current profile avatars.
+- Other image/media lifecycles beyond P-062/A-076's current profile avatars.
 - Public-template global/ranked recommendation and broader discovery beyond the
   accepted chronological friends-only feed.
 - Notification archive/delete/preferences, later types, push-safe payloads,
@@ -1105,3 +1124,21 @@ choose them:
 - The exact terms-acceptance, in-app Chat content/user reporting, moderator
   workflow, evidence, appeal, and operational-response contract required before
   public distribution.
+
+### Approved reference follow-up allocation
+
+The “Things to change.docx” references guide compact balance strips, directional
+suggested-payment cards, transaction rows with existing payer/beneficiary identity,
+Chat bubble alignment/colours and composer, persistent plain dropdown captions,
+and compact text-only Community cards with author/profile action/title/publication
+and item count. Existing text colours, integer money, settlement confirmation and
+reversal, text Chat/unread rules and access restrictions remain authoritative.
+“Record payment” records bookkeeping; it never transfers funds. Many participants
+and large text must remain reachable through responsive layout and scrolling.
+Initials remain in PR #33; actual avatar editing/rendering belongs to PR #34.
+
+Template images are planned as the next separate feature PR, including optional
+image selection/preview in publishing and image-bearing Community cards. No image
+upload, fake placeholder or Add image control belongs to this delivery. Visibility,
+limits, replacement/removal, copying/sending, unpublishing/deletion, account
+export/deletion and moderation decisions must be resolved first (O-P19/O-A17).

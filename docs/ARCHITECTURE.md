@@ -66,6 +66,22 @@ the selected mode without recreating the router or account state. Profile render
 the localized selector; widgets never access storage directly. No backend field,
 export contract, dependency, or cross-device synchronization is introduced.
 
+The follow-up Language preference follows the same device-local settings boundary
+(P-061/A-075). The app watches its locale without replacing its router. Failed
+writes reload the preference cache and reconcile the displayed choice from storage;
+read failures leave startup usable and expose a localized retry. It does not add
+an account field or cross-device synchronization.
+
+Quick-add is a stateful presentation widget using the existing active-list
+controller's createItem and ListQuantity.one contract. A submitted draft revision
+prevents success from clearing subsequent input. It adds no transport/API. Routine
+completion confirmation is the authoritative checkbox state, without inserting a
+success banner above keyed list rows; recovery/error paths remain visible.
+
+Template-image architecture is deliberately unresolved in O-P19/O-A17 and outside
+this source change. PR #34 independently owns avatar infrastructure and must be
+integrated against this updated base only in a later task.
+
 ## Client composition
 
 The application composition path is intentionally small:
@@ -346,13 +362,13 @@ not an implemented Chat subsystem.
   membership, ownership, or recipient relationship.
 - **Realtime** delivers private, account-scoped, content-free invalidations; RPC
   repositories remain the only state and authorization authority.
-- **Storage** holds P-060/A-075 private profile thumbnails; future binary objects
+- **Storage** holds P-062/A-076 private profile thumbnails; future binary objects
   need separately agreed policies aligned to their owning application records.
 - **Database functions** and, where appropriate, **Edge Functions** hold atomic or
   privileged server operations. Authoritative balance and debt calculations run
   server-side and require unit tests.
 
-P-060/A-075 implement a feature-owned avatar repository/controller and private
+P-062/A-076 implement a feature-owned avatar repository/controller and private
 Edge byte gateway. Only the verified user wrapper derives the mutation owner;
 client reads resolve contextual authorization twice around server Storage access.
 Private forced-RLS metadata and file ledgers track random keys before upload,
@@ -1613,7 +1629,7 @@ writes are implemented.
 - PostgreSQL-function versus Edge-Function placement for each atomic server action.
 - SQLite library, cache schema, synchronization algorithm, conflict policy, and
   background execution limits.
-- Other Storage use cases beyond the accepted P-060/A-075 current-avatar boundary.
+- Other Storage use cases beyond the accepted P-062/A-076 current-avatar boundary.
 - Logging, analytics, crash reporting, performance budgets, and privacy controls.
 - Notification archive/delete/preferences, later-type payload/localization,
   physical cleanup, and account-lifecycle retention.

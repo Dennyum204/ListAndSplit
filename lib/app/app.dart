@@ -4,6 +4,7 @@ import 'package:list_and_split/app/router/app_router.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/account/presentation/account_session_lifecycle.dart';
 import 'package:list_and_split/features/settings/presentation/theme_preference_controller.dart';
+import 'package:list_and_split/features/settings/presentation/language_preference_controller.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class ListAndSplitApp extends ConsumerWidget {
@@ -21,6 +22,8 @@ class ListAndSplitApp extends ConsumerWidget {
       themeMode: ref.watch(
         themePreferenceControllerProvider.select((state) => state.themeMode),
       ),
+      locale: ref.watch(
+          languagePreferenceControllerProvider.select((state) => state.locale)),
       routerConfig: router,
       builder: (context, child) => AccountSessionLifecycle(
         child: child ?? const SizedBox.shrink(),

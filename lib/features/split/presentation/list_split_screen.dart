@@ -146,29 +146,27 @@ class _SplitBody extends ConsumerWidget {
           if (overview.participants.isEmpty)
             Text(localizations.splitNoBalancesMessage)
           else
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final largeText =
-                    MediaQuery.textScalerOf(context).scale(14) > 20;
-                final columns = largeText || constraints.maxWidth < 340 ? 1 : 2;
-                final width =
-                    (constraints.maxWidth - (columns - 1) * 8) / columns;
-                return Wrap(
-                  key: const Key('splitBalanceCards'),
-                  spacing: 8,
-                  runSpacing: 8,
+            Card(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? AppPalette.darkCard
+                  : AppPalette.inputCream,
+              child: SingleChildScrollView(
+                key: const Key('splitBalanceCards'),
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     for (final participant in overview.participants)
                       SizedBox(
-                        width: width,
+                        width: MediaQuery.textScalerOf(context).scale(72) + 24,
                         child: _BalanceTile(
-                          participant: participant,
-                          currency: overview.currency!,
-                        ),
+                            participant: participant,
+                            currency: overview.currency!),
                       ),
                   ],
-                );
-              },
+                ),
+              ),
             ),
           const SizedBox(height: 20),
           _SettlementSuggestionsSection(
@@ -259,30 +257,36 @@ class _DisabledSplitStateState extends ConsumerState<_DisabledSplitState> {
             ),
             if (canEnable) ...[
               const SizedBox(height: 20),
-              DropdownButtonFormField<SplitCurrency>(
-                iconEnabledColor: AppPalette.navy,
-                style: AppPalette.inputTextStyle(context),
-                dropdownColor: AppPalette.inputCream,
-                key: const Key('splitCurrencyField'),
-                // Keep the initializer supported by the Flutter 3.19 floor.
-                // ignore: deprecated_member_use
-                value: _currency,
-                decoration: InputDecoration(
-                  labelText: localizations.splitCurrencyLabel,
-                ),
-                items: [
-                  for (final currency in SplitCurrency.values)
-                    DropdownMenuItem(
-                      value: currency,
-                      child: Text(currency.code),
+              AppDialogField(
+                  label: localizations.splitCurrencyLabel,
+                  child: DropdownButtonFormField<SplitCurrency>(
+                    isDense: false,
+                    isExpanded: true,
+                    iconEnabledColor: AppPalette.navy,
+                    style: AppPalette.inputTextStyle(context),
+                    dropdownColor: AppPalette.inputCream,
+                    key: const Key('splitCurrencyField'),
+                    // Keep the initializer supported by the Flutter 3.19 floor.
+                    // ignore: deprecated_member_use
+                    value: _currency,
+                    decoration: const InputDecoration(
+                      contentPadding: AppDialogField.dropdownPadding,
                     ),
-                ],
-                onChanged: widget.state.isMutating
-                    ? null
-                    : (value) {
-                        if (value != null) setState(() => _currency = value);
-                      },
-              ),
+                    items: [
+                      for (final currency in SplitCurrency.values)
+                        DropdownMenuItem(
+                          value: currency,
+                          child: Text(currency.code),
+                        ),
+                    ],
+                    onChanged: widget.state.isMutating
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              setState(() => _currency = value);
+                            }
+                          },
+                  )),
               const SizedBox(height: 16),
               FilledButton(
                 key: const Key('enableSplitButton'),
@@ -392,7 +396,9 @@ class _SplitSummaryCard extends ConsumerWidget {
               // Keep the initializer supported by the Flutter 3.19 floor.
               // ignore: deprecated_member_use
               value: selected,
-              decoration: const InputDecoration(),
+              decoration: const InputDecoration(
+                contentPadding: AppDialogField.dropdownPadding,
+              ),
               items: [
                 for (final currency in SplitCurrency.values)
                   DropdownMenuItem(value: currency, child: Text(currency.code)),
@@ -446,61 +452,74 @@ class _BalanceTile extends StatelessWidget {
                 _formatMinor(balance.abs(), currency),
               )
             : localizations.splitParticipantSettled(name);
-    return Card(
-      color: Theme.of(context).brightness == Brightness.dark
-          ? AppPalette.darkCard
-          : AppPalette.inputCream,
-      margin: EdgeInsets.zero,
-      child: Padding(
-        key: ValueKey('splitBalance-${participant.id}'),
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                if (participant.isAnonymized)
-                  const CircleAvatar(child: Icon(Icons.person_off_outlined))
-                else
-                  ProfileAvatar(
-                      label: name, target: AvatarTarget.split(participant.id)),
-                const SizedBox(width: 10),
-                Expanded(
-                    child: Text(name,
-                        style: Theme.of(context).textTheme.titleSmall)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(text),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(
-                  participant.isAnonymized
-                      ? Icons.person_off_outlined
-                      : balance > 0
-                          ? Icons.south_west_rounded
-                          : balance < 0
-                              ? Icons.north_east_rounded
-                              : Icons.check_rounded,
-                  size: 18,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                    child: Text(
-                  _formatMinor(balance.abs(), currency),
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                )),
-              ],
-            ),
-          ],
+    return Semantics(
+      key: ValueKey('splitBalance-${participant.id}'),
+      label: text,
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Column(
+            children: [
+              ProfileAvatar(
+                  target: participant.isAnonymized
+                      ? null
+                      : AvatarTarget.split(participant.id),
+                  backgroundColor:
+                      Theme.of(context).brightness == Brightness.dark
+                          ? AppPalette.inputCream
+                          : AppPalette.cardBlue,
+                  label: participant.isAnonymized ? '' : name,
+                  size: 40),
+              const SizedBox(height: 4),
+              Text(name,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelMedium),
+              const SizedBox(height: 4),
+              Text(
+                '${balance > 0 ? '+' : balance < 0 ? '−' : ''}${_formatMinor(balance.abs(), currency)}',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: balance < 0
+                        ? Theme.of(context).colorScheme.error
+                        : balance > 0
+                            ? (Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF9AD7A0)
+                                : const Color(0xFF236B32))
+                            : null),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+class _SplitIdentity extends StatelessWidget {
+  const _SplitIdentity({required this.name, required this.participant});
+  final String name;
+  final ListSplitParticipant? participant;
+  @override
+  Widget build(BuildContext context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ProfileAvatar(
+              target: participant == null || participant!.isAnonymized
+                  ? null
+                  : AvatarTarget.split(participant!.id),
+              backgroundColor: Theme.of(context).brightness == Brightness.dark
+                  ? AppPalette.inputCream
+                  : AppPalette.cardBlue,
+              label:
+                  participant == null || participant!.isAnonymized ? '' : name,
+              size: 32),
+          const SizedBox(height: 4),
+          Text(name,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelSmall)
+        ],
+      );
 }
 
 class _SettlementSuggestionsSection extends StatelessWidget {
@@ -576,77 +595,76 @@ class _SettlementSuggestionCard extends StatelessWidget {
       recipientName,
       _formatMinor(suggestion.amountMinor, overview.currency!),
     );
-    return Card(
+    final flow = Semantics(
+      label: description,
+      child: ExcludeSemantics(
+        child: Row(
+          children: [
+            Expanded(
+                child: _SplitIdentity(name: payerName, participant: payer)),
+            Flexible(
+                child: Column(children: [
+              const Icon(Icons.arrow_forward_rounded),
+              Text(_formatMinor(suggestion.amountMinor, overview.currency!),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelMedium),
+            ])),
+            Expanded(
+                child: _SplitIdentity(
+                    name: recipientName, participant: recipient)),
+          ],
+        ),
+      ),
+    );
+    final action = FilledButton.tonal(
       key: ValueKey(
-        'splitSuggestion-${suggestion.payerParticipantId}-'
+        'recordSuggestedPayment-'
+        '${suggestion.payerParticipantId}-'
         '${suggestion.recipientParticipantId}',
       ),
+      onPressed: isBusy
+          ? null
+          : () => showDialog<void>(
+                context: context,
+                barrierDismissible: !isBusy,
+                builder: (_) => SettlementFormDialog(
+                  listId: listId,
+                  initialOverview: overview,
+                  initialSuggestion: suggestion,
+                ),
+              ),
+      child: Text(localizations.splitRecordPaymentButton),
+    );
+    return Card(
+      key: ValueKey(
+          'splitSuggestion-${suggestion.payerParticipantId}-${suggestion.recipientParticipantId}'),
       color: Theme.of(context).brightness == Brightness.dark
           ? AppPalette.darkCard
           : AppPalette.inputCream,
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ExcludeSemantics(
-              child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final stacked = constraints.maxWidth < 320 ||
+              MediaQuery.textScalerOf(context).scale(14) > 18;
+          if (!overview.writable) {
+            return flow;
+          }
+          if (stacked) {
+            return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  ProfileAvatar(
-                      label: payerName,
-                      size: 32,
-                      target: payer == null || payer.isAnonymized
-                          ? null
-                          : AvatarTarget.split(payer.id)),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Icon(Icons.arrow_forward_rounded),
-                  ),
-                  ProfileAvatar(
-                      label: recipientName,
-                      size: 32,
-                      target: recipient == null || recipient.isAnonymized
-                          ? null
-                          : AvatarTarget.split(recipient.id)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.payments_outlined),
-                const SizedBox(width: 12),
-                Expanded(child: Text(description)),
-              ],
-            ),
-            if (overview.writable) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: FilledButton.tonal(
-                  key: ValueKey(
-                    'recordSuggestedPayment-'
-                    '${suggestion.payerParticipantId}-'
-                    '${suggestion.recipientParticipantId}',
-                  ),
-                  onPressed: isBusy
-                      ? null
-                      : () => showDialog<void>(
-                            context: context,
-                            barrierDismissible: !isBusy,
-                            builder: (_) => SettlementFormDialog(
-                              listId: listId,
-                              initialOverview: overview,
-                              initialSuggestion: suggestion,
-                            ),
-                          ),
-                  child: Text(localizations.splitRecordPaymentButton),
-                ),
-              ),
-            ],
-          ],
-        ),
+                  flow,
+                  const SizedBox(height: 8),
+                  Align(
+                      alignment: AlignmentDirectional.centerEnd, child: action),
+                ]);
+          }
+          return Row(children: [
+            Expanded(flex: 3, child: flow),
+            const SizedBox(width: 8),
+            Flexible(flex: 2, child: action)
+          ]);
+        }),
       ),
     );
   }
@@ -956,6 +974,7 @@ class _SettlementFormDialogState extends ConsumerState<SettlementFormDialog> {
                       ? _payerId
                       : null,
                   decoration: InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding,
                     errorText: _showValidation && !endpointsValid
                         ? localizations.splitSettlementEndpointsInvalid
                         : null,
@@ -991,7 +1010,9 @@ class _SettlementFormDialogState extends ConsumerState<SettlementFormDialog> {
                       recipientChoices.any((entry) => entry.id == _recipientId)
                           ? _recipientId
                           : null,
-                  decoration: const InputDecoration(),
+                  decoration: const InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding,
+                  ),
                   items: [
                     for (final participant in recipientChoices)
                       DropdownMenuItem(
@@ -1384,8 +1405,27 @@ class _ExpenseCardState extends ConsumerState<_ExpenseCard> {
     final payer = widget.overview.participantById(
       widget.expense.payerParticipantId,
     );
+    final payerName = payer == null
+        ? localizations.splitFormerParticipant
+        : _participantName(localizations, payer);
+    final beneficiaries = [
+      for (final id in widget.expense.beneficiaryParticipantIds)
+        widget.overview.participantById(id),
+    ];
+    final beneficiaryNames = [
+      for (final id in widget.expense.beneficiaryParticipantIds)
+        widget.overview.participantById(id) == null
+            ? localizations.splitFormerParticipant
+            : _participantName(
+                localizations, widget.overview.participantById(id)!)
+    ];
     return Card(
+      color: Theme.of(context).brightness == Brightness.dark
+          ? AppPalette.darkCard
+          : AppPalette.inputCream,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         key: ValueKey('splitExpense-${widget.expense.id}'),
         onTap: !widget.overview.writable || widget.isBusy
             ? null
@@ -1397,24 +1437,61 @@ class _ExpenseCardState extends ConsumerState<_ExpenseCard> {
                     expense: widget.expense,
                   ),
                 ),
-        title: Text(widget.expense.description),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              localizations.splitExpensePaidBy(
-                payer == null
-                    ? localizations.splitFormerParticipant
-                    : _participantName(localizations, payer),
-                widget.expense.beneficiaryParticipantIds.length,
+        title: Text(widget.expense.description,
+            style: Theme.of(context).textTheme.titleSmall),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Semantics(
+                label:
+                    '${localizations.splitExpenseParticipantsLabel}: ${beneficiaryNames.join(', ')}',
+                child: ExcludeSemantics(
+                    child: Wrap(spacing: 2, runSpacing: 2, children: [
+                  for (var index = 0; index < beneficiaryNames.length; index++)
+                    ProfileAvatar(
+                        target: beneficiaries[index] == null ||
+                                beneficiaries[index]!.isAnonymized
+                            ? null
+                            : AvatarTarget.split(beneficiaries[index]!.id),
+                        backgroundColor:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? AppPalette.inputCream
+                                : AppPalette.cardBlue,
+                        label: beneficiaries[index] == null ||
+                                beneficiaries[index]!.isAnonymized
+                            ? ''
+                            : beneficiaryNames[index],
+                        size: 24),
+                ])),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              _formatMinor(widget.expense.amountMinor, currency),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ],
+              Semantics(
+                label: localizations.splitExpensePaidBy(
+                    payerName, beneficiaryNames.length),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  ProfileAvatar(
+                      target: payer == null || payer.isAnonymized
+                          ? null
+                          : AvatarTarget.split(payer.id),
+                      backgroundColor:
+                          Theme.of(context).brightness == Brightness.dark
+                              ? AppPalette.inputCream
+                              : AppPalette.cardBlue,
+                      label:
+                          payer == null || payer.isAnonymized ? '' : payerName,
+                      size: 24),
+                  const SizedBox(width: 6),
+                  Flexible(
+                      child: Text(
+                          _formatMinor(widget.expense.amountMinor, currency),
+                          style: Theme.of(context).textTheme.labelLarge)),
+                ]),
+              ),
+            ],
+          ),
         ),
         trailing: widget.overview.writable
             ? IconButton(
@@ -1695,6 +1772,7 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
                   // ignore: deprecated_member_use
                   value: payerValid ? _payerId : null,
                   decoration: InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding,
                     errorText: _showValidation && !payerValid
                         ? localizations.splitPayerRequiredMessage
                         : null,

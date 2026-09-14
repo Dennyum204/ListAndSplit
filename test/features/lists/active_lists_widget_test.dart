@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -24,6 +26,237 @@ import '../../support/ui_preview_capture.dart';
 
 void main() {
   setUpAll(prepareUiPreviewFonts);
+
+  for (final dark in [false, true]) {
+    testWidgets(
+        'unchanged icons retain paint through completion transitions dark=$dark',
+        (tester) async {
+      tester.view.physicalSize = const Size(400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repository = _CompletionTransitionRepository()
+        ..activeLists = [_summary()]
+        ..itemsByList['list-1'] = [
+          _item(),
+          _item(id: 'untouched', name: 'Untouched'),
+          _item(id: 'checked', name: 'Already checked', completed: true),
+        ];
+      await _pump(tester,
+          repository: repository,
+          themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+          child: const ActiveListDetailScreen(listId: 'list-1'));
+      await tester.pumpAndSettle();
+      final target = find.byKey(const Key('completeItem-item-1'));
+      final untouched = find.byKey(const Key('completeItem-untouched'));
+      final identity = tester.element(untouched);
+      final position = tester.getTopLeft(untouched);
+      final regions = {
+        'members': find.byKey(const Key('listMembersButton')),
+        'settings': find.byKey(const Key('listActionsButton')),
+        'checkbox': untouched,
+        'checkmark': find.byKey(const Key('completeItem-checked')),
+        'item menu': find.byKey(const Key('itemActions-untouched')),
+        'drag handle': find.byIcon(Icons.drag_handle_rounded).last,
+      };
+      final baseline = await _iconPaint(tester, regions);
+      for (final value in [true, false]) {
+        repository.mutationGate = Completer<void>();
+        repository.readGate = Completer<void>();
+        await tester.tap(target);
+        await tester.pumpAndSettle();
+        expect(tester.widget<Checkbox>(untouched).onChanged, isNull);
+        expect(
+            tester.widget<IconButton>(regions['members']!).onPressed, isNull);
+        final attempts = repository.attempts;
+        await tester.tap(target);
+        await tester.pump();
+        expect(repository.attempts, attempts);
+        expect(await _iconPaint(tester, regions), baseline,
+            reason: 'Pending completion must not dim unrelated icons.');
+        repository.mutationGate!.complete();
+        await tester.pumpAndSettle();
+        expect(await _iconPaint(tester, regions), baseline,
+            reason:
+                'Success before authoritative reads must retain icon paint.');
+        repository.readGate!.complete();
+        await tester.pumpAndSettle();
+        expect(tester.widget<Checkbox>(target).value, value);
+        expect(await _iconPaint(tester, regions), baseline,
+            reason: 'Reconciliation must retain unrelated icon paint.');
+        expect(tester.element(untouched), same(identity));
+        expect(tester.getTopLeft(untouched), position);
+      }
+      repository.readGate = null;
+      repository.itemsByList['list-1']![1] =
+          _item(id: 'untouched', name: 'Remote name');
+      final container = ProviderScope.containerOf(
+          tester.element(find.byType(ActiveListDetailScreen)));
+      await container.read(reconciliationRegistryProvider).reconcile();
+      await tester.pumpAndSettle();
+      expect(find.text('Remote name'), findsOneWidget);
+      expect(tester.element(untouched), same(identity));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets(
+      'completion preserves row position and identity through reconciliation',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..itemsByList['list-1'] = [_item()];
+    await _pump(tester,
+        repository: repository,
+        child: const ActiveListDetailScreen(listId: 'list-1'));
+    await tester.pumpAndSettle();
+    final checkbox = find.byKey(const Key('completeItem-item-1'));
+    final element = tester.element(checkbox);
+    final position = tester.getTopLeft(checkbox);
+    for (final completed in [true, false, true]) {
+      await tester.tap(checkbox);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Checkbox>(checkbox).value, completed);
+      expect(tester.element(checkbox), same(element));
+      expect(tester.getTopLeft(checkbox), position);
+    }
+  });
+
+  for (final language in ['en', 'pt']) {
+    for (final dark in [false, true]) {
+      testWidgets(
+          'quick add defaults and keyboard focus at 200% $language dark=$dark',
+          (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = FakeActiveListRepository()
+          ..activeLists = [_summary()];
+        await _pump(tester,
+            repository: repository,
+            child: const ActiveListDetailScreen(listId: 'list-1'),
+            locale: Locale(language),
+            themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+            textScale: 2,
+            keyboardInset: 280);
+        await tester.pumpAndSettle();
+        final field = find.byKey(const Key('quickAddItemName'));
+        final add = find.byKey(const Key('addItemButton'));
+        expect(tester.widget<IconButton>(add).onPressed, isNull);
+        await tester.enterText(field, '  Coffee  ');
+        await tester.pump();
+        expect(tester.getBottomRight(add).dy, lessThanOrEqualTo(564));
+        expect(tester.getSize(add).height, greaterThanOrEqualTo(48));
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pumpAndSettle();
+        final item = repository.itemsByList['list-1']!.single;
+        expect(item.name, 'Coffee');
+        expect(item.quantity, ListQuantity.one);
+        expect(item.unit, isNull);
+        expect(item.assignees, isEmpty);
+        final input = tester.widget<TextField>(field);
+        expect(input.controller!.text, isEmpty);
+        expect(input.focusNode!.hasFocus, isTrue);
+        expect(find.byType(AlertDialog), findsNothing);
+        await captureUiPreview(tester,
+            'quick-add-$language-${dark ? 'dark' : 'light'}-keyboard-large');
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('quick add guards repeated actions and preserves a newer draft',
+      (tester) async {
+    final repository = _QuickAddRepository()
+      ..activeLists = [_summary()]
+      ..gate = Completer<void>();
+    await _pump(tester,
+        repository: repository,
+        child: const ActiveListDetailScreen(listId: 'list-1'));
+    await tester.pumpAndSettle();
+    final field = find.byKey(const Key('quickAddItemName'));
+    final add = find.byKey(const Key('addItemButton'));
+    await tester.enterText(field, 'Coffee');
+    await tester.pump();
+    await tester.tap(add);
+    await tester.tap(add);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(repository.attempts, 1);
+    await tester.enterText(field, 'Tea');
+    repository.gate!.complete();
+    await tester.pumpAndSettle();
+    expect(repository.itemsByList['list-1']!.single.name, 'Coffee');
+    expect(tester.widget<TextField>(field).controller!.text, 'Tea');
+    repository.gate = null;
+    await tester.tap(add);
+    await tester.pumpAndSettle();
+    expect(repository.itemsByList['list-1']!.map((item) => item.name),
+        ['Coffee', 'Tea']);
+    expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+  });
+
+  testWidgets(
+      'quick add failure preserves input and unchanged retry request identity',
+      (tester) async {
+    final repository = FakeActiveListRepository()..activeLists = [_summary()];
+    await _pump(tester,
+        repository: repository,
+        child: const ActiveListDetailScreen(listId: 'list-1'));
+    await tester.pumpAndSettle();
+    repository.failure = const ActiveListFailure(ActiveListFailureCode.generic);
+    final field = find.byKey(const Key('quickAddItemName'));
+    await tester.enterText(field, 'Coffee');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('addItemButton')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field).controller!.text, 'Coffee');
+    expect(repository.itemsByList['list-1'] ?? [], isEmpty);
+    repository.failure = null;
+    await tester.tap(find.byKey(const Key('addItemButton')));
+    await tester.pumpAndSettle();
+    expect(repository.itemRequestIds, hasLength(2));
+    expect(repository.itemRequestIds.first, repository.itemRequestIds.last);
+    expect(repository.itemsByList['list-1'], hasLength(1));
+  });
+
+  testWidgets(
+      'scrolled completion keeps the viewport and accepts remote reconciliation',
+      (tester) async {
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..itemsByList['list-1'] = [
+        for (var i = 0; i < 40; i++) _item(id: 'row-$i', name: 'Item $i')
+      ];
+    await _pump(tester,
+        repository: repository,
+        child: const ActiveListDetailScreen(listId: 'list-1'));
+    await tester.pumpAndSettle();
+    final target = find.byKey(const Key('completeItem-row-12'));
+    final scrollable = find.descendant(
+        of: find.byKey(const Key('activeListItems')),
+        matching: find.byType(Scrollable));
+    await tester.scrollUntilVisible(target, 300, scrollable: scrollable);
+    await tester.pumpAndSettle();
+    final position = tester.getTopLeft(target);
+    final element = tester.element(target);
+    final offset = tester.state<ScrollableState>(scrollable).position.pixels;
+    await tester.tap(target);
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(target), position);
+    expect(tester.state<ScrollableState>(scrollable).position.pixels, offset);
+    expect(tester.element(target), same(element));
+    repository.itemsByList['list-1']![12] =
+        _item(id: 'row-12', name: 'Remote edit');
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(ActiveListDetailScreen)));
+    await container.read(reconciliationRegistryProvider).reconcile();
+    await tester.pumpAndSettle();
+    expect(find.text('Remote edit'), findsOneWidget);
+    expect(tester.element(target), same(element));
+    expect(tester.widget<Checkbox>(target).value, isFalse);
+  });
 
   for (final language in ['en', 'pt']) {
     for (final rename in [false, true]) {
@@ -415,9 +648,11 @@ void main() {
     expect(find.text('Import from template'), findsNothing);
   });
 
-  testWidgets('detail add form localizes units and retains invalid quantity',
+  testWidgets('detail edit form localizes units and retains invalid quantity',
       (tester) async {
-    final repository = FakeActiveListRepository()..activeLists = [_summary()];
+    final repository = FakeActiveListRepository()
+      ..activeLists = [_summary()]
+      ..itemsByList['list-1'] = [_item()];
     await _pump(
       tester,
       repository: repository,
@@ -426,9 +661,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('addItemButton')));
+    await tester.tap(find.byKey(const Key('itemActions-item-1')));
     await tester.pumpAndSettle();
-    expect(find.text('No unit'), findsOneWidget);
+    await tester.tap(find.text('Edit').last);
+    await tester.pumpAndSettle();
+    expect(find.text('pack'), findsOneWidget);
     await tester.enterText(find.byKey(const Key('itemNameField')), 'Coffee');
     await tester.enterText(
         find.byKey(const Key('itemQuantityField')), '1.0000');
@@ -454,16 +691,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.enterText(find.byKey(const Key('quickAddItemName')), 'Coffee');
+    await tester.pump();
     await tester.tap(find.byKey(const Key('addItemButton')));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('itemNameField')), 'Coffee');
-    await tester.tap(find.byKey(const Key('saveItemButton')));
     await tester.pumpAndSettle();
     expect(repository.itemsByList['list-1'], hasLength(2));
     expect(find.text('Coffee'), findsNWidgets(2));
+    final afterAddPosition =
+        tester.getTopLeft(find.byKey(const Key('completeItem-item-1')));
 
     await tester.tap(find.byKey(const Key('completeItem-item-1')));
     await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.byKey(const Key('completeItem-item-1'))),
+        afterAddPosition);
     expect(
       tester
           .widget<Checkbox>(find.byKey(const Key('completeItem-item-1')))
@@ -555,8 +795,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Unassigned'), findsOneWidget);
+    expect(find.text('Unassigned'), findsNothing);
     expect(find.text('Owner'), findsOneWidget);
+    expect(tester.getSize(find.byKey(const ValueKey('zero'))).height,
+        lessThan(tester.getSize(find.byKey(const ValueKey('one'))).height));
     expect(find.text('Owner, Member'), findsOneWidget);
     expect(find.text('Owner, Member +2'), findsOneWidget);
     expect(
@@ -576,6 +818,7 @@ void main() {
       findsNothing,
     );
     final zeroSummary = find.byKey(const Key('itemAssignees-zero'));
+    expect(tester.getSemantics(zeroSummary).rect.isEmpty, isFalse);
     expect(
       tester.getSemantics(zeroSummary).label,
       contains('Zero. Unassigned.'),
@@ -1568,7 +1811,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('itemNameField')), findsNothing);
-    expect(find.text('Unassigned'), findsOneWidget);
+    expect(find.text('Unassigned'), findsNothing);
     expect(
       find.text(
         'This list changed on another device. The latest version was loaded.',
@@ -2185,6 +2428,86 @@ String _listSemanticLabel(WidgetTester tester, String id) => tester
     .properties
     .label!;
 
+class _QuickAddRepository extends FakeActiveListRepository {
+  Completer<void>? gate;
+  int attempts = 0;
+  @override
+  Future<ActiveListItem> createItem(
+    String listId,
+    String name, {
+    required int expectedListVersion,
+    ListQuantity quantity = ListQuantity.one,
+    ListUnit? unit,
+    List<String> assigneeProfileIds = const [],
+    required String requestId,
+  }) async {
+    attempts++;
+    await gate?.future;
+    return super.createItem(listId, name,
+        expectedListVersion: expectedListVersion,
+        quantity: quantity,
+        unit: unit,
+        assigneeProfileIds: assigneeProfileIds,
+        requestId: requestId);
+  }
+}
+
+Future<Map<String, int>> _iconPaint(
+    WidgetTester tester, Map<String, Finder> regions) async {
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(const ValueKey('uiPreviewBoundary')));
+  final rectangles =
+      regions.map((key, finder) => MapEntry(key, tester.getRect(finder)));
+  return (await tester.runAsync(() async {
+    final image = await boundary.toImage();
+    try {
+      final bytes =
+          (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!
+              .buffer
+              .asUint8List();
+      return rectangles.map((key, rect) {
+        var hash = 0;
+        for (var y = rect.top.ceil(); y < rect.bottom.floor(); y++) {
+          for (var x = rect.left.ceil(); x < rect.right.floor(); x++) {
+            for (var channel = 0; channel < 4; channel++) {
+              hash = 0x1fffffff &
+                  (hash * 31 + bytes[(y * image.width + x) * 4 + channel]);
+            }
+          }
+        }
+        return MapEntry(key, hash);
+      });
+    } finally {
+      image.dispose();
+    }
+  }))!;
+}
+
+class _CompletionTransitionRepository extends FakeActiveListRepository {
+  Completer<void>? mutationGate;
+  Completer<void>? readGate;
+  int attempts = 0;
+
+  @override
+  Future<ActiveListSummary> getList(String listId) async {
+    await readGate?.future;
+    return super.getList(listId);
+  }
+
+  @override
+  Future<ActiveListItem> setItemCompleted(String listId, String itemId,
+      {required bool completed,
+      required int expectedListVersion,
+      required int expectedItemVersion}) async {
+    attempts++;
+    await mutationGate?.future;
+    return super.setItemCompleted(listId, itemId,
+        completed: completed,
+        expectedListVersion: expectedListVersion,
+        expectedItemVersion: expectedItemVersion);
+  }
+}
+
 class _RevokedAccessRepository extends FakeActiveListRepository {
   _RevokedAccessRepository() {
     activeLists = [_summary(isOwner: false)];
@@ -2407,6 +2730,7 @@ Future<void> _pump(
         ),
       ],
       child: MaterialApp(
+        debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: themeMode,
@@ -2458,6 +2782,7 @@ ActiveListItem _item({
   String id = 'item-1',
   String name = 'Coffee',
   int version = 2,
+  bool completed = false,
   List<ActiveListAssignee> assignees = const [],
 }) {
   return ActiveListItem(
@@ -2467,8 +2792,8 @@ ActiveListItem _item({
     unit: ListUnit.pack,
     position: 1,
     version: version,
-    completedAt: null,
-    completedBy: null,
+    completedAt: completed ? DateTime.utc(2026, 7, 20, 10) : null,
+    completedBy: completed ? 'user-1' : null,
     createdAt: DateTime.utc(2026, 7, 20, 9),
     updatedAt: DateTime.utc(2026, 7, 20, 10),
     assignees: assignees,

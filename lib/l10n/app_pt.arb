@@ -1,5 +1,7 @@
 {
   "avatarChoose": "Escolher ou alterar fotografia",
+  "avatarAdd": "Adicionar avatar",
+  "avatarUpdate": "Atualizar avatar",
   "avatarRemove": "Remover fotografia",
   "avatarSaving": "A atualizar a fotografia de perfil…",
   "avatarSaved": "Fotografia de perfil atualizada.",
@@ -765,5 +767,11 @@
   "templateSendDuplicatePendingMessage": "Este amigo já tem um convite pendente para este modelo.",
   "templateSendRetryConflictMessage": "Esta nova tentativa já não corresponde ao pedido original. Atualize e tente novamente.",
   "templateSendNotificationTitle": "“{templateName}” foi-lhe enviado",
-  "templateSendNotificationUnavailable": "Este convite de modelo já não permite ações."
+  "templateSendNotificationUnavailable": "Este convite de modelo já não permite ações.",
+  "itemQuickAddHint": "Adicionar um item…",
+  "languageTitle": "Idioma",
+  "languageSystem": "Sistema",
+  "languageDeviceHelper": "Aplica-se apenas neste dispositivo. Sistema segue o idioma do dispositivo.",
+  "languageSaveFailed": "Não foi possível guardar o idioma. Tenta novamente.",
+  "languageReadFailed": "Não foi possível ler o idioma guardado. Tenta novamente para o restaurar."
 }

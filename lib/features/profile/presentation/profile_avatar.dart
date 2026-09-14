@@ -18,6 +18,17 @@ final profileAvatarRepositoryProvider = Provider<ProfileAvatarRepository>(
         SupabaseProfileAvatarRepository(ref.watch(supabaseClientProvider)));
 final avatarGalleryProvider =
     Provider<AvatarGallery>((ref) => DeviceAvatarGallery());
+final ownAvatarMetadataProvider =
+    FutureProvider.autoDispose<ProfileAvatarMetadata?>((ref) async {
+  if (!ref.watch(supabaseRuntimeReadyProvider) ||
+      ref.watch(verifiedUserIdProvider) == null) {
+    return null;
+  }
+  registerForReconciliation(ref, () async {
+    ref.invalidateSelf();
+  });
+  return ref.watch(profileAvatarRepositoryProvider).metadata();
+});
 final avatarBytesProvider = FutureProvider.autoDispose
     .family<Uint8List?, AvatarTarget>((ref, target) async {
   if (!ref.watch(supabaseRuntimeReadyProvider) ||
@@ -37,17 +48,24 @@ final avatarBytesProvider = FutureProvider.autoDispose
 final avatarControllerProvider =
     StateNotifierProvider.autoDispose<AvatarController, AvatarEditorState>(
         (ref) => AvatarController(
-            ref.watch(profileAvatarRepositoryProvider),
-            ref.watch(avatarGalleryProvider),
-            ref.watch(verifiedUserIdProvider),
-            () => ref.invalidate(avatarBytesProvider)));
+                ref.watch(profileAvatarRepositoryProvider),
+                ref.watch(avatarGalleryProvider),
+                ref.watch(verifiedUserIdProvider), () {
+              ref.invalidate(avatarBytesProvider);
+              ref.invalidate(ownAvatarMetadataProvider);
+            }));
 
 class ProfileAvatar extends ConsumerWidget {
   const ProfileAvatar(
-      {required this.label, required this.target, this.size = 40, super.key});
+      {required this.label,
+      required this.target,
+      this.size = 40,
+      this.backgroundColor,
+      super.key});
   final String label;
   final AvatarTarget? target;
   final double size;
+  final Color? backgroundColor;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final result =
@@ -55,7 +73,8 @@ class ProfileAvatar extends ConsumerWidget {
     final bytes = result != null && !result.isLoading && !result.hasError
         ? result.valueOrNull
         : null;
-    final fallback = IdentityBadge(label: label, size: size);
+    final fallback = IdentityBadge(
+        label: label, size: size, backgroundColor: backgroundColor);
     if (bytes == null) return fallback;
     return ExcludeSemantics(
         child: ClipOval(
@@ -64,6 +83,11 @@ class ProfileAvatar extends ConsumerWidget {
                 height: size,
                 fit: BoxFit.cover,
                 gaplessPlayback: false,
+                // Keep initials visible until decoding finishes, rather than
+                // exposing an empty frame. Revalidation/access failures still
+                // discard the photo; never carry bytes into another identity.
+                frameBuilder: (_, child, frame, synchronous) =>
+                    synchronous || frame != null ? child : fallback,
                 errorBuilder: (_, __, ___) => fallback)));
   }
 }
@@ -77,6 +101,9 @@ class AvatarEditorActions extends ConsumerWidget {
       return const SizedBox.shrink();
     }
     final state = ref.watch(avatarControllerProvider);
+    final metadata = ref.watch(ownAvatarMetadataProvider);
+    final current =
+        metadata.isReloading || metadata.hasError ? null : metadata.valueOrNull;
     final l10n = AppLocalizations.of(context);
     final message = state.error == null
         ? (state.changed ? l10n.avatarSaved : null)
@@ -96,16 +123,21 @@ class AvatarEditorActions extends ConsumerWidget {
                     .read(avatarControllerProvider.notifier)
                     .submit(remove: false),
             icon: const Icon(Icons.photo_library_outlined),
-            label: Text(l10n.avatarChoose)),
-        TextButton.icon(
-            key: const Key('removeAvatarButton'),
-            onPressed: state.busy || disabled
-                ? null
-                : () => ref
-                    .read(avatarControllerProvider.notifier)
-                    .submit(remove: true),
-            icon: const Icon(Icons.person_remove_outlined),
-            label: Text(l10n.avatarRemove)),
+            label: Text(current == null
+                ? l10n.avatarChoose
+                : current.hasImage
+                    ? l10n.avatarUpdate
+                    : l10n.avatarAdd)),
+        if (current?.hasImage == true)
+          TextButton.icon(
+              key: const Key('removeAvatarButton'),
+              onPressed: state.busy || disabled
+                  ? null
+                  : () => ref
+                      .read(avatarControllerProvider.notifier)
+                      .submit(remove: true),
+              icon: const Icon(Icons.person_remove_outlined),
+              label: Text(l10n.avatarRemove)),
       ]),
       if (state.busy)
         Semantics(

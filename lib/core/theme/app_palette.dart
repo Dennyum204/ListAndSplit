@@ -9,6 +9,7 @@ abstract final class AppPalette {
   static const inputCream = Color(0xFFFAE8CE);
   static const dark = Color(0xFF202020);
   static const darkCard = Color(0xFF3A3A3A);
+  static const darkIncomingMessage = Color(0xFF5C5C5C);
   static const lightText = Color(0xFFF2F7FB);
   static const ink = Color(0xFF1D1D1D);
   static TextStyle inputTextStyle(BuildContext context) =>

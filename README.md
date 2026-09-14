@@ -84,6 +84,8 @@ failure without changing other owners' financial history.
 
 No avatar deployment or physical QA is claimed. See
 [profile avatar operations and rollout gates](docs/PROFILE_AVATARS.md). The
+exact migration/function order, recovery and remaining physical QA are in the
+[Dev rollout plan](docs/PROFILE_AVATARS_DEV_ROLLOUT.md). The
 reviewed migration and both Edge Functions require separately authorized rollout
 before distributing the new client. Production remains untouched.
 
@@ -134,7 +136,7 @@ Delivery proceeds in this order:
    redesign, post-beta, or rejected.
 7. Implement only the additional functionality Fernando explicitly selects.
    P-059/A-073 select participant counts as a backend/domain PR followed by a
-   separate Figma UI PR preserving existing behavior. P-060/A-075 separately
+   separate Figma UI PR preserving existing behavior. P-062/A-076 separately
    select current avatars; category icons, list covers, template images and
    other additions remain unselected.
 8. Refactor the stable UI through the approved design references, screen by screen.
@@ -320,6 +322,19 @@ Use **Profile > Appearance > System / Light / Dark** to choose a theme. System
 follows the device; an explicit choice persists locally across app restarts and
 sign-out. Switching themes does not save profile edits or change account data.
 
+The approved `Things to change.docx` follow-up adds inline list quick-add,
+compact unassigned rows, stable checkbox updates, refreshed Split/Chat/Community
+layouts and persistent dropdown captions. Use **Profile > Language** near
+Appearance to select **System / English / Português**. Language changes apply
+immediately, persist locally across restart and sign-out, and preserve navigation
+and unsaved forms. System follows the device with the existing English fallback;
+storage failures display localized recovery feedback.
+
+See [PR #33 follow-up coverage](docs/PR33_UI_FOLLOWUP.md) for each document item's
+delivery. Profile photographs stay in existing PR #34; template-image selection,
+preview and image-bearing Community cards are the next separate feature PR after
+the recorded product and lifecycle decisions are resolved.
+
 Community's initial page is now the existing friends-only template feed. Its
 Friends action opens exact-username discovery; friendship/block management and
 public-profile/template paths remain available. List, Chat and Split controls
@@ -339,6 +354,8 @@ content. Physical QA has **not** been completed for PR #33:
    static mockups where needed.
    Exercise Profile's Appearance selector, check all tabs update, restart to
    confirm the saved choice, and return to System to follow device brightness.
+   Repeat with Language, including an unsaved Profile draft, sign-out and System
+   following the device language. Confirm Portuguese uses the existing PT locale.
    Check that the selected navigation pill encloses its icon and full translated
    label, and that compact list cards retain meaningful screen-reader summaries.
 3. Exercise category/template create, rename, cancellation, normalized duplicates,
@@ -351,6 +368,11 @@ content. Physical QA has **not** been completed for PR #33:
    on both clients. Leave Chat for Split, send from the other client, and verify
    the hidden Chat did not mark the unseen message read. Repeat access removal
    with an editor open and verify one safe exit/message.
+   Toggle a scrolled list item and confirm its row does not jump. Quick-add with
+   both + and the keyboard; confirm quantity 1 and no unit/assignee, edit details,
+   retry an offline submission, and type a new draft while a request is pending.
+   Inspect balances, debtor-to-creditor direction, beneficiaries and payer;
+   record and reverse only disposable bookkeeping settlements.
 5. Scroll to a later notification, cause a rejected/offline action, and confirm
    visible recoverable feedback. Verify Community search/feed and template filters
    survive tab/back navigation and duplicate names still open exact IDs.

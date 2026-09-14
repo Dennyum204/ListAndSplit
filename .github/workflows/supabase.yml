@@ -50,11 +50,34 @@ jobs:
       - name: Test profile avatar function
         run: deno task --config supabase/functions/profile-avatar/deno.json --frozen test
 
-      - name: Start local database
-        run: supabase db start
+      - name: Start isolated local database, Auth and Storage
+        run: |
+          # Credentials printed by start belong only to this disposable runner.
+          # Capture them locally rather than publishing them in the job log.
+          umask 077
+          supabase start --exclude studio,meta,edge-runtime,imgproxy,inbucket,analytics,vector > "$RUNNER_TEMP/supabase-start.log" 2>&1
 
       - name: Reset local database from migrations
         run: supabase db reset --local --no-seed
 
       - name: Run database and RLS tests
         run: supabase test db --local supabase/tests
+
+      - name: Test local avatar Storage and Auth lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          status_file="$RUNNER_TEMP/avatar-local-status.json"
+          supabase status --agent no -o json > "$status_file"
+          export AVATAR_LOCAL_URL
+          export AVATAR_LOCAL_ANON
+          export AVATAR_LOCAL_SERVICE
+          AVATAR_LOCAL_URL=$(jq -er '.API_URL' "$status_file")
+          AVATAR_LOCAL_ANON=$(jq -er '.ANON_KEY' "$status_file")
+          AVATAR_LOCAL_SERVICE=$(jq -er '.SERVICE_ROLE_KEY' "$status_file")
+          echo "::add-mask::$AVATAR_LOCAL_ANON"
+          echo "::add-mask::$AVATAR_LOCAL_SERVICE"
+          test "$AVATAR_LOCAL_URL" = 'http://127.0.0.1:54321'
+          trap 'unset AVATAR_LOCAL_URL AVATAR_LOCAL_ANON AVATAR_LOCAL_SERVICE' EXIT
+          deno test --config supabase/functions/profile-avatar/deno.json --frozen --allow-read --allow-net=127.0.0.1:54321,localhost:54321 --allow-env=AVATAR_LOCAL_URL,AVATAR_LOCAL_ANON,AVATAR_LOCAL_SERVICE supabase/functions/profile-avatar/avatar.local.test.ts

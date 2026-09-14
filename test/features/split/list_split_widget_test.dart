@@ -9,6 +9,7 @@ import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:list_and_split/features/split/domain/list_split.dart';
 import 'package:list_and_split/features/split/domain/list_split_repository.dart';
 import 'package:list_and_split/features/split/presentation/list_split_providers.dart';
@@ -43,10 +44,27 @@ void main() {
             find.byKey(
                 const ValueKey('splitBalance-$splitOwnerParticipantId')));
         expect(find.byKey(const Key('splitBalanceCards')), findsOneWidget);
+        final balanceAvatar = find.descendant(
+          of: find
+              .byKey(const ValueKey('splitBalance-$splitOwnerParticipantId')),
+          matching: find.byType(ProfileAvatar),
+        );
+        expect(tester.widget<ProfileAvatar>(balanceAvatar).target,
+            const AvatarTarget.split(splitOwnerParticipantId));
         final expense = repository.overview.expenses.single;
         await _scrollSplitUntilVisible(
             tester, find.byKey(ValueKey('splitExpense-${expense.id}')));
         expect(find.text(expense.description), findsOneWidget);
+        final expenseAvatars = tester.widgetList<ProfileAvatar>(find.descendant(
+          of: find.byKey(ValueKey('splitExpense-${expense.id}')),
+          matching: find.byType(ProfileAvatar),
+        ));
+        expect(
+            expenseAvatars.map((avatar) => avatar.target),
+            containsAll([
+              AvatarTarget.split(expense.payerParticipantId),
+              ...expense.beneficiaryParticipantIds.map(AvatarTarget.split),
+            ]));
         expect(tester.takeException(), isNull);
         expect(repository.overview.expenses.single.amountMinor,
             expense.amountMinor);
@@ -487,6 +505,18 @@ void main() {
       tester,
       find.byKey(ValueKey('splitExpense-${expense.id}')),
     );
+    final identityMarkers = tester.widgetList<ProfileAvatar>(find.descendant(
+      of: find.byKey(ValueKey('splitExpense-${expense.id}')),
+      matching: find.byType(ProfileAvatar),
+    ));
+    expect(
+        identityMarkers
+            .any((avatar) => avatar.target == null && avatar.label.isEmpty),
+        isTrue);
+    expect(
+        identityMarkers.any((avatar) =>
+            avatar.target == const AvatarTarget.split(formerParticipantId)),
+        isFalse);
     await tester.tap(find.byKey(ValueKey('splitExpense-${expense.id}')));
     await tester.pumpAndSettle();
 
@@ -565,51 +595,58 @@ void main() {
 
   testWidgets('renders positive, negative, zero, and historical balances',
       (tester) async {
-    final repository = FakeListSplitRepository(
-      initial: enabledSplitOverview(
-        participants: const [
-          ListSplitParticipant(
-            id: splitOwnerParticipantId,
-            profileId: splitOwnerProfileId,
-            username: 'fernando',
-            displayName: 'Fernando',
-            isAnonymized: false,
-            isCurrent: true,
-            paidMinor: 1000,
-            owedMinor: 500,
-            balanceMinor: 500,
-          ),
-          ListSplitParticipant(
-            id: splitMemberParticipantId,
-            profileId: splitMemberProfileId,
-            username: 'susana',
-            displayName: 'Susana',
-            isAnonymized: false,
-            isCurrent: true,
-            paidMinor: 0,
-            owedMinor: 500,
-            balanceMinor: -500,
-          ),
-          ListSplitParticipant(
-            id: '30000000-0000-4000-8000-000000000003',
-            profileId: null,
-            username: null,
-            displayName: null,
-            isAnonymized: true,
-            isCurrent: false,
-            paidMinor: 250,
-            owedMinor: 250,
-            balanceMinor: 0,
-          ),
-        ],
-      ),
-    );
-    await _pump(tester, repository);
+    final semantics = tester.ensureSemantics();
+    try {
+      final repository = FakeListSplitRepository(
+        initial: enabledSplitOverview(
+          participants: const [
+            ListSplitParticipant(
+              id: splitOwnerParticipantId,
+              profileId: splitOwnerProfileId,
+              username: 'fernando',
+              displayName: 'Fernando',
+              isAnonymized: false,
+              isCurrent: true,
+              paidMinor: 1000,
+              owedMinor: 500,
+              balanceMinor: 500,
+            ),
+            ListSplitParticipant(
+              id: splitMemberParticipantId,
+              profileId: splitMemberProfileId,
+              username: 'susana',
+              displayName: 'Susana',
+              isAnonymized: false,
+              isCurrent: true,
+              paidMinor: 0,
+              owedMinor: 500,
+              balanceMinor: -500,
+            ),
+            ListSplitParticipant(
+              id: '30000000-0000-4000-8000-000000000003',
+              profileId: null,
+              username: null,
+              displayName: null,
+              isAnonymized: true,
+              isCurrent: false,
+              paidMinor: 250,
+              owedMinor: 250,
+              balanceMinor: 0,
+            ),
+          ],
+        ),
+      );
+      await _pump(tester, repository);
 
-    expect(find.text('You are owed CHF 5.00'), findsOneWidget);
-    expect(find.text('Fernando is owed CHF 5.00'), findsOneWidget);
-    expect(find.text('Susana owes CHF 5.00'), findsOneWidget);
-    expect(find.text('Former participant is settled up'), findsOneWidget);
+      expect(find.text('You are owed CHF 5.00'), findsOneWidget);
+      expect(
+          find.bySemanticsLabel('Fernando is owed CHF 5.00'), findsOneWidget);
+      expect(find.bySemanticsLabel('Susana owes CHF 5.00'), findsOneWidget);
+      expect(find.bySemanticsLabel('Former participant is settled up'),
+          findsOneWidget);
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('invalid amount and zero beneficiaries never submit',
@@ -1121,7 +1158,8 @@ Future<void> _scrollSplitUntilVisible(
     300,
     scrollable: find.descendant(
       of: find.byKey(const Key('splitOverview')),
-      matching: find.byType(Scrollable),
+      matching: find.byWidgetPredicate((widget) =>
+          widget is Scrollable && widget.axisDirection == AxisDirection.down),
     ),
     maxScrolls: 20,
   );

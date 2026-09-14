@@ -81,10 +81,10 @@ Cross-user identity is disclosed only through narrow block-aware contracts. Exac
 canonical-username discovery returns at most one fully onboarded profile and only
 its ID, username, and display name. It excludes the caller and any pair with a
 block in either direction. A future support/administrator correction path for
-immutable usernames remains open; P-060/A-075 resolve current avatar lifecycle.
+immutable usernames remains open; P-062/A-076 resolve current avatar lifecycle.
 Export is governed by the non-persistent contract below.
 
-### Current profile avatar (P-060/A-075)
+### Current profile avatar (P-062/A-076)
 
 `private.profile_avatars` holds the profile FK, version, current opaque file key,
 fenced operation lease/expiry and last successful request UUID/fingerprint.
@@ -451,6 +451,12 @@ foreign keys across repeated transfers. Exact expected list and target-access
 versions reject stale attempts; pair-before-list locking serializes concurrent
 block and transfer actions.
 
+### Device-local presentation preferences
+
+Appearance and language are local application preferences, not Profile columns,
+account export fields or synchronized records. Language stores System, English or
+European Portuguese through the existing local settings repository boundary.
+
 ### Implemented list item
 
 `public.active_list_items` has a UUID primary key, non-null `list_id` referencing
@@ -460,6 +466,10 @@ checked unit code, positive deterministic integer `position`, positive monotonic
 `bigint` version, a creation request UUID, nullable completion time and actor, and
 database-owned creation/update times. `(list_id, creation_request_id)` and
 `(list_id, position)` are unique; duplicate names remain valid.
+
+The approved inline quick-add creates this same entity with quantity `1000`,
+null unit and an empty assignment set; no new entity or database API is introduced.
+Later detailed editing uses the existing versioned item/assignment contracts.
 
 Unit is null or exactly `piece`, `kg`, `g`, `l`, `ml`, `pack`, `box`, `bottle`,
 `can`, or `bag`. Flutter parses at most three decimal places directly into integer
@@ -1248,7 +1258,7 @@ explicit grants, protected search paths, and adversarial policy/function tests.
   later aggregates beyond the accepted profile, relationship, notification,
   owner-list, and current-assignment records.
 - Support/administrator correction and audit rules for immutable usernames.
-- Storage lifecycle for other media beyond P-060/A-075 profile avatars.
+- Storage lifecycle for other media beyond P-062/A-076 profile avatars.
 - Global/ranked public-template discovery beyond the accepted chronological
   friends feed.
 - Later notification-type payload/localization, archive/preferences, physical
