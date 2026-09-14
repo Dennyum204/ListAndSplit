@@ -867,19 +867,19 @@ select throws_ok(
     (select value_id from split_test_values where label='expense-a'),'Stale edit',6001,
     (select value_id from split_test_values where label='owner-participant'),
     array[(select value_id from split_test_values where label='owner-participant')],11,1)$$,
-  '40001','expense changed','stale concurrent expense edit is rejected without overwrite'
+  'PT409','expense changed','stale concurrent expense edit is rejected without overwrite'
 );
 select throws_ok(
   $$select public.update_active_list_expense(
     '72000000-0000-4000-8000-000000000001',gen_random_uuid(),'Gone',1,
     (select value_id from split_test_values where label='owner-participant'),
     array[(select value_id from split_test_values where label='owner-participant')],12,1)$$,
-  '40001','expense changed','missing remote-edited expense is a stale conflict, not list unavailability'
+  'PT409','expense changed','missing remote-edited expense is a stale conflict, not list unavailability'
 );
 select throws_ok(
   $$select public.delete_active_list_expense(
     '72000000-0000-4000-8000-000000000001',gen_random_uuid(),12,1)$$,
-  '40001','expense changed','missing remote-deleted expense is a stale conflict'
+  'PT409','expense changed','missing remote-deleted expense is a stale conflict'
 );
 reset role;
 select ok(
@@ -1097,7 +1097,7 @@ select throws_ok(
     (select value_id from split_test_values where label='capacity-participant'),
     array[(select value_id from split_test_values where label='capacity-participant')],
     '76000000-0000-4000-8000-000000000003',1)$$,
-  '40001','split changed','serialized concurrent create observes the aggregate version change'
+  'PT409','split changed','serialized concurrent create observes the aggregate version change'
 );
 select throws_ok(
   $$select public.create_active_list_expense(

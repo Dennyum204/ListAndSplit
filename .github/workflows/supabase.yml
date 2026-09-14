@@ -92,3 +92,4 @@ jobs:
           test "$ready" = true
           trap 'unset AVATAR_LOCAL_URL AVATAR_LOCAL_ANON AVATAR_LOCAL_SERVICE' EXIT
           deno test --config supabase/functions/profile-avatar/deno.json --frozen --allow-read --allow-net=127.0.0.1:54321,localhost:54321 --allow-env=AVATAR_LOCAL_URL,AVATAR_LOCAL_ANON,AVATAR_LOCAL_SERVICE supabase/functions/profile-avatar/avatar.local.test.ts
+          deno test --config supabase/functions/profile-avatar/deno.json --frozen --allow-read --allow-net=127.0.0.1:54321,localhost:54321 --allow-env=AVATAR_LOCAL_URL,AVATAR_LOCAL_ANON,AVATAR_LOCAL_SERVICE supabase/tests/business_conflicts.local.test.ts

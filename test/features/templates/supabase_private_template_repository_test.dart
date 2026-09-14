@@ -201,7 +201,7 @@ void main() {
       () async {
     for (final entry in const {
       '54000': PrivateTemplateFailureCode.capacity,
-      '40001': PrivateTemplateFailureCode.stale,
+      'PT409': PrivateTemplateFailureCode.stale,
     }.entries) {
       failure = PostgrestException(
         message: 'private database detail',

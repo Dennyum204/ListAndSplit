@@ -1,3 +1,4 @@
+import 'package:list_and_split/core/supabase/business_conflict.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/moderation/domain/public_template_moderation.dart';
 import 'package:list_and_split/features/moderation/domain/public_template_moderation_repository.dart';
@@ -357,7 +358,9 @@ class SupabasePublicTemplateModerationRepository
         switch (error.code) {
           '22023' => PublicTemplateModerationFailureCode.invalid,
           'P0002' => PublicTemplateModerationFailureCode.unavailable,
-          '40001' => PublicTemplateModerationFailureCode.stale,
+          'PT409' ||
+          '40001' when isBusinessConflict(error.code, error.message) =>
+            PublicTemplateModerationFailureCode.stale,
           '23505' => PublicTemplateModerationFailureCode.retryConflict,
           '42501' => PublicTemplateModerationFailureCode.revoked,
           _ => PublicTemplateModerationFailureCode.generic,

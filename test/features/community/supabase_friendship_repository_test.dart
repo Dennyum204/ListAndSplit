@@ -276,10 +276,10 @@ void main() {
     );
   });
 
-  test('maps only SQLSTATE 40001 to the stable stale failure', () async {
+  test('maps only SQLSTATE PT409 to the stable stale failure', () async {
     failure = const PostgrestException(
       message: 'sensitive backend state',
-      code: '40001',
+      code: 'PT409',
       details: 'private details',
       hint: 'private hint',
     );

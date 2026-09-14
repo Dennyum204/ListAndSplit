@@ -263,7 +263,7 @@ List providers are keyed by the current verified user identity and are invalidat
 on sign-out, account deletion, invalid-session recovery, or identity change. No
 global list/member/invitation payload survives a session boundary. There is no
 SQLite, offline mutation queue, or optimistic server success. Realtime is an
-opaque invalidation input to repository refresh only; stale `40001` failures refresh current
+opaque invalidation input to repository refresh only; stale `PT409` failures refresh current
 state and never overwrite it. Exact quantity parsing is a domain value that stores
 positive integer thousandths and never converts through `double`.
 
@@ -489,7 +489,7 @@ lock-free, and paths may skip unused tiers without reversing the order.
 
 Ordinary mutations lock the list row before item rows; when multiple items are locked
 they use UUID order. Expected positive `bigint` versions reject stale writes with
-SQLSTATE `40001`. List metadata changes increment only list version. Item
+SQLSTATE `PT409`. List metadata changes increment only list version. Item
 create/delete/reorder increment list version; item edit/complete/reopen increment
 both list and item versions. A real assignment-set change also increments both
 versions exactly once; a combined item-field/assignment update does not double
@@ -504,7 +504,7 @@ operations never trust caller-supplied role or identity.
 Mutation paths that can write a profile foreign key first take deterministic
 `FOR KEY SHARE` locks on the referenced profile identities before acquiring list
 locks. Paths whose current participant set can change between preflight and the
-list lock recheck the exact sorted snapshot and return `40001` rather than writing.
+list lock recheck the exact sorted snapshot and return `PT409` rather than writing.
 This narrow identity preflight prevents account deletion from deadlocking against
 list mutation; after it, aggregate locking follows the global hierarchy.
 
@@ -524,7 +524,7 @@ complete valid `@username` token. Manually typed unresolved text remains text.
 Repeated occurrences resolve once; self-resolution is allowed without notification.
 A real text/link change advances `general_note_version` and parent list version
 once. An exact no-op or payload-equivalent completed retry changes nothing; a stale
-payload-different write returns `40001` with no partial row, notification, version,
+payload-different write returns `PT409` with no partial row, notification, version,
 timestamp, or Broadcast message.
 
 New clients read through `list_active_list_items_v2(uuid)` and mutate through

@@ -768,7 +768,7 @@ select lives_ok(
 );
 select throws_ok(
   $$select * from public.import_private_template_items((select value_id from template_test_values where label='snapshot-template'),array[(select item_id from public.list_private_template_items((select value_id from template_test_values where label='snapshot-template')) where position=2)],'6b000000-0000-4000-8000-000000000001',array['6b200000-0000-4000-8000-000000000002'::uuid],1,1)$$,
-  '40001','list changed',
+  'PT409','list changed',
   'a concurrent stale import cannot exceed remaining capacity'
 );
 select is(

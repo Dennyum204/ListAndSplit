@@ -546,7 +546,7 @@ select is(
     from public_template_race_results
     where label = 'edit-copy'
   ),
-  '40001',
+  'PT409',
   'a copy losing the source-edit race is rejected as stale'
 );
 

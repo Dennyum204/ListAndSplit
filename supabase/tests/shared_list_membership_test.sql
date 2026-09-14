@@ -218,7 +218,7 @@ select ok(
 select throws_ok(format(
  $$select public.cancel_active_list_invitation(%L,'10000000-0000-4000-8000-000000000003',2)$$,
  (select list_id from membership_values where label='owner-list')),
- '40001','list access changed','stale cancel is denied safely'
+ 'PT409','list access changed','stale cancel is denied safely'
 );
 select is(public.cancel_active_list_invitation(
  (select list_id from membership_values where label='owner-list'),

@@ -313,7 +313,7 @@ select throws_ok(
     $$select public.cancel_active_list_invitation(%L,'41000000-0000-4000-8000-000000000002',99)$$,
     (select value from realtime_values where label = 'list')
   ),
-  '40001',
+  'PT409',
   'list access changed',
   'rejected stale invitation mutation emits no committed message'
 );

@@ -471,7 +471,7 @@ select throws_ok(
       false,
       2
     )$$,
-  '40001',
+  'PT409',
   'template changed',
   'a stale real unpublication transition is rejected'
 );
@@ -980,7 +980,7 @@ select throws_ok(
       4,
       'd6000000-0000-4000-8000-000000000003'
     )$$,
-  '40001',
+  'PT409',
   'template changed',
   'stale public source versions write no copy'
 );

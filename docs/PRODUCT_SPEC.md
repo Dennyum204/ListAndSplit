@@ -339,7 +339,7 @@ are not implemented.
 - A real note-text or resolved-link change advances the note version and parent
   list version exactly once and emits the existing private invalidations. Exact
   no-ops and payload-equivalent completed retries change no state. A payload-
-  different stale write returns the established `40001` conflict and writes
+  different stale write returns the established `PT409` conflict and writes
   nothing. The UI preserves a dirty draft across remote note, version, or mention-
   eligibility conflicts, presents one localized explanation, and requires an
   explicit deterministic recovery choice. Caller access loss or list deletion

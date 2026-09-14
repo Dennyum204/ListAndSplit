@@ -1,3 +1,4 @@
+import 'package:list_and_split/core/supabase/business_conflict.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/templates/domain/friend_public_template_feed_repository.dart';
 import 'package:list_and_split/features/templates/domain/private_template.dart';
@@ -371,7 +372,9 @@ class SupabasePublicTemplateRepository
         switch (error.code) {
           '22023' => PublicTemplateFailureCode.invalid,
           'P0002' || '42501' => PublicTemplateFailureCode.unavailable,
-          '40001' => PublicTemplateFailureCode.stale,
+          'PT409' ||
+          '40001' when isBusinessConflict(error.code, error.message) =>
+            PublicTemplateFailureCode.stale,
           '23505' => PublicTemplateFailureCode.retryConflict,
           '54000' => PublicTemplateFailureCode.capacity,
           _ => PublicTemplateFailureCode.generic,

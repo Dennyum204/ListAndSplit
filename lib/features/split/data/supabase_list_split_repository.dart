@@ -1,3 +1,4 @@
+import 'package:list_and_split/core/supabase/business_conflict.dart';
 import 'package:list_and_split/features/split/domain/list_split.dart';
 import 'package:list_and_split/features/split/domain/list_split_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -781,7 +782,9 @@ class SupabaseListSplitRepository implements ListSplitRepository {
         switch (error.code) {
           '22023' => ListSplitFailureCode.invalid,
           'P0002' || '42501' => ListSplitFailureCode.unavailable,
-          '40001' => ListSplitFailureCode.stale,
+          'PT409' ||
+          '40001' when isBusinessConflict(error.code, error.message) =>
+            ListSplitFailureCode.stale,
           '55000' => ListSplitFailureCode.archived,
           '54000' => ListSplitFailureCode.capacity,
           _ => ListSplitFailureCode.generic,

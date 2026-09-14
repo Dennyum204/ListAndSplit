@@ -179,7 +179,7 @@ void main() {
     for (final entry in const {
       '22023': PublicTemplateModerationFailureCode.invalid,
       'P0002': PublicTemplateModerationFailureCode.unavailable,
-      '40001': PublicTemplateModerationFailureCode.stale,
+      'PT409': PublicTemplateModerationFailureCode.stale,
       '23505': PublicTemplateModerationFailureCode.retryConflict,
       '42501': PublicTemplateModerationFailureCode.revoked,
     }.entries) {

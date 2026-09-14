@@ -1077,7 +1077,7 @@ select throws_ok(
     )$$,
     (select value_id from assignment_test_values where label = 'core-item')
   ),
-  '40001',
+  'PT409',
   'list item changed',
   'serialized stale full-set update loses safely'
 );

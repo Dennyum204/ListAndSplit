@@ -614,7 +614,7 @@ select throws_ok(
     $$select * from public.rename_active_list(%L, 'Stale overwrite', 1)$$,
     (select list_id from active_list_test_values where label = 'primary')
   ),
-  '40001',
+  'PT409',
   'list changed',
   'stale rename cannot overwrite newer list state'
 );
@@ -815,7 +815,7 @@ select throws_ok(
     (select list_id from active_list_test_values where label = 'item-one'),
     (select item_id from active_list_test_values where label = 'item-one')
   ),
-  '40001',
+  'PT409',
   'list item changed',
   'stale item edits cannot overwrite current content'
 );
@@ -949,7 +949,7 @@ select throws_ok(
     (select item_id from active_list_test_values where label = 'item-one'),
     (select item_id from active_list_test_values where label = 'item-two')
   ),
-  '40001',
+  'PT409',
   'list changed',
   'stale concurrent reorder cannot overwrite the committed order'
 );
@@ -1120,7 +1120,7 @@ select throws_ok(
     $$select public.delete_active_list(%L, 10)$$,
     (select list_id from active_list_test_values where label = 'primary')
   ),
-  '40001',
+  'PT409',
   'list changed',
   'stale list deletion is rejected'
 );
