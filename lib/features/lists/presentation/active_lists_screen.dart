@@ -77,6 +77,7 @@ class _ActiveListsScreenState extends ConsumerState<ActiveListsScreen> {
       appBar: header,
       floatingActionButton: _status == ActiveListStatus.active
           ? FloatingActionButton.extended(
+              heroTag: 'createActiveList',
               key: const Key('createListButton'),
               onPressed: state.isCreating ? null : _showCreateDialog,
               icon: const Icon(Icons.add_rounded),

@@ -34,6 +34,12 @@ or Production-released. Production remains fail-closed and unconfigured.
 8. Apply the approved design system and UI refactor to stable functionality,
    screen by screen. PR #33 uses the supplied light-theme PDF and dark-theme
    screenshots instead of requiring live Figma access (A-074).
+   The approved Word follow-up and device-local Language selector remain in PR #33.
+   Keep the existing avatar PR #34 unchanged until this base is finalized, then
+   integrate deliberately and verify its Profile control layout against item 8.
+   The next separate feature delivery is template images (publish selection/preview
+   and Community cards), gated by O-P19/O-A17. No image capability is implied by
+   compact text-only card styling in PR #33.
 9. Finalize branding and adaptive, monochrome, and Play launcher icons.
 10. Revalidate official requirements and implement Android release infrastructure:
    the supported toolchain, Play Console, Play App Signing and separate upload

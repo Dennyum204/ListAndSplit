@@ -1487,5 +1487,11 @@
   "@templateSendNotificationTitle": {
     "placeholders": {"templateName": {"type": "String"}}
   },
-  "templateSendNotificationUnavailable": "This template invitation is no longer actionable."
+  "templateSendNotificationUnavailable": "This template invitation is no longer actionable.",
+  "itemQuickAddHint": "Add an item…",
+  "languageTitle": "Language",
+  "languageSystem": "System",
+  "languageDeviceHelper": "Applies only on this device. System follows your device language.",
+  "languageSaveFailed": "We couldn't save your language. Try again.",
+  "languageReadFailed": "Your saved language could not be read. Try again to restore it."
 }

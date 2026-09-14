@@ -232,6 +232,18 @@ without a separate background behind the caption.
   separately authorized disposable accounts and must never delete or modify
   Fernando or Susana.
 
+### Fast active-list item entry
+
+Inline quick-add accepts an item name and submits through either + or the keyboard.
+It uses quantity 1, leaves unit and assignments unset, and retains the detailed
+item editor for later changes. Existing name normalization, duplicate-name support,
+limits, capacity, committed creation order, permissions and request-id recovery
+remain authoritative. Guard repeated submissions, preserve all failed/uncertain
+drafts, clear only an unchanged successfully submitted draft, and keep focus ready
+for the next item. Unassigned rows omit the visible icon/text and unused space;
+assigned identities and meaningful screen-reader context remain available.
+Completion/reopen must not shift the viewport to announce routine success.
+
 ### Active and shared lists
 
 Each list has one fully onboarded owner, retained versioned access rows, current
@@ -1013,6 +1025,13 @@ Notification links and later feature deep-link contracts remain open.
 ### Accessibility and localization
 
 - Material 3 light and dark themes are part of the application foundation.
+- Profile includes a Language dropdown near Appearance: System (default), English
+  and Português (European Portuguese). It updates the whole app immediately while
+  preserving navigation, authentication, selected tab and unsaved forms. System
+  follows device locale changes with the existing English/Portuguese fallback.
+  The choice persists locally across restart/sign-out, is not account/export data,
+  and has recoverable localized storage-failure feedback. No phone setting changes
+  or restart are required.
 - Profile includes an Appearance selector for System (default), Light and Dark.
   The choice applies immediately across the app and is saved only on this device,
   surviving app restarts and sign-out without modifying the account or export.
@@ -1090,3 +1109,21 @@ choose them:
 - The exact terms-acceptance, in-app Chat content/user reporting, moderator
   workflow, evidence, appeal, and operational-response contract required before
   public distribution.
+
+### Approved reference follow-up allocation
+
+The “Things to change.docx” references guide compact balance strips, directional
+suggested-payment cards, transaction rows with existing payer/beneficiary identity,
+Chat bubble alignment/colours and composer, persistent plain dropdown captions,
+and compact text-only Community cards with author/profile action/title/publication
+and item count. Existing text colours, integer money, settlement confirmation and
+reversal, text Chat/unread rules and access restrictions remain authoritative.
+“Record payment” records bookkeeping; it never transfers funds. Many participants
+and large text must remain reachable through responsive layout and scrolling.
+Initials remain in PR #33; actual avatar editing/rendering belongs to PR #34.
+
+Template images are planned as the next separate feature PR, including optional
+image selection/preview in publishing and image-bearing Community cards. No image
+upload, fake placeholder or Add image control belongs to this delivery. Visibility,
+limits, replacement/removal, copying/sending, unpublishing/deletion, account
+export/deletion and moderation decisions must be resolved first (O-P19/O-A17).

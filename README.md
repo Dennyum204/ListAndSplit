@@ -300,6 +300,19 @@ Use **Profile > Appearance > System / Light / Dark** to choose a theme. System
 follows the device; an explicit choice persists locally across app restarts and
 sign-out. Switching themes does not save profile edits or change account data.
 
+The approved `Things to change.docx` follow-up adds inline list quick-add,
+compact unassigned rows, stable checkbox updates, refreshed Split/Chat/Community
+layouts and persistent dropdown captions. Use **Profile > Language** near
+Appearance to select **System / English / Português**. Language changes apply
+immediately, persist locally across restart and sign-out, and preserve navigation
+and unsaved forms. System follows the device with the existing English fallback;
+storage failures display localized recovery feedback.
+
+See [PR #33 follow-up coverage](docs/PR33_UI_FOLLOWUP.md) for each document item's
+delivery. Profile photographs stay in existing PR #34; template-image selection,
+preview and image-bearing Community cards are the next separate feature PR after
+the recorded product and lifecycle decisions are resolved.
+
 Community's initial page is now the existing friends-only template feed. Its
 Friends action opens exact-username discovery; friendship/block management and
 public-profile/template paths remain available. List, Chat and Split controls
@@ -319,6 +332,8 @@ content. Physical QA has **not** been completed for PR #33:
    static mockups where needed.
    Exercise Profile's Appearance selector, check all tabs update, restart to
    confirm the saved choice, and return to System to follow device brightness.
+   Repeat with Language, including an unsaved Profile draft, sign-out and System
+   following the device language. Confirm Portuguese uses the existing PT locale.
    Check that the selected navigation pill encloses its icon and full translated
    label, and that compact list cards retain meaningful screen-reader summaries.
 3. Exercise category/template create, rename, cancellation, normalized duplicates,
@@ -331,6 +346,11 @@ content. Physical QA has **not** been completed for PR #33:
    on both clients. Leave Chat for Split, send from the other client, and verify
    the hidden Chat did not mark the unseen message read. Repeat access removal
    with an editor open and verify one safe exit/message.
+   Toggle a scrolled list item and confirm its row does not jump. Quick-add with
+   both + and the keyboard; confirm quantity 1 and no unit/assignee, edit details,
+   retry an offline submission, and type a new draft while a request is pending.
+   Inspect balances, debtor-to-creditor direction, beneficiaries and payer;
+   record and reverse only disposable bookkeeping settlements.
 5. Scroll to a later notification, cause a rejected/offline action, and confirm
    visible recoverable feedback. Verify Community search/feed and template filters
    survive tab/back navigation and duplicate names still open exact IDs.

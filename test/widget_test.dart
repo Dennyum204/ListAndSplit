@@ -35,10 +35,76 @@ import 'helpers/fake_private_template_repository.dart';
 import 'helpers/fake_public_template_moderation_repository.dart';
 import 'helpers/fake_friend_public_template_feed_repository.dart';
 import 'helpers/fake_theme_preference_repository.dart';
+import 'helpers/fake_language_preference_repository.dart';
+import 'package:list_and_split/features/settings/domain/language_preference.dart';
+import 'package:list_and_split/features/settings/presentation/language_preference_controller.dart';
+import 'package:list_and_split/l10n/generated/app_localizations.dart';
 import 'support/ui_preview_capture.dart';
 
 void main() {
   setUpAll(prepareUiPreviewFonts);
+
+  testWidgets(
+      'language selection preserves router, selected tab, drafts, sign-out and restart',
+      (tester) async {
+    final auth = FakeAuthRepository(session: verifiedSession);
+    final profile =
+        FakeProfileRepository(profile: FakeProfileRepository.completeProfile);
+    final language = FakeLanguagePreferenceRepository();
+    addTearDown(auth.close);
+    await _pumpConfiguredApp(tester,
+        auth: auth, profile: profile, language: language);
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(ListAndSplitApp)));
+    final router = container.read(appRouterProvider);
+    await tester.tap(find.byKey(const Key('profileDestination')));
+    await tester.pumpAndSettle();
+    final field = find.byKey(const Key('profileDisplayName'));
+    await tester.enterText(field, 'Unsaved language draft');
+    await tester.pumpAndSettle();
+    final fieldElement = tester.element(field);
+    final selector = find.byType(DropdownButton<LanguagePreference>);
+    await Scrollable.ensureVisible(tester.element(selector), alignment: .5);
+    await tester.pumpAndSettle();
+    await tester.tap(selector);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Português').last);
+    await tester.pumpAndSettle();
+    expect(container.read(appRouterProvider), same(router));
+    expect(
+        tester
+            .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+            .selectedIndex,
+        3);
+    expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).locale,
+        const Locale('pt'));
+    expect(tester.element(field), same(fieldElement));
+    expect(tester.widget<TextField>(field).controller!.text,
+        'Unsaved language draft');
+    expect(profile.updateCalls, 0);
+    expect(auth.signOutCalls, 0);
+    await tester.tap(find.byKey(const Key('templatesDestination')));
+    await tester.pumpAndSettle();
+    expect(
+        AppLocalizations.of(tester.element(find.byType(AppBottomNavigationBar)))
+            .localeName,
+        'pt');
+    await tester.tap(find.byKey(const Key('profileDestination')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field).controller!.text,
+        'Unsaved language draft');
+    await auth.signOut();
+    await tester.pumpAndSettle();
+    expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).locale,
+        const Locale('pt'));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _pumpConfiguredApp(tester,
+        auth: auth, profile: profile, language: language);
+    expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).locale,
+        const Locale('pt'));
+    expect(language.writes, [LanguagePreference.pt]);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
       'Profile theme selection preserves router, tab, draft and session',
@@ -1416,6 +1482,7 @@ Future<void> _pumpConfiguredApp(
   FakeActiveListRepository? lists,
   FakePublicTemplateModerationRepository? moderation,
   ThemePreferenceRepository? appearance,
+  LanguagePreferenceRepository? language,
 }) async {
   final defaultFriendships = FakeFriendshipRepository()
     ..summaryResult = const FriendshipSummary(
@@ -1429,6 +1496,8 @@ Future<void> _pumpConfiguredApp(
   await tester.pumpWidget(
     uiPreviewBoundary(ProviderScope(
       overrides: [
+        languagePreferenceRepositoryProvider
+            .overrideWithValue(language ?? FakeLanguagePreferenceRepository()),
         themePreferenceRepositoryProvider.overrideWithValue(
           appearance ?? FakeThemePreferenceRepository(),
         ),

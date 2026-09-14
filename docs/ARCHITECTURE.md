@@ -66,6 +66,22 @@ the selected mode without recreating the router or account state. Profile render
 the localized selector; widgets never access storage directly. No backend field,
 export contract, dependency, or cross-device synchronization is introduced.
 
+The follow-up Language preference follows the same device-local settings boundary
+(P-061/A-075). The app watches its locale without replacing its router. Failed
+writes reload the preference cache and reconcile the displayed choice from storage;
+read failures leave startup usable and expose a localized retry. It does not add
+an account field or cross-device synchronization.
+
+Quick-add is a stateful presentation widget using the existing active-list
+controller's createItem and ListQuantity.one contract. A submitted draft revision
+prevents success from clearing subsequent input. It adds no transport/API. Routine
+completion confirmation is the authoritative checkbox state, without inserting a
+success banner above keyed list rows; recovery/error paths remain visible.
+
+Template-image architecture is deliberately unresolved in O-P19/O-A17 and outside
+this source change. PR #34 independently owns avatar infrastructure and must be
+integrated against this updated base only in a later task.
+
 ## Client composition
 
 The application composition path is intentionally small:

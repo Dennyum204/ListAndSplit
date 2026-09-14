@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
@@ -180,8 +181,17 @@ class _FriendTemplateCard extends StatelessWidget {
         .formatMediumDate(template.publishedAt.toLocal());
     return AppSectionCard(
       key: Key('friendTemplateCard-${template.id}'),
-      tonal: true,
       padding: EdgeInsets.zero,
+      color: Theme.of(context).brightness == Brightness.dark
+          ? AppPalette.darkCard
+          : AppPalette.inputCream,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Theme.of(context).dividerColor
+                : AppPalette.orange),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -200,7 +210,13 @@ class _FriendTemplateCard extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
                   child: Row(
                     children: [
-                      IdentityBadge(label: profile.displayName, size: 32),
+                      IdentityBadge(
+                          backgroundColor:
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? AppPalette.inputCream
+                                  : AppPalette.cardBlue,
+                          label: profile.displayName,
+                          size: 32),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
@@ -215,10 +231,19 @@ class _FriendTemplateCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Flexible(
-                        child: Text(
-                          localizations.publicTemplatesViewProfileButton,
-                          textAlign: TextAlign.end,
-                          style: Theme.of(context).textTheme.labelLarge,
+                        child: Container(
+                          constraints: const BoxConstraints(minHeight: 48),
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppPalette.orange),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                              localizations.publicTemplatesViewProfileButton,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.labelLarge),
                         ),
                       ),
                     ],
@@ -242,7 +267,7 @@ class _FriendTemplateCard extends StatelessWidget {
                 AppRoutes.publicTemplate(profile.id, template.id),
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -256,7 +281,7 @@ class _FriendTemplateCard extends StatelessWidget {
                         const Icon(Icons.chevron_right_rounded),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 6),
                     Wrap(
                       alignment: WrapAlignment.spaceBetween,
                       spacing: 16,

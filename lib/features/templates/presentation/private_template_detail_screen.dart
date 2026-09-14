@@ -655,6 +655,7 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
             AppDialogField(
               label: localizations.templatesCategoryLabel,
               child: DropdownButtonFormField<String?>(
+                isDense: false,
                 style: AppPalette.inputTextStyle(context),
                 dropdownColor: AppPalette.inputCream,
                 iconEnabledColor: AppPalette.navy,

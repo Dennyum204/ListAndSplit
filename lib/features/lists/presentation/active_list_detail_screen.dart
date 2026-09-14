@@ -166,33 +166,7 @@ class ActiveListDetailScreen extends ConsumerWidget {
         ],
       ),
       bottomNavigationBar: detail != null && !archived
-          ? SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: Tooltip(
-                  message: detail.items.length >= activeListItemCapacity
-                      ? localizations.listItemCapacityReachedMessage
-                      : localizations.itemAddButton,
-                  child: FilledButton.icon(
-                    key: const Key('addItemButton'),
-                    onPressed: state.isMutating ||
-                            detail.items.length >= activeListItemCapacity
-                        ? null
-                        : () => _showItemDialog(context, ref),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppPalette.inputCream,
-                      foregroundColor: AppPalette.navy,
-                      side: const BorderSide(
-                          color: AppPalette.orange, width: 1.5),
-                      shape: const StadiumBorder(),
-                    ),
-                    icon: const Icon(Icons.add_rounded),
-                    label: Text(localizations.itemAddButton),
-                  ),
-                ),
-              ),
-            )
+          ? _QuickAddItem(key: ValueKey('quickAdd-$listId'), listId: listId)
           : null,
       body: SafeArea(
         child: Center(
@@ -408,17 +382,6 @@ class ActiveListDetailScreen extends ConsumerWidget {
       context.pop();
     }
   }
-
-  Future<void> _showItemDialog(
-    BuildContext context,
-    WidgetRef ref, {
-    ActiveListItem? item,
-  }) {
-    return showDialog<void>(
-      context: context,
-      builder: (_) => _ItemDialog(listId: listId, item: item),
-    );
-  }
 }
 
 enum ListDetailSection { items, split, chat }
@@ -605,6 +568,126 @@ class _ListChatButton extends ConsumerWidget {
   }
 }
 
+class _QuickAddItem extends ConsumerStatefulWidget {
+  const _QuickAddItem({required this.listId, super.key});
+  final String listId;
+
+  @override
+  ConsumerState<_QuickAddItem> createState() => _QuickAddItemState();
+}
+
+class _QuickAddItemState extends ConsumerState<_QuickAddItem> {
+  final _name = TextEditingController();
+  final _focus = FocusNode();
+  bool _submitting = false;
+  int _draftRevision = 0;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final state = ref.read(activeListDetailControllerProvider(widget.listId));
+    final detail = state.detail.valueOrNull;
+    final draft = _name.text;
+    if (_submitting ||
+        state.isMutating ||
+        detail == null ||
+        detail.summary.status != ActiveListStatus.active ||
+        detail.items.length >= activeListItemCapacity ||
+        draft.trim().isEmpty ||
+        draft.trim().length > 120) return;
+    final revision = _draftRevision;
+    setState(() => _submitting = true);
+    final result = await ref
+        .read(activeListDetailControllerProvider(widget.listId).notifier)
+        .createItem(draft,
+            quantity: ListQuantity.one,
+            unit: null,
+            assigneeProfileIds: const {});
+    if (!mounted) return;
+    setState(() {
+      _submitting = false;
+      if (result == ActiveListMutationOutcome.succeeded &&
+          revision == _draftRevision &&
+          _name.text == draft) _name.clear();
+    });
+    if (result == ActiveListMutationOutcome.succeeded) _focus.requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    final state = ref.watch(activeListDetailControllerProvider(widget.listId));
+    final detail = state.detail.valueOrNull;
+    final atCapacity = (detail?.items.length ?? 0) >= activeListItemCapacity;
+    final valid =
+        _name.text.trim().isNotEmpty && _name.text.trim().length <= 120;
+    final enabled = !_submitting && !state.isMutating && !atCapacity && valid;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('quickAddItemName'),
+                  style: AppPalette.inputTextStyle(context),
+                  controller: _name,
+                  focusNode: _focus,
+                  textInputAction: TextInputAction.done,
+                  onChanged: (_) => setState(() => _draftRevision++),
+                  onSubmitted: (_) => _submit(),
+                  decoration: InputDecoration(
+                    hintText: strings.itemQuickAddHint,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(32),
+                        borderSide: const BorderSide(
+                            color: AppPalette.orange, width: 1.5)),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(32),
+                        borderSide: const BorderSide(
+                            color: AppPalette.orange, width: 1.5)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(32),
+                        borderSide:
+                            const BorderSide(color: AppPalette.navy, width: 2)),
+                    errorText: _name.text.trim().length > 120
+                        ? strings.listInvalidInputMessage
+                        : null,
+                    helperText: atCapacity
+                        ? strings.listItemCapacityReachedMessage
+                        : null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                key: const Key('addItemButton'),
+                tooltip: strings.itemAddButton,
+                onPressed: enabled ? _submit : null,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(48, 48),
+                  backgroundColor: AppPalette.inputCream,
+                  foregroundColor: AppPalette.navy,
+                ),
+                icon: const Icon(Icons.add_rounded, size: 30),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DetailBody extends ConsumerWidget {
   const _DetailBody({
     required this.listId,
@@ -743,8 +826,11 @@ class _DetailBody extends ConsumerWidget {
       ActiveListDetailMessage.archived => localizations.listArchivedMessage,
       ActiveListDetailMessage.restored => localizations.listRestoredMessage,
       ActiveListDetailMessage.remotelyArchived => null,
-      ActiveListDetailMessage.itemCreated => localizations.itemCreatedMessage,
-      ActiveListDetailMessage.itemUpdated => localizations.itemUpdatedMessage,
+      ActiveListDetailMessage.itemCreated => null,
+      // The checked state is the completion confirmation. Inserting a success
+      // banner here moved every row by 60px after each toggle, then back on
+      // the next mutation. Failures/recovery remain visible below.
+      ActiveListDetailMessage.itemUpdated => null,
       ActiveListDetailMessage.itemDeleted => localizations.itemDeletedMessage,
       ActiveListDetailMessage.noteSaved =>
         localizations.generalNoteSavedMessage,
@@ -1559,6 +1645,19 @@ class _ItemCard extends ConsumerWidget {
           child: Checkbox(
             key: Key('completeItem-${item.id}'),
             value: item.isCompleted,
+            // A pending mutation disables interaction without flashing every
+            // checkbox into the disabled palette and back.
+            fillColor: readOnly
+                ? null
+                // Retain the Flutter 3.19 floor; renamed WidgetState APIs
+                // are unavailable there.
+                // ignore: deprecated_member_use
+                : MaterialStateProperty.resolveWith(
+                    // ignore: deprecated_member_use
+                    (states) => states.contains(MaterialState.selected)
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.transparent,
+                  ),
             onChanged: readOnly || isBusy
                 ? null
                 : (value) => controller.setItemCompleted(item, value ?? false),
@@ -1574,9 +1673,17 @@ class _ItemCard extends ConsumerWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(quantity),
-            const SizedBox(height: 2),
-            _AssigneeSummary(item: item),
+            if (item.assignees.isEmpty)
+              Semantics(
+                key: Key('itemAssignees-${item.id}'),
+                label: localizations.itemUnassignedSemanticLabel(item.name),
+                child: Text(quantity),
+              )
+            else ...[
+              Text(quantity),
+              const SizedBox(height: 2),
+              _AssigneeSummary(item: item),
+            ],
           ],
         ),
         trailing: Row(

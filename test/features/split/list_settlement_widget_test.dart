@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:list_and_split/core/theme/app_theme.dart';
+import '../../support/ui_preview_capture.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +21,37 @@ import '../../helpers/fakes.dart';
 const _formerParticipantId = '30000000-0000-4000-8000-000000000003';
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
+  for (final dark in [false, true]) {
+    testWidgets('Split reference suggestion and transaction layout dark=$dark',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repository = FakeListSplitRepository(initial: _debtOverview());
+      await _pumpSettlement(tester, repository, dark: dark);
+      final suggestion = find.byKey(const ValueKey(
+          'splitSuggestion-$splitMemberParticipantId-$splitOwnerParticipantId'));
+      await _scrollSplitUntilVisible(tester, suggestion);
+      expect(
+          find.byWidgetPredicate((widget) =>
+              widget is Semantics &&
+              widget.properties.label == 'Susana pays Fernando CHF 5.00'),
+          findsOneWidget);
+      expect(find.text('CHF 5.00'), findsOneWidget);
+      await captureUiPreview(
+          tester, 'split-suggestions-${dark ? 'dark' : 'light'}');
+      await _scrollSplitUntilVisible(
+          tester,
+          find.byKey(ValueKey(
+              'splitExpense-${repository.overview.expenses.single.id}')));
+      await captureUiPreview(
+          tester, 'split-transactions-${dark ? 'dark' : 'light'}');
+      expect(repository.recordSettlementCalls, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
   test(
       'owner and member Realtime registries reconcile independently without duplicates',
       () async {
@@ -134,7 +167,11 @@ void main() {
       ),
     );
     await _scrollSplitUntilVisible(tester, suggestion);
-    expect(find.text('Susana pays Fernando CHF 5.00'), findsOneWidget);
+    expect(
+        find.byWidgetPredicate((widget) =>
+            widget is Semantics &&
+            widget.properties.label == 'Susana pays Fernando CHF 5.00'),
+        findsOneWidget);
 
     await tester.tap(
       find.byKey(
@@ -181,7 +218,9 @@ void main() {
     );
     await _scrollSplitUntilVisible(
       tester,
-      find.text('Susana pays Fernando CHF 3.00'),
+      find.byWidgetPredicate((widget) =>
+          widget is Semantics &&
+          widget.properties.label == 'Susana pays Fernando CHF 3.00'),
     );
 
     await tester.tap(
@@ -579,14 +618,14 @@ Future<ProviderContainer> _pumpSettlement(
         builder: (context) {
           container = ProviderScope.containerOf(context);
           return MaterialApp(
-            theme: ThemeData.light(),
-            darkTheme: ThemeData.dark(),
+            theme: AppTheme.light,
+            darkTheme: AppTheme.dark,
             themeMode: dark ? ThemeMode.dark : ThemeMode.light,
             builder: (context, child) => MediaQuery(
               data: MediaQuery.of(context).copyWith(
                 textScaler: TextScaler.linear(textScale),
               ),
-              child: child!,
+              child: uiPreviewBoundary(child!),
             ),
             localizationsDelegates: const [
               AppLocalizations.delegate,
@@ -624,7 +663,8 @@ Future<void> _scrollSplitUntilVisible(
 ) async {
   final scrollable = find.descendant(
     of: find.byKey(const Key('splitOverview')),
-    matching: find.byType(Scrollable),
+    matching: find.byWidgetPredicate((widget) =>
+        widget is Scrollable && widget.axisDirection == AxisDirection.down),
   );
   // A completed payment can remove cards above the preserved viewport. Search
   // from the start so this helper finds both earlier and later authoritative UI.

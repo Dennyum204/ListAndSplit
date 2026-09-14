@@ -101,38 +101,42 @@ void main() {
 
   for (final locale in [const Locale('en'), const Locale('pt')]) {
     for (final dark in [false, true]) {
-      testWidgets(
-          'Chat redesign supports narrow 200% ${locale.languageCode} dark=$dark',
-          (tester) async {
-        tester.view.physicalSize = const Size(390, 844);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        final chat = FakeActiveListChatRepository()
-          ..messages = [
-            activeListChatTestMessage(sequence: 1, body: 'Ready for the trip?'),
-            activeListChatTestMessage(
-                sequence: 2, body: 'Sim, vamos! 😀', isMine: true),
-          ];
-        await _pump(tester,
-            lists: _listsRepository(),
-            chat: chat,
-            initialLocation: '/lists/list-1/chat',
-            locale: locale,
-            dark: dark,
-            textScale: 2);
-        expect(find.byKey(const Key('listSectionNavigation')), findsOneWidget);
-        await captureUiPreview(tester,
-            'chat-${locale.languageCode}-${dark ? 'dark' : 'light'}-large');
-        final composer = find.byKey(const Key('listChatComposer'));
-        await tester.enterText(composer, 'Olá!');
-        await tester.pump();
-        final send = find.byKey(const Key('listChatSendButton'));
-        expect(send.hitTestable(), findsOneWidget);
-        expect(tester.getSize(send).height, greaterThanOrEqualTo(48));
-        expect(chat.sendCalls, 0);
-        expect(tester.takeException(), isNull);
-      });
+      for (final scale in [1.0, 2.0]) {
+        testWidgets(
+            'Chat redesign supports narrow scale=$scale ${locale.languageCode} dark=$dark',
+            (tester) async {
+          tester.view.physicalSize = const Size(390, 844);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final chat = FakeActiveListChatRepository()
+            ..messages = [
+              activeListChatTestMessage(
+                  sequence: 1, body: 'Ready for the trip?'),
+              activeListChatTestMessage(
+                  sequence: 2, body: 'Sim, vamos! 😀', isMine: true),
+            ];
+          await _pump(tester,
+              lists: _listsRepository(),
+              chat: chat,
+              initialLocation: '/lists/list-1/chat',
+              locale: locale,
+              dark: dark,
+              textScale: scale);
+          expect(
+              find.byKey(const Key('listSectionNavigation')), findsOneWidget);
+          await captureUiPreview(tester,
+              'chat-${locale.languageCode}-${dark ? 'dark' : 'light'}-${scale == 2 ? 'large' : 'standard'}');
+          final composer = find.byKey(const Key('listChatComposer'));
+          await tester.enterText(composer, 'Olá!');
+          await tester.pump();
+          final send = find.byKey(const Key('listChatSendButton'));
+          expect(send.hitTestable(), findsOneWidget);
+          expect(tester.getSize(send).height, greaterThanOrEqualTo(48));
+          expect(chat.sendCalls, 0);
+          expect(tester.takeException(), isNull);
+        });
+      }
     }
   }
 

@@ -565,51 +565,58 @@ void main() {
 
   testWidgets('renders positive, negative, zero, and historical balances',
       (tester) async {
-    final repository = FakeListSplitRepository(
-      initial: enabledSplitOverview(
-        participants: const [
-          ListSplitParticipant(
-            id: splitOwnerParticipantId,
-            profileId: splitOwnerProfileId,
-            username: 'fernando',
-            displayName: 'Fernando',
-            isAnonymized: false,
-            isCurrent: true,
-            paidMinor: 1000,
-            owedMinor: 500,
-            balanceMinor: 500,
-          ),
-          ListSplitParticipant(
-            id: splitMemberParticipantId,
-            profileId: splitMemberProfileId,
-            username: 'susana',
-            displayName: 'Susana',
-            isAnonymized: false,
-            isCurrent: true,
-            paidMinor: 0,
-            owedMinor: 500,
-            balanceMinor: -500,
-          ),
-          ListSplitParticipant(
-            id: '30000000-0000-4000-8000-000000000003',
-            profileId: null,
-            username: null,
-            displayName: null,
-            isAnonymized: true,
-            isCurrent: false,
-            paidMinor: 250,
-            owedMinor: 250,
-            balanceMinor: 0,
-          ),
-        ],
-      ),
-    );
-    await _pump(tester, repository);
+    final semantics = tester.ensureSemantics();
+    try {
+      final repository = FakeListSplitRepository(
+        initial: enabledSplitOverview(
+          participants: const [
+            ListSplitParticipant(
+              id: splitOwnerParticipantId,
+              profileId: splitOwnerProfileId,
+              username: 'fernando',
+              displayName: 'Fernando',
+              isAnonymized: false,
+              isCurrent: true,
+              paidMinor: 1000,
+              owedMinor: 500,
+              balanceMinor: 500,
+            ),
+            ListSplitParticipant(
+              id: splitMemberParticipantId,
+              profileId: splitMemberProfileId,
+              username: 'susana',
+              displayName: 'Susana',
+              isAnonymized: false,
+              isCurrent: true,
+              paidMinor: 0,
+              owedMinor: 500,
+              balanceMinor: -500,
+            ),
+            ListSplitParticipant(
+              id: '30000000-0000-4000-8000-000000000003',
+              profileId: null,
+              username: null,
+              displayName: null,
+              isAnonymized: true,
+              isCurrent: false,
+              paidMinor: 250,
+              owedMinor: 250,
+              balanceMinor: 0,
+            ),
+          ],
+        ),
+      );
+      await _pump(tester, repository);
 
-    expect(find.text('You are owed CHF 5.00'), findsOneWidget);
-    expect(find.text('Fernando is owed CHF 5.00'), findsOneWidget);
-    expect(find.text('Susana owes CHF 5.00'), findsOneWidget);
-    expect(find.text('Former participant is settled up'), findsOneWidget);
+      expect(find.text('You are owed CHF 5.00'), findsOneWidget);
+      expect(
+          find.bySemanticsLabel('Fernando is owed CHF 5.00'), findsOneWidget);
+      expect(find.bySemanticsLabel('Susana owes CHF 5.00'), findsOneWidget);
+      expect(find.bySemanticsLabel('Former participant is settled up'),
+          findsOneWidget);
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('invalid amount and zero beneficiaries never submit',
@@ -1121,7 +1128,8 @@ Future<void> _scrollSplitUntilVisible(
     300,
     scrollable: find.descendant(
       of: find.byKey(const Key('splitOverview')),
-      matching: find.byType(Scrollable),
+      matching: find.byWidgetPredicate((widget) =>
+          widget is Scrollable && widget.axisDirection == AxisDirection.down),
     ),
     maxScrolls: 20,
   );

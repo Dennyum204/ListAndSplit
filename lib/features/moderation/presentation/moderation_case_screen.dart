@@ -414,6 +414,7 @@ class _ModerationActionDialogState extends State<_ModerationActionDialog> {
                   AppDialogField(
                     label: localizations.moderationOwnerReasonLabel,
                     child: DropdownButtonFormField<PublicTemplateReportReason>(
+                      isDense: false,
                       style: AppPalette.inputTextStyle(context),
                       dropdownColor: AppPalette.inputCream,
                       iconEnabledColor: AppPalette.navy,
