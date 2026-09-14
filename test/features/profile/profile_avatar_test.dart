@@ -165,6 +165,28 @@ void main() {
     expect(c.state.busy, false);
     expect(refresh, 0);
   });
+  test(
+      'stale conflict reloads once without retrying; a later user action succeeds',
+      () async {
+    final repo = Repository()
+      ..failure = const AvatarFailure(AvatarFailureKind.stale);
+    var refresh = 0;
+    final controller =
+        AvatarController(repo, Gallery(), 'viewer', () => refresh++);
+    addTearDown(controller.dispose);
+    await controller.submit(remove: false);
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.state.error, AvatarFailureKind.stale);
+    expect(controller.state.busy, false);
+    expect(repo.writes, 1);
+    expect(refresh, 1);
+    repo.failure = null;
+    await controller.submit(remove: false);
+    expect(repo.writes, 2);
+    expect(refresh, 2);
+    expect(controller.state.error, isNull);
+    expect(controller.state.changed, true);
+  });
   for (final error in [
     const AvatarFailure(AvatarFailureKind.stale),
     const AvatarFailure(AvatarFailureKind.busy),

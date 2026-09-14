@@ -1,11 +1,52 @@
-# Profile avatars: proposed Dev rollout
+# Profile avatars: Dev rollout and verification
 
-This is a reviewable plan, not deployment authorization or a record of deployment.
-Both PRs remain draft/unmerged. The Samsung and emulator retain the PR #33 client;
-the avatar-enabled client must not connect to hosted Dev before this rollout is
-separately reviewed and authorized. Production is outside scope.
+This document records the initial backend rollout and the focused forward plan.
+Both PRs remain draft/unmerged. Client distribution requires successful backend
+verification at the reviewed source. Record deployment versions, test evidence and
+device installation results separately. Production is outside scope.
 
 ## Exact source and order
+
+### Focused stale-version forward rollout
+
+The initial Dev rollout applied `20260907221034_profile_avatars.sql` once and
+deployed avatar-aware `delete-account` v3 and `profile-avatar` v1. Client
+distribution was stopped when hosted PostgREST 14.5 retried the avatar's deliberate
+SQLSTATE `40001` stale error. Do not reapply that migration or roll back deletion.
+
+For the separately authorized focused fix:
+
+1. Verify the reviewed PR #34 source, clean synchronized worktree, final-head CI,
+   local database/Edge/HTTP regression results and exact Dev identity. Compare
+   migration history and the deployed function versions against this record;
+   stop on unexpected changes. Record current backup availability and advisors.
+2. Run the supported migration dry run. It must propose **only**
+   `20260914222013_profile_avatar_stale_conflict.sql`.
+3. Deploy **only `profile-avatar`** with its reviewed shared service/PNG modules
+   and pinned dependencies. Its adapter narrowly recognizes both the original
+   avatar conflict (RPC name + `40001` + exact `avatar changed` message) and new
+   `PT409`; unrelated/native serialization failures are not relabeled or retried.
+   Preserve the verified-user wrapper and `verify_jwt=false` configuration.
+4. Apply only the new forward migration. It replaces the one function's deliberate
+   application-conflict SQLSTATE with `PT409`, preserving its body, grants,
+   authorization, request/version binding and operation leases otherwise.
+5. Verify the recorded migration once, function version/config and advisor delta.
+   Using only task-created disposable accounts, require stale Edge/RPC requests to
+   return promptly with HTTP 409 / `stale` and exact RPC code `PT409`. Use bounded
+   deadlines and inspect authoritative metadata/ledger and request evidence;
+   never rerun an unbounded failing legacy request. Then verify fresh replacement,
+   removal, export/deletion and cleanup. No service disruption or policy changes.
+6. After backend verification, build the configured Dev APK from the verified
+   source and update Samsung/emulator in place. Preserve app data/signature;
+   complete the remaining physical QA below. Both PRs stay draft/unmerged.
+
+The order keeps the new handler compatible with the old database until the new
+exception is active. `delete-account` does not need redeployment: its cleanup
+requests use no expected version, so this stale branch is not involved. Leave
+the avatar-aware service intact. On uncertainty, stop distribution and inspect
+authoritative state before any retry or separately reviewed forward repair.
+
+### Initial rollout reference (already applied in Dev)
 
 The sole new migration relative to the completed PR #33 base is
 `supabase/migrations/20260907221034_profile_avatars.sql`. It creates the private
@@ -24,7 +65,7 @@ in the deployment record before proceeding. Preserve any newer remote work.
    migration or drift; do not run a broad push that would apply extra migrations.
    Review the migration diff, both function bundles/locks, CI/local integration
    evidence, current backup/recovery arrangements and private bucket limits.
-   This task has not accessed the hosted project's state.
+   This initial preflight was completed before the first Dev deployment.
 2. **Apply only `20260907221034_profile_avatars.sql`.** Use the repository's reviewed
    migration process with an explicit Dev target. No reset, destructive repair,
    manual Dashboard-only schema change or retention invocation is authorized.

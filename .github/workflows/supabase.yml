@@ -79,5 +79,16 @@ jobs:
           echo "::add-mask::$AVATAR_LOCAL_ANON"
           echo "::add-mask::$AVATAR_LOCAL_SERVICE"
           test "$AVATAR_LOCAL_URL" = 'http://127.0.0.1:54321'
+          supabase functions serve profile-avatar > "$RUNNER_TEMP/avatar-functions.log" 2>&1 &
+          # Readiness probes carry no user JWT and must never mutate data.
+          ready=false
+          for attempt in $(seq 1 30); do
+            if [ "$(curl --max-time 2 -s -o /dev/null -w '%{http_code}' "$AVATAR_LOCAL_URL/functions/v1/profile-avatar")" = '401' ]; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
           trap 'unset AVATAR_LOCAL_URL AVATAR_LOCAL_ANON AVATAR_LOCAL_SERVICE' EXIT
           deno test --config supabase/functions/profile-avatar/deno.json --frozen --allow-read --allow-net=127.0.0.1:54321,localhost:54321 --allow-env=AVATAR_LOCAL_URL,AVATAR_LOCAL_ANON,AVATAR_LOCAL_SERVICE supabase/functions/profile-avatar/avatar.local.test.ts

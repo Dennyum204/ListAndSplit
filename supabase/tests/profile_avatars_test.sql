@@ -48,7 +48,20 @@ select public.finish_profile_avatar_operation('aa000000-0000-4000-8000-000000000
 select throws_ok($$select public.begin_profile_avatar_operation('aa000000-0000-4000-8000-000000000001','ab000000-0000-4000-8000-000000000001','conflict',0)$$,
  '22023','conflicting avatar request','UUID reuse cannot change payload');
 select throws_ok($$select public.begin_profile_avatar_operation('aa000000-0000-4000-8000-000000000001',gen_random_uuid(),'stale',0)$$,
- '40001','avatar changed','stale version cannot overwrite photo');
+ 'PT409','avatar changed','stale version is an explicit non-retried application conflict');
+select ok((select version=1 and lease is null and lease_until is null
+  and current_file=(select(v#>>'{}')::uuid from avatar_results where k='file')
+  from private.profile_avatars where profile_id='aa000000-0000-4000-8000-000000000001'),
+ 'stale rejection preserves version, current file and released lease');
+select is((select count(*) from private.profile_avatar_files
+  where profile_id='aa000000-0000-4000-8000-000000000001'),1::bigint,
+ 'stale rejection stages no file');
+insert into avatar_results values('fresh_after_stale',public.begin_profile_avatar_operation(
+ 'aa000000-0000-4000-8000-000000000001',gen_random_uuid(),'fresh',1));
+select ok((select(v->>'lease')::uuid is not null from avatar_results where k='fresh_after_stale'),
+ 'fresh valid operation can acquire the lease immediately after conflict');
+select public.finish_profile_avatar_operation('aa000000-0000-4000-8000-000000000001',
+ (select(v->>'lease')::uuid from avatar_results where k='fresh_after_stale'));
 set local role authenticated;
 set local "request.jwt.claim.sub"='aa000000-0000-4000-8000-000000000002';
 select is(public.resolve_profile_avatar('profile','aa000000-0000-4000-8000-000000000001'),

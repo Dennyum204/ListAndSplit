@@ -65,6 +65,90 @@ Deno.test("local Storage/RPC upload, authorized read, export, removal and Auth-r
     if ((await invoke("PUT", 0, bytes)).status !== 200) {
       throw new Error("Local upload failed");
     }
+    // Exercise the deployed local Edge wrapper and real PostgREST HTTP path.
+    // Direct pgTAP/handler calls miss PostgREST 14's 40001 retry behaviour.
+    const session = (await user.auth.getSession()).data.session;
+    if (!session) throw new Error("Local fixture session missing");
+    const staleRequest = crypto.randomUUID();
+    const started = performance.now();
+    const stale = await fetch(`${url}/functions/v1/profile-avatar`, {
+      method: "PUT",
+      headers: {
+        apikey: anon,
+        Authorization: `Bearer ${session.access_token}`,
+        "content-type": "image/png",
+        "if-match": "0",
+        "x-request-id": staleRequest,
+      },
+      body: bytes,
+      signal: AbortSignal.timeout(5000),
+    });
+    if (
+      stale.status !== 409 || (await stale.json()).error !== "stale" ||
+      performance.now() - started >= 5000
+    ) throw new Error("Local HTTP stale request did not promptly conflict");
+    const directStale = await fetch(
+      `${url}/rest/v1/rpc/begin_profile_avatar_operation`,
+      {
+        method: "POST",
+        headers: {
+          apikey: service,
+          Authorization: `Bearer ${service}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          target_profile: id,
+          request_id: crypto.randomUUID(),
+          fingerprint: "remove",
+          expected_version: 0,
+        }),
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    if (
+      directStale.status !== 409 || (await directStale.json()).code !== "PT409"
+    ) {
+      throw new Error("Local RPC did not preserve exact PT409 SQLSTATE");
+    }
+    // Acquiring a fresh lease proves stale calls did not leave an operation open;
+    // inspect all durable keys without granting direct metadata access.
+    const probeLease = await admin.rpc("begin_profile_avatar_operation", {
+      target_profile: id,
+      request_id: crypto.randomUUID(),
+      fingerprint: "probe-after-stale",
+      expected_version: 1,
+    });
+    requireSuccess(probeLease);
+    if (
+      probeLease.data.version !== 1 || probeLease.data.files.length !== 1 ||
+      probeLease.data.files[0] !== probeLease.data.current_file ||
+      probeLease.data.completed
+    ) {
+      throw new Error(
+        "Stale request mutated version, request binding or file ledger",
+      );
+    }
+    requireSuccess(
+      await admin.rpc("finish_profile_avatar_operation", {
+        target_profile: id,
+        token: probeLease.data.lease,
+      }),
+    );
+    const fresh = await fetch(`${url}/functions/v1/profile-avatar`, {
+      method: "PUT",
+      headers: {
+        apikey: anon,
+        Authorization: `Bearer ${session.access_token}`,
+        "content-type": "image/png",
+        "if-match": "1",
+        "x-request-id": crypto.randomUUID(),
+      },
+      body: bytes,
+      signal: AbortSignal.timeout(5000),
+    });
+    if (fresh.status !== 200 || (await fresh.json()).version !== 2) {
+      throw new Error("Fresh HTTP replacement failed after stale conflict");
+    }
     const read = await invoke("GET");
     if (
       read.status !== 200 ||
@@ -98,10 +182,10 @@ Deno.test("local Storage/RPC upload, authorized read, export, removal and Auth-r
       throw new Error("Local export failed");
     }
     if (
-      (await invoke("DELETE", 1)).status !== 200 ||
+      (await invoke("DELETE", 2)).status !== 200 ||
       (await invoke("GET")).status !== 404
     ) throw new Error("Local remove failed");
-    if ((await invoke("PUT", 2, bytes)).status !== 200) {
+    if ((await invoke("PUT", 3, bytes)).status !== 200) {
       throw new Error("Local replacement failed");
     }
     const list = await user.rpc("create_active_list", {

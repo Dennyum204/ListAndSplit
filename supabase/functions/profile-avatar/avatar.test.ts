@@ -51,6 +51,8 @@ class Fake implements AvatarClient {
   completed = false;
   version = 0;
   failure: string | null = null;
+  failureCode = "40001";
+  failureMessage: string | undefined;
   deniedAfterDownload = false;
   resolves = 0;
   bytes = new Uint8Array(100);
@@ -58,7 +60,10 @@ class Fake implements AvatarClient {
     this.calls.push(name);
     this.args.push(args);
     if (this.failure === name) {
-      return Promise.resolve({ data: null, error: { code: "40001" } });
+      return Promise.resolve({
+        data: null,
+        error: { code: this.failureCode, message: this.failureMessage },
+      });
     }
     let data: unknown = null;
     if (name === "begin_profile_avatar_operation") {
@@ -258,6 +263,51 @@ Deno.test("completed upload retry neither uploads nor increments version", async
   );
   equal(await operation.replace(await png()), { version: 3, has_image: true });
   equal(fake.calls, ["begin_profile_avatar_operation"]);
+});
+for (
+  const [code, message, expectedStatus, expectedError] of [
+    ["PT409", "avatar changed", 409, "stale"],
+    ["40001", "avatar changed", 409, "stale"],
+    [
+      "40001",
+      "could not serialize access due to concurrent update",
+      503,
+      "retryable",
+    ],
+  ] as const
+) {
+  Deno.test(`avatar conflict mapping ${code}/${message} makes one attempt`, async () => {
+    const fake = new Fake();
+    fake.current = "old";
+    fake.files = ["old"];
+    fake.version = 7;
+    fake.failure = "begin_profile_avatar_operation";
+    fake.failureCode = code;
+    fake.failureMessage = message;
+    const response = await handleAvatar(request("DELETE"), actor, fake, fake);
+    equal(response.status, expectedStatus);
+    equal(await response.json(), { error: expectedError });
+    equal(fake.calls, [
+      "get_own_profile_avatar",
+      "begin_profile_avatar_operation",
+    ]);
+    equal(fake.version, 7);
+    equal(fake.files, ["old"]);
+    fake.failure = null;
+    equal(
+      (await handleAvatar(request("DELETE"), actor, fake, fake)).status,
+      200,
+    );
+  });
+}
+Deno.test("legacy compatibility does not relabel serialization errors from other RPCs", async () => {
+  const fake = new Fake();
+  fake.failure = "get_own_profile_avatar";
+  fake.failureMessage = "avatar changed";
+  const response = await handleAvatar(request("DELETE"), actor, fake, fake);
+  equal(response.status, 503);
+  equal(await response.json(), { error: "retryable" });
+  equal(fake.calls, ["get_own_profile_avatar"]);
 });
 for (const failure of ["upload", "remove", "commit_profile_avatar"]) {
   Deno.test(`${failure} failure retains recovery fence and never reports success`, async () => {

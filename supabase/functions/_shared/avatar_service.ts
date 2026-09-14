@@ -3,7 +3,10 @@ export interface AvatarClient {
   rpc(
     name: string,
     args?: Record<string, unknown>,
-  ): PromiseLike<{ data: unknown; error: { code?: string } | null }>;
+  ): PromiseLike<{
+    data: unknown;
+    error: { code?: string; message?: string } | null;
+  }>;
   storage: {
     from(bucket: string): {
       upload(
@@ -30,6 +33,13 @@ export async function avatarRpc(
 ): Promise<unknown> {
   const result = await client.rpc(name, args);
   if (result.error != null) {
+    // Compatibility with the already-deployed avatar migration only. Native
+    // serialization errors and errors from other RPCs must retain their code.
+    if (
+      name === "begin_profile_avatar_operation" &&
+      result.error.code === "40001" &&
+      result.error.message === "avatar changed"
+    ) throw new AvatarError("PT409");
     throw new AvatarError(result.error.code ?? "retryable");
   }
   return result.data;

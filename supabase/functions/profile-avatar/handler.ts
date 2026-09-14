@@ -121,7 +121,7 @@ export async function handleAvatar(
       : "retryable";
     const status = code === "42501"
       ? 401
-      : code === "40001" || code === "55P03"
+      : code === "PT409" || code === "55P03"
       ? 409
       : code === "22023" || code === "invalid_image"
       ? 422
@@ -129,7 +129,7 @@ export async function handleAvatar(
     return Response.json({
       error: code === "55P03"
         ? "busy"
-        : code === "40001"
+        : code === "PT409"
         ? "stale"
         : status === 422
         ? "invalid_image"
