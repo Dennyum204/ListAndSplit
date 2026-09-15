@@ -20,6 +20,13 @@ is required on the final combined source and by each applicable CI gate.
 
 ## Following branches
 
+`codex/launcher-welcome` follows the Chat/Login branch. It replaces Flutter's
+launcher resources with an original shared-list mark and adds a concurrent cold
+start cover. 45 startup/application checks pass, including restored signed-out,
+signed-in and recovery routes, early destination/reduced-motion bypass, no resume
+replay, failure recovery and EN/PT at 200% text. Dev debug APK compilation passed. Final device checks and the integrated suite
+remain pending at this checkpoint. PR #37 CI passed at 1d75bf8.
+
 Launcher/welcome and Android push are separate new draft PRs, stacked as needed.
 Firebase CLI 15.30.1 is installed locally; dedicated Spark project setup awaits
 the owner's local Firebase login. No Firebase project or hosted push migration

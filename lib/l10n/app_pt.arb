@@ -775,5 +775,8 @@
   "languageSaveFailed": "Não foi possível guardar o idioma. Tenta novamente.",
   "languageReadFailed": "Não foi possível ler o idioma guardado. Tenta novamente para o restaurar.",
   "showPasswordButton": "Mostrar palavra-passe",
-  "hidePasswordButton": "Ocultar palavra-passe"
+  "hidePasswordButton": "Ocultar palavra-passe",
+  "welcomeMessage": "Que bom ter-te por aqui.",
+  "welcomeRetryMessage": "Não foi possível iniciar. Tenta novamente.",
+  "welcomeRetryButton": "Tentar novamente"
 }

@@ -5,6 +5,7 @@ import 'package:list_and_split/core/presentation/app_bottom_navigation_bar.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/app/app.dart';
+import 'package:list_and_split/app/startup/startup_host.dart';
 import 'package:list_and_split/app/router/app_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/core/config/configuration_provider.dart';
@@ -43,6 +44,42 @@ import 'support/ui_preview_capture.dart';
 
 void main() {
   setUpAll(prepareUiPreviewFonts);
+
+  for (final session in [
+    const AuthSessionState.signedOut(),
+    verifiedSession,
+    recoverySession
+  ]) {
+    testWidgets(
+        'welcome preserves restored auth routing ${session.isPasswordRecovery} ${session.user?.id}',
+        (tester) async {
+      final auth = FakeAuthRepository(session: session);
+      addTearDown(auth.close);
+      await _pumpConfiguredApp(tester,
+          auth: auth,
+          profile: FakeProfileRepository(
+              profile: FakeProfileRepository.completeProfile),
+          startup: true);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(find.byType(WelcomeApp), findsNothing);
+      final container = ProviderScope.containerOf(
+          tester.element(find.byType(ListAndSplitApp)));
+      expect(
+          container
+              .read(appRouterProvider)
+              .routeInformationProvider
+              .value
+              .uri
+              .path,
+          session.isPasswordRecovery
+              ? AppRoutes.passwordRecovery
+              : session.user == null
+                  ? AppRoutes.signIn
+                  : AppRoutes.lists);
+      expect(auth.signOutCalls, 0);
+    });
+  }
 
   testWidgets(
       'language selection preserves router, selected tab, drafts, sign-out and restart',
@@ -1483,6 +1520,7 @@ Future<void> _pumpConfiguredApp(
   FakePublicTemplateModerationRepository? moderation,
   ThemePreferenceRepository? appearance,
   LanguagePreferenceRepository? language,
+  bool startup = false,
 }) async {
   final defaultFriendships = FakeFriendshipRepository()
     ..summaryResult = const FriendshipSummary(
@@ -1534,7 +1572,9 @@ Future<void> _pumpConfiguredApp(
           moderation ?? FakePublicTemplateModerationRepository(),
         ),
       ],
-      child: const ListAndSplitApp(),
+      child: startup
+          ? StartupHost(initialize: () async => const ListAndSplitApp())
+          : const ListAndSplitApp(),
     )),
   );
   await tester.pumpAndSettle();
