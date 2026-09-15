@@ -786,7 +786,7 @@ void main() {
         matching: find.byType(Scrollable),
       ),
     );
-    scrollable.position.jumpTo(0);
+    scrollable.position.jumpTo(scrollable.position.minScrollExtent);
     await tester.pump();
     chat.listFailure = StateError('offline');
 
@@ -809,6 +809,70 @@ void main() {
     await tester.tap(find.byKey(const Key('listChatLoadOlderButton')));
     await tester.pumpAndSettle();
     expect(find.text('Retry older messages'), findsNothing);
+  });
+
+  testWidgets(
+      'background refresh and sending preserve bubble geometry and identity',
+      (tester) async {
+    final chat = FakeActiveListChatRepository()
+      ..messages = [
+        for (var i = 1; i <= 12; i++)
+          activeListChatTestMessage(
+              sequence: i,
+              body:
+                  'Variable message $i with enough words to wrap on narrow devices',
+              isMine: true),
+      ];
+    final harness = await _pump(tester,
+        lists: _listsRepository(),
+        chat: chat,
+        initialLocation: '/lists/list-1/chat');
+    final controller = harness.container
+        .read(activeListChatControllerProvider('list-1').notifier);
+    final bubble = find.byKey(Key('chat-message-${chat.messages.last.id}'));
+    final element = tester.element(bubble);
+    final bounds = tester.getRect(bubble);
+    final page = Completer<ActiveListChatPage>();
+    chat.onList = (_, __, ___) => page.future;
+    final refresh = controller.reconcile();
+    await tester.pump();
+    await tester.pump();
+    expect(
+        harness.container
+            .read(activeListChatControllerProvider('list-1'))
+            .isRefreshing,
+        isTrue);
+    expect(tester.element(bubble), same(element));
+    expect(tester.getRect(bubble), bounds);
+    expect(
+        tester
+            .widget<IconButton>(
+                find.byKey(Key('delete-chat-message-${chat.messages.last.id}')))
+            .onPressed,
+        isNull);
+    page.complete(ActiveListChatPage(
+        messages: chat.messages.reversed.toList(),
+        hasMore: false,
+        nextBeforeMessagePosition: null));
+    await refresh;
+    await tester.pumpAndSettle();
+    expect(tester.getRect(bubble), bounds);
+    final sendResult = Completer<ActiveListChatMessage>();
+    chat.onSend = (_, __, ___) => sendResult.future;
+    final send = controller.send('One confirmed bubble');
+    await tester.pump();
+    expect(tester.element(bubble), same(element));
+    expect(tester.getRect(bubble), bounds);
+    sendResult.complete(activeListChatTestMessage(
+        sequence: 13, body: 'One confirmed bubble', isMine: true));
+    await send;
+    await tester.pumpAndSettle();
+    expect(find.text('One confirmed bubble'), findsOneWidget);
+    chat.onList = null;
+    await controller.reconcile();
+    await tester.pumpAndSettle();
+    expect(find.text('One confirmed bubble'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('older loading preserves the viewport and remote arrivals wait',
@@ -834,13 +898,16 @@ void main() {
         matching: find.byType(Scrollable),
       ),
     );
-    scrollable.position.jumpTo(0);
+    scrollable.position.jumpTo(scrollable.position.minScrollExtent);
     await tester.pump();
     final before = scrollable.position.pixels;
+    final anchor = find.text('Message 46');
+    final anchorBefore = tester.getTopLeft(anchor);
     await tester.tap(find.byKey(const Key('listChatLoadOlderButton')));
     await tester.pumpAndSettle();
 
-    expect(scrollable.position.pixels, greaterThan(before));
+    expect(scrollable.position.pixels, closeTo(before, 1));
+    expect(tester.getTopLeft(anchor).dy, closeTo(anchorBefore.dy, 1));
     expect(
       harness.container
           .read(activeListChatControllerProvider('list-1'))
@@ -851,7 +918,7 @@ void main() {
       'Message 1',
     );
 
-    scrollable.position.jumpTo(0);
+    scrollable.position.jumpTo(scrollable.position.minScrollExtent);
     await tester.pump();
     chat.messages.add(
       activeListChatTestMessage(sequence: 76, body: 'Remote newest'),
@@ -877,6 +944,40 @@ void main() {
     expect(find.text('Remote newest'), findsOneWidget);
     expect(
         chat.markedMessageIds.last, activeListChatTestMessage(sequence: 76).id);
+  });
+
+  testWidgets('keyboard and multiline composer retain tail or history anchor',
+      (tester) async {
+    addTearDown(tester.view.resetViewInsets);
+    final chat = FakeActiveListChatRepository()
+      ..messages = [
+        for (var i = 1; i <= 30; i++)
+          activeListChatTestMessage(sequence: i, body: 'Message $i'),
+      ];
+    await _pump(tester,
+        lists: _listsRepository(),
+        chat: chat,
+        initialLocation: '/lists/list-1/chat');
+    final scrollable = tester.state<ScrollableState>(find.descendant(
+        of: find.byKey(const Key('listChatMessages')),
+        matching: find.byType(Scrollable)));
+    tester.view.viewInsets = const FakeViewPadding(bottom: 160);
+    await tester.pumpAndSettle();
+    expect(scrollable.position.extentAfter, closeTo(0, 1));
+    await tester.enterText(
+        find.byKey(const Key('listChatComposer')), 'One\nTwo\nThree');
+    await tester.pumpAndSettle();
+    expect(scrollable.position.extentAfter, closeTo(0, 1));
+    scrollable.position.jumpTo(scrollable.position.pixels - 400);
+    await tester.pumpAndSettle();
+    final offset = scrollable.position.pixels;
+    tester.view.viewInsets = const FakeViewPadding();
+    await tester.pumpAndSettle();
+    expect(scrollable.position.pixels, closeTo(offset, 1));
+    await tester.enterText(find.byKey(const Key('listChatComposer')), 'Draft');
+    await tester.pumpAndSettle();
+    expect(scrollable.position.pixels, closeTo(offset, 1));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('new arrival at the bottom stays anchored and is marked visible',
