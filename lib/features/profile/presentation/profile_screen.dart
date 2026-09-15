@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
@@ -100,7 +101,8 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                             : null,
                   ),
                   LayoutBuilder(builder: (context, constraints) {
-                    final identity = IdentityBadge(
+                    final identity = ProfileAvatar(
+                      target: AvatarTarget.profile(widget.profile.id),
                       label: widget.profile.displayName ??
                           widget.profile.username!,
                       size: 72,
@@ -145,6 +147,7 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                     );
                   }),
                   const SizedBox(height: 8),
+                  AvatarEditorActions(disabled: isBusy),
                   Text(localizations.usernameImmutableHelper,
                       style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(height: 16),

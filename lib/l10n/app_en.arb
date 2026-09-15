@@ -1,4 +1,14 @@
 {
+  "avatarChoose": "Choose or change photo",
+  "avatarAdd": "Add avatar",
+  "avatarUpdate": "Update avatar",
+  "avatarRemove": "Remove photo",
+  "avatarSaving": "Updating profile photo…",
+  "avatarSaved": "Profile photo updated.",
+  "avatarBusy": "A photo operation is still recovering. Please try again in 15 minutes.",
+  "avatarStale": "Your photo changed on another device. Try again with the current photo.",
+  "avatarInvalidImage": "Choose a still photo up to 5 MB. This image could not be used.",
+  "avatarFailed": "We couldn't update your photo. Check your connection and try again.",
   "@@locale": "en",
   "appTitle": "List & Split",
   "appearanceTitle": "Appearance",
@@ -525,7 +535,7 @@
   "@accountDeletionDialogTitle": {
     "description": "Permanent account deletion confirmation dialog title."
   },
-  "accountDeletionIrreversibleWarning": "This cannot be undone. Your profile, friendships, blocks and notifications will be permanently removed. A new account will not restore them.",
+  "accountDeletionIrreversibleWarning": "This cannot be undone. Your profile, friendships, blocks and notifications will be permanently removed. A new account will not restore them. Your avatar is removed first; if account deletion fails, the account remains but its photo may already be gone.",
   "@accountDeletionIrreversibleWarning": {
     "description": "Explicit irreversible consequences shown before deletion."
   },

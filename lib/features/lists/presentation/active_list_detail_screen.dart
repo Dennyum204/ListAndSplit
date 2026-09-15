@@ -15,6 +15,7 @@ import 'package:list_and_split/features/lists/presentation/active_list_detail_co
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:list_and_split/features/templates/domain/private_template.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
@@ -1248,9 +1249,10 @@ class _GeneralNoteDialogState extends ConsumerState<_GeneralNoteDialog> {
                                     key: Key(
                                       'generalNoteMention-${participant.profileId}',
                                     ),
-                                    leading: CircleAvatar(
-                                      child: Text(
-                                          _participantInitial(participant)),
+                                    leading: ProfileAvatar(
+                                      label: participant.displayName,
+                                      target: AvatarTarget.profile(
+                                          participant.profileId),
                                     ),
                                     title: Text(
                                       _identityName(
@@ -1302,8 +1304,11 @@ class _GeneralNoteDialogState extends ConsumerState<_GeneralNoteDialog> {
                               key: Key(
                                 'generalNoteSelected-${participant.profileId}',
                               ),
-                              avatar: CircleAvatar(
-                                child: Text(_participantInitial(participant)),
+                              avatar: ProfileAvatar(
+                                label: participant.displayName,
+                                target:
+                                    AvatarTarget.profile(participant.profileId),
+                                size: 24,
                               ),
                               label: Text(
                                 '${_identityName(
@@ -1993,8 +1998,9 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
                             }
                           })
                       : null,
-                  secondary: CircleAvatar(
-                    child: Text(_participantInitial(participant)),
+                  secondary: ProfileAvatar(
+                    label: participant.displayName,
+                    target: AvatarTarget.profile(participant.profileId),
                   ),
                   title: Text(
                     participant.profileId == authenticatedProfileId
@@ -2176,18 +2182,13 @@ class _AssigneeSummary extends StatelessWidget {
               const Icon(Icons.person_off_outlined, size: 18)
             else
               for (final assignee in item.assignees.take(2)) ...[
-                CircleAvatar(
+                ProfileAvatar(
                   key: Key(
                     'itemAssigneeAvatar-${item.id}-${assignee.profileId}',
                   ),
-                  radius: 10,
-                  child: Text(
-                    _identityInitial(
-                      displayName: assignee.displayName,
-                      username: assignee.username,
-                    ),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
+                  size: 20,
+                  label: assignee.displayName,
+                  target: AvatarTarget.profile(assignee.profileId),
                 ),
                 const SizedBox(width: 2),
               ],
@@ -2205,21 +2206,6 @@ class _AssigneeSummary extends StatelessWidget {
       ),
     );
   }
-}
-
-String _participantInitial(ActiveListParticipant participant) {
-  return _identityInitial(
-    displayName: participant.displayName,
-    username: participant.username,
-  );
-}
-
-String _identityInitial({
-  required String displayName,
-  required String username,
-}) {
-  final source = _identityName(displayName: displayName, username: username);
-  return source.characters.first.toUpperCase();
 }
 
 String _identityName({

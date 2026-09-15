@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
@@ -261,7 +262,9 @@ class _RelationshipCard extends ConsumerWidget {
           children: [
             Row(
               children: [
-                IdentityBadge(label: relationship.displayName),
+                ProfileAvatar(
+                    label: relationship.displayName,
+                    target: AvatarTarget.profile(relationship.id)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

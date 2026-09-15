@@ -78,9 +78,23 @@ without a separate background behind the caption.
 - The initial profile capability is owner-only. Users can read and update only
   their own approved fields; cross-user search/discovery is deferred until it can
   account for blocking.
-- Avatar editing is accepted future behavior. Image selection, upload, Storage
-  buckets, object policies, and avatar lifecycle are outside the initial profile
-  slice.
+- Optional current avatars are implemented in the separate P-062/A-076 source
+  slice: gallery selection, replacement/removal, and current images on Profile,
+  Chat, Split and existing authorized identity cards. The initial profile slice
+  did not include avatars. Deployment and physical QA remain separate gates.
+- Avatars are visible to verified completed users authorized to view the profile,
+  including nonfriends; either-direction blocks deny them. Chat uses visible
+  message context without exposing a new sender identifier. Deleted identities
+  use the generic fallback, never a historical photo snapshot.
+- Only a re-encoded 256x256 PNG thumbnail is uploaded, without source metadata.
+  Cancellation makes no change. Stale/busy/offline errors stop progress and allow
+  authoritative recovery; repeated taps cannot duplicate the running operation.
+- The avatar is removed before account deletion. If deletion fails, the account
+  is retained for retry but its photo may already be gone; confirmation explains
+  this exception to the otherwise atomic database lifecycle.
+- The avatar-aware client downloads export v13 from the authenticated Edge
+  endpoint, preserving all v12 fields plus only its own sanitized photo or null.
+  Existing export RPCs and document schemas 1-12 are unchanged.
 
 ### Account data export and deletion lifecycle
 
@@ -650,7 +664,7 @@ copies succeed; duplicate-name rows each consume one place.
   independent, and Production remains unscheduled until separately authorized.
   Account export v11 adds role-specific sent/received offer projections while
   leaving v1-v10 unchanged. Its shape remains strictly supported by the current
-  v12 Flutter export parser.
+  v13 Flutter export parser.
 
 #### Public Template reporting and moderation
 
@@ -1063,7 +1077,8 @@ Notification links and later feature deep-link contracts remain open.
 - P-059 selects participant counts only, with a backend/domain PR followed by a
   separate Figma UI PR preserving existing behavior. Category icon selection,
   avatars, list covers, template images, Chat media, and a Chat enable/disable
-  switch are not included. The count foundation requires a separately authorized
+  switch are not included in that count/refactor delivery. P-062/A-076 separately
+  select current avatars. The count foundation requires a separately authorized
   migration rollout before a client using v2 reads is distributed; it does not
   itself deliver the UI refactor or complete the overall feature-freeze review.
 - No production Supabase or Firebase project without separate explicit
@@ -1094,7 +1109,7 @@ choose them:
 
 - A support or administrator correction process for immutable usernames, including
   its authorization and audit requirements.
-- Avatar storage, upload validation, privacy, replacement, and deletion lifecycle.
+- Other image/media lifecycles beyond P-062/A-076's current profile avatars.
 - Public-template global/ranked recommendation and broader discovery beyond the
   accepted chronological friends-only feed.
 - Notification archive/delete/preferences, later types, push-safe payloads,

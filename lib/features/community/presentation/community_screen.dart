@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
@@ -222,7 +223,9 @@ class _DiscoveryResultCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                IdentityBadge(label: profile.displayName),
+                ProfileAvatar(
+                    label: profile.displayName,
+                    target: AvatarTarget.profile(profile.id)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

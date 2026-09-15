@@ -59,8 +59,9 @@ Localized accessible cards are implemented in the separate PR #33. The foundatio
 reuses existing private account reconciliation without a stored counter or Storage
 infrastructure. Its reviewed migration must be deployed to a separately
 authorized environment before distributing the new client; no hosted deployment
-or physical QA is implied by this source change. Category icons, avatars, list
-covers, template images, and changes to Chat remain unselected. The Figma UI
+or physical QA is implied by this source change. Category icons, list
+covers, template images, and changes to Chat remain unselected; avatars are now
+separately selected by P-062/A-076. The Figma UI
 refactor follows as the second PR and does not introduce those optional features.
 PR #32 is merged. PR #33 implements the reference-driven presentation separately:
 themes/shared controls, authentication, Lists/Chat/Split, Templates/Shared Templates,
@@ -69,8 +70,14 @@ template feed first; exact-username discovery remains available from its Friends
 action. Implementation and automated rendering do not imply completed physical
 QA, hosted participant-count rollout, beta readiness, or final branding.
 The visual QA follow-up includes whole-destination selection pills, compact list
-overview cards and external unfilled dialog captions. Real avatar uploads require
-a separately resolved Storage/privacy/lifecycle contract; see O-P16/O-A13.
+overview cards and external unfilled dialog captions. Fernando separately
+approved current gallery avatars under P-062/A-076. Their feature branch is
+stacked on PR #33: private Storage/Edge authorization, replacement/removal,
+Profile/Chat/Split rendering, export v13 and pre-Auth binary cleanup. It also
+contains the authorized owner-Split account-deletion regression fix. This source
+work does not imply deployment, completed physical QA or Production readiness.
+The migration and both avatar-aware Edge Functions must be deployed under separate
+authorization before distributing the new client. Other media remain unselected.
 
 ## Phase 0 — Bootstrap foundation (implemented)
 
@@ -144,8 +151,8 @@ references that row without replacing its action authority and still excludes
 push delivery, other notification types, and public profiles. The four-tab
 authenticated shell now includes secure shared-list membership and private
 account-scoped Realtime reconciliation.
-The immutable-username support/admin correction path and avatar storage lifecycle
-remain open and must be resolved before a later slice encodes either.
+The immutable-username support/admin correction path remains open. Current avatar
+storage lifecycle is resolved by P-062/A-076, separately from the initial slice.
 Shared-resource ownership/deletion and the Public Template v1 moderation/retention
 contract are resolved. Administrator deletion, appeal/compliance, moderation/legal
 retention beyond that contract, Storage cleanup, and broader compliance obligations
@@ -475,7 +482,7 @@ does not make them prerequisites for redesign, beta, or Production:
 
 - offline read caching and a separately designed offline mutation queue;
 - push delivery plus notification preferences/archive;
-- avatars and image uploads;
+- other image uploads beyond P-062/A-076 current avatars;
 - expanded notification and feature deep links;
 - advanced Split percentages, receipts, recurring expenses, and charts;
 - additional locales;

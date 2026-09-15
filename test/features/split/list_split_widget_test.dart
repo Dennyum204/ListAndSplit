@@ -9,6 +9,7 @@ import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:list_and_split/features/split/domain/list_split.dart';
 import 'package:list_and_split/features/split/domain/list_split_repository.dart';
 import 'package:list_and_split/features/split/presentation/list_split_providers.dart';
@@ -43,10 +44,27 @@ void main() {
             find.byKey(
                 const ValueKey('splitBalance-$splitOwnerParticipantId')));
         expect(find.byKey(const Key('splitBalanceCards')), findsOneWidget);
+        final balanceAvatar = find.descendant(
+          of: find
+              .byKey(const ValueKey('splitBalance-$splitOwnerParticipantId')),
+          matching: find.byType(ProfileAvatar),
+        );
+        expect(tester.widget<ProfileAvatar>(balanceAvatar).target,
+            const AvatarTarget.split(splitOwnerParticipantId));
         final expense = repository.overview.expenses.single;
         await _scrollSplitUntilVisible(
             tester, find.byKey(ValueKey('splitExpense-${expense.id}')));
         expect(find.text(expense.description), findsOneWidget);
+        final expenseAvatars = tester.widgetList<ProfileAvatar>(find.descendant(
+          of: find.byKey(ValueKey('splitExpense-${expense.id}')),
+          matching: find.byType(ProfileAvatar),
+        ));
+        expect(
+            expenseAvatars.map((avatar) => avatar.target),
+            containsAll([
+              AvatarTarget.split(expense.payerParticipantId),
+              ...expense.beneficiaryParticipantIds.map(AvatarTarget.split),
+            ]));
         expect(tester.takeException(), isNull);
         expect(repository.overview.expenses.single.amountMinor,
             expense.amountMinor);
@@ -487,6 +505,18 @@ void main() {
       tester,
       find.byKey(ValueKey('splitExpense-${expense.id}')),
     );
+    final identityMarkers = tester.widgetList<ProfileAvatar>(find.descendant(
+      of: find.byKey(ValueKey('splitExpense-${expense.id}')),
+      matching: find.byType(ProfileAvatar),
+    ));
+    expect(
+        identityMarkers
+            .any((avatar) => avatar.target == null && avatar.label.isEmpty),
+        isTrue);
+    expect(
+        identityMarkers.any((avatar) =>
+            avatar.target == const AvatarTarget.split(formerParticipantId)),
+        isFalse);
     await tester.tap(find.byKey(ValueKey('splitExpense-${expense.id}')));
     await tester.pumpAndSettle();
 

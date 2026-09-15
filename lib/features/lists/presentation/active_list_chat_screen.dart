@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
@@ -693,8 +694,12 @@ class _ChatMessageCard extends StatelessWidget {
                 if (!message.isMine) ...[
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: IdentityBadge(
-                        label: message.senderDisplayName ?? '', size: 32),
+                    child: ProfileAvatar(
+                        label: message.senderDisplayName ?? '',
+                        target: message.isDeleted
+                            ? null
+                            : AvatarTarget.chat(message.id),
+                        size: 32),
                   ),
                   const SizedBox(width: 8),
                 ],
@@ -772,6 +777,17 @@ class _ChatMessageCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (message.isMine && !message.isDeleted) ...[
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: ProfileAvatar(
+                      label: message.senderDisplayName ?? sender,
+                      target: AvatarTarget.chat(message.id),
+                      size: 32,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

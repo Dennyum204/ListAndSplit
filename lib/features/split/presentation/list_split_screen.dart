@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
@@ -459,7 +460,10 @@ class _BalanceTile extends StatelessWidget {
           padding: const EdgeInsets.all(4),
           child: Column(
             children: [
-              IdentityBadge(
+              ProfileAvatar(
+                  target: participant.isAnonymized
+                      ? null
+                      : AvatarTarget.split(participant.id),
                   backgroundColor:
                       Theme.of(context).brightness == Brightness.dark
                           ? AppPalette.inputCream
@@ -493,17 +497,22 @@ class _BalanceTile extends StatelessWidget {
 }
 
 class _SplitIdentity extends StatelessWidget {
-  const _SplitIdentity({required this.name});
+  const _SplitIdentity({required this.name, required this.participant});
   final String name;
+  final ListSplitParticipant? participant;
   @override
   Widget build(BuildContext context) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IdentityBadge(
+          ProfileAvatar(
+              target: participant == null || participant!.isAnonymized
+                  ? null
+                  : AvatarTarget.split(participant!.id),
               backgroundColor: Theme.of(context).brightness == Brightness.dark
                   ? AppPalette.inputCream
                   : AppPalette.cardBlue,
-              label: name,
+              label:
+                  participant == null || participant!.isAnonymized ? '' : name,
               size: 32),
           const SizedBox(height: 4),
           Text(name,
@@ -591,7 +600,8 @@ class _SettlementSuggestionCard extends StatelessWidget {
       child: ExcludeSemantics(
         child: Row(
           children: [
-            Expanded(child: _SplitIdentity(name: payerName)),
+            Expanded(
+                child: _SplitIdentity(name: payerName, participant: payer)),
             Flexible(
                 child: Column(children: [
               const Icon(Icons.arrow_forward_rounded),
@@ -599,7 +609,9 @@ class _SettlementSuggestionCard extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelMedium),
             ])),
-            Expanded(child: _SplitIdentity(name: recipientName)),
+            Expanded(
+                child: _SplitIdentity(
+                    name: recipientName, participant: recipient)),
           ],
         ),
       ),
@@ -1396,6 +1408,10 @@ class _ExpenseCardState extends ConsumerState<_ExpenseCard> {
     final payerName = payer == null
         ? localizations.splitFormerParticipant
         : _participantName(localizations, payer);
+    final beneficiaries = [
+      for (final id in widget.expense.beneficiaryParticipantIds)
+        widget.overview.participantById(id),
+    ];
     final beneficiaryNames = [
       for (final id in widget.expense.beneficiaryParticipantIds)
         widget.overview.participantById(id) == null
@@ -1435,13 +1451,20 @@ class _ExpenseCardState extends ConsumerState<_ExpenseCard> {
                     '${localizations.splitExpenseParticipantsLabel}: ${beneficiaryNames.join(', ')}',
                 child: ExcludeSemantics(
                     child: Wrap(spacing: 2, runSpacing: 2, children: [
-                  for (final name in beneficiaryNames)
-                    IdentityBadge(
+                  for (var index = 0; index < beneficiaryNames.length; index++)
+                    ProfileAvatar(
+                        target: beneficiaries[index] == null ||
+                                beneficiaries[index]!.isAnonymized
+                            ? null
+                            : AvatarTarget.split(beneficiaries[index]!.id),
                         backgroundColor:
                             Theme.of(context).brightness == Brightness.dark
                                 ? AppPalette.inputCream
                                 : AppPalette.cardBlue,
-                        label: name,
+                        label: beneficiaries[index] == null ||
+                                beneficiaries[index]!.isAnonymized
+                            ? ''
+                            : beneficiaryNames[index],
                         size: 24),
                 ])),
               ),
@@ -1449,12 +1472,16 @@ class _ExpenseCardState extends ConsumerState<_ExpenseCard> {
                 label: localizations.splitExpensePaidBy(
                     payerName, beneficiaryNames.length),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  IdentityBadge(
+                  ProfileAvatar(
+                      target: payer == null || payer.isAnonymized
+                          ? null
+                          : AvatarTarget.split(payer.id),
                       backgroundColor:
                           Theme.of(context).brightness == Brightness.dark
                               ? AppPalette.inputCream
                               : AppPalette.cardBlue,
-                      label: payerName,
+                      label:
+                          payer == null || payer.isAnonymized ? '' : payerName,
                       size: 24),
                   const SizedBox(width: 6),
                   Flexible(

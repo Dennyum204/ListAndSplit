@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
@@ -163,7 +164,9 @@ class _PublicTemplateDetailScreenState
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      IdentityBadge(
+                                      ProfileAvatar(
+                                          target: AvatarTarget.profile(
+                                              loaded.profile.id),
                                           label: loaded.profile.displayName),
                                       const SizedBox(width: 12),
                                       Expanded(

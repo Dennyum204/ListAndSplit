@@ -13,7 +13,7 @@ camera/audio, avatar and template-image controls. Live Figma is not required.
 | 5 Chat | PR #33: incoming/outgoing alignment/colours, external identity and compact composer; preserve text sends, tombstones, paging, retry, unread/navigation and access restrictions. No media controls. |
 | 6 Dropdown captions | PR #33: plain persistent AppDialogField captions above filled dropdowns. Shared 4dp vertical padding around non-dense controls reduces normal height to 56dp; values/icons remain centered and controls grow with text. Selection/validation/semantics and 48dp minimum targets remain. |
 | 7 Community cards | PR #33: author/title/profile action and publication/count on compact text-only cards with existing text colours. Image selection/preview and image-bearing cards are the next separate feature PR, gated by O-P19/O-A17. |
-| 8 Profile avatars | Existing PR #34: gallery selection, replacement/removal and identity rendering. Keep that branch unchanged here; later integrate the updated PR #33 base and verify its button/layout against images 15–16. |
+| 8 Profile avatars | Existing PR #34: gallery selection, replacement/removal and identity rendering. Its separately authorized integration now combines the completed PR #33 base with the existing avatar implementation; backend rollout and physical avatar QA remain gated. |
 | Additional Language selector | PR #33: System / English / Português, immediate app locale, device-local persistence and recoverable storage errors; preserve route/session/tab/drafts. |
 
 ## Verification and remaining QA
@@ -29,7 +29,8 @@ Automated/widget visual evidence is separate from Samsung physical QA. A built o
 installed Dev APK does not establish user sign-in, all-screen correctness,
 accessibility on hardware or two-device reconciliation. Record actual observations
 and leave unperformed scenarios pending. No hosted rollout, Production access,
-PR #34 change, account deletion or retention invocation belongs to this follow-up.
+account deletion or retention invocation belongs to this UI-only follow-up. The
+subsequent PR #34 integration is documented separately in PROFILE_AVATARS.md.
 
 The owner's September 14 “looks good overall” feedback is general visual feedback,
 not a pass for every previously pending functional or accessibility scenario.

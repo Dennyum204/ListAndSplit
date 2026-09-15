@@ -18,6 +18,7 @@ import 'package:list_and_split/features/lists/presentation/active_list_detail_sc
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
+import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fake_active_list_chat_repository.dart';
@@ -125,6 +126,13 @@ void main() {
               textScale: scale);
           expect(
               find.byKey(const Key('listSectionNavigation')), findsOneWidget);
+          expect(
+            tester
+                .widgetList<ProfileAvatar>(find.byType(ProfileAvatar))
+                .map((avatar) => avatar.target),
+            containsAll(
+                chat.messages.map((message) => AvatarTarget.chat(message.id))),
+          );
           await captureUiPreview(tester,
               'chat-${locale.languageCode}-${dark ? 'dark' : 'light'}-${scale == 2 ? 'large' : 'standard'}');
           final composer = find.byKey(const Key('listChatComposer'));

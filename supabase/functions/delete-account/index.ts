@@ -1,6 +1,10 @@
 import { withSupabase } from "@supabase/server";
 import { handleDeleteAccount } from "./handler.ts";
 import {
+  type AvatarClient,
+  deleteAvatarBeforeAccount,
+} from "../_shared/avatar_service.ts";
+import {
   hardDeleteAuthenticatedUser,
   type UserScopedDeletionClient,
   validateDeletion,
@@ -17,9 +21,14 @@ export default {
           confirmation,
         ),
       hardDelete: (authenticatedUserId) =>
-        hardDeleteAuthenticatedUser(
-          context.supabaseAdmin,
+        deleteAvatarBeforeAccount(
+          context.supabaseAdmin as unknown as AvatarClient,
           authenticatedUserId,
+          () =>
+            hardDeleteAuthenticatedUser(
+              context.supabaseAdmin,
+              authenticatedUserId,
+            ),
         ),
     });
   }),

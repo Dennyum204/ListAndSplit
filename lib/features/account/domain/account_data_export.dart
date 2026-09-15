@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 class AccountDataExportFailure implements Exception {
   const AccountDataExportFailure();
 }
@@ -9,6 +12,7 @@ class AccountDataExportDocument {
     required this.exportedAt,
     required this.authIdentity,
     required this.profile,
+    this.avatar,
     required List<AccountOutgoingBlock> outgoingBlocks,
     required List<AccountActiveRelationship> activeRelationships,
     required List<AccountVisibleNotification> visibleNotifications,
@@ -36,6 +40,7 @@ class AccountDataExportDocument {
     if (product != supportedProduct ||
         !supportedSchemaVersions.contains(schemaVersion) ||
         authIdentity.id != profile.id ||
+        (schemaVersion < 13 && avatar != null) ||
         activeLists.any(
           (activeList) =>
               activeList.includesSplitField != (schemaVersion >= 5) ||
@@ -86,6 +91,7 @@ class AccountDataExportDocument {
         10 => _schemaTenRootKeys,
         11 => _schemaElevenRootKeys,
         12 => _schemaTwelveRootKeys,
+        13 => {..._schemaTwelveRootKeys, 'avatar'},
         _ => const <String>{},
       },
     );
@@ -100,6 +106,9 @@ class AccountDataExportDocument {
       profile: AccountProfileExport.fromJson(
         _requiredObject(json, 'profile'),
       ),
+      avatar: schemaVersion < 13 || json['avatar'] == null
+          ? null
+          : AccountAvatarExport.fromJson(_requiredObject(json, 'avatar')),
       outgoingBlocks: _requiredObjects(json, 'outgoing_blocks')
           .map(AccountOutgoingBlock.fromJson)
           .toList(growable: false),
@@ -163,7 +172,7 @@ class AccountDataExportDocument {
   }
 
   static const supportedProduct = 'list_and_split';
-  static const supportedSchemaVersion = 12;
+  static const supportedSchemaVersion = 13;
   static const supportedSchemaVersions = {
     1,
     2,
@@ -176,6 +185,7 @@ class AccountDataExportDocument {
     9,
     10,
     11,
+    12,
     supportedSchemaVersion,
   };
   static const _schemaOneRootKeys = {
@@ -225,6 +235,7 @@ class AccountDataExportDocument {
   final DateTime exportedAt;
   final AccountAuthIdentity authIdentity;
   final AccountProfileExport profile;
+  final AccountAvatarExport? avatar;
   final List<AccountOutgoingBlock> outgoingBlocks;
   final List<AccountActiveRelationship> activeRelationships;
   final List<AccountVisibleNotification> visibleNotifications;
@@ -244,6 +255,7 @@ class AccountDataExportDocument {
         'exported_at': _encodeDateTime(exportedAt),
         'auth_identity': authIdentity.toJson(),
         'profile': profile.toJson(),
+        if (schemaVersion >= 13) 'avatar': avatar?.toJson(),
         'outgoing_blocks': outgoingBlocks
             .map((block) => block.toJson())
             .toList(growable: false),
@@ -285,6 +297,44 @@ class AccountDataExportDocument {
           'authored_chat_messages': authoredChatMessages
               .map((message) => message.toJson())
               .toList(growable: false),
+      };
+}
+
+class AccountAvatarExport {
+  AccountAvatarExport._(this.dataBase64);
+  factory AccountAvatarExport.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(json, {'mime_type', 'width', 'height', 'data_base64'});
+    if (json['mime_type'] != 'image/png' ||
+        json['width'] != 256 ||
+        json['height'] != 256 ||
+        json['data_base64'] is! String ||
+        (json['data_base64'] as String).length > 436908) {
+      throw const AccountDataExportFailure();
+    }
+    try {
+      final bytes = base64Decode(json['data_base64'] as String);
+      if (bytes.length < 57 ||
+          bytes.length > 327680 ||
+          base64Encode(bytes) != json['data_base64'] ||
+          bytes[0] != 137 ||
+          bytes[1] != 80 ||
+          bytes[2] != 78 ||
+          bytes[3] != 71 ||
+          ByteData.sublistView(bytes).getUint32(16) != 256 ||
+          ByteData.sublistView(bytes).getUint32(20) != 256) {
+        throw const AccountDataExportFailure();
+      }
+      return AccountAvatarExport._(json['data_base64'] as String);
+    } catch (_) {
+      throw const AccountDataExportFailure();
+    }
+  }
+  final String dataBase64;
+  Map<String, dynamic> toJson() => {
+        'mime_type': 'image/png',
+        'width': 256,
+        'height': 256,
+        'data_base64': dataBase64
       };
 }
 
