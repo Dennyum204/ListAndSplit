@@ -121,6 +121,10 @@
     {
       "path": "supabase/migrations/20260914232057_recoverable_business_conflicts.sql",
       "sha256": "53e57192f1ad58309809e2b17898295d0f7a2cd884be4cefa25fc3356685282e"
+    },
+    {
+      "path": "supabase/migrations/20260915050418_android_push_delivery.sql",
+      "sha256": "a353729cf444958d5226d41fec7fad7000e016994660abbeac3a74c6085f4a1f"
     }
   ],
   "functions": [
@@ -183,6 +187,33 @@
         {
           "path": "supabase/functions/_shared/avatar_png.ts",
           "sha256": "daff1271e4b9a9af548f0b20fd4df8653773184e0d5cd1eaca847c0cd20dee25"
+        }
+      ]
+    },
+    {
+      "name": "push-dispatch",
+      "verify_jwt": false,
+      "authentication": "withSupabase auth:none; constant-time dedicated PUSH_WORKER_SECRET header before privileged access",
+      "files": [
+        {
+          "path": "supabase/functions/push-dispatch/index.ts",
+          "sha256": "2b632c7aa91097067922221941628c9cf667986a3f8240ff382093a0c2fabdfe"
+        },
+        {
+          "path": "supabase/functions/push-dispatch/handler.ts",
+          "sha256": "142837c4d8d3094f049963ad79936e3713ee190b49e84569827008487e52e188"
+        },
+        {
+          "path": "supabase/functions/push-dispatch/fcm.ts",
+          "sha256": "1645d097f4fe86b711eda05669949aedb544e555dede19e3fcf8ea3a43e4557f"
+        },
+        {
+          "path": "supabase/functions/push-dispatch/deno.json",
+          "sha256": "d10027f9ca797238b0d93a28754aad1602ea7ba453df872cd38ff94a94ec5c9b"
+        },
+        {
+          "path": "supabase/functions/push-dispatch/deno.lock",
+          "sha256": "4e01e4e63ae11e800efd1533ce344c3ee2166925df93c8cf3d5ef2e4f608accb"
         }
       ]
     }

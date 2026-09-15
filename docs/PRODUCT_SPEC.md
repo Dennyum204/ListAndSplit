@@ -917,6 +917,15 @@ copies succeed; duplicate-name rows each consume one place.
 
 ### Notifications and actionable requests
 
+The private Android beta additionally authorizes generic FCM alerts for new
+existing notification events and other participants' new Chat messages (P-063).
+They complement the persistent bell, never copy private content to lock screens,
+and require per-phone consent. Current access, blocking, read state, account and
+device binding are rechecked. No historical replay or self alerts; visible Chat
+suppresses redundant alerts. Force Stop, connectivity and battery constraints can
+prevent delivery. Exact scope/limits and pending rollout evidence are recorded in
+[ANDROID_PUSH.md](ANDROID_PUSH.md); this does not claim end-to-end delivery passed.
+
 - The app has a persistent in-app notification centre.
 - Every real friend-request transition into `pending` creates one persistent
   notification for the recipient and relationship version. Duplicate sends and

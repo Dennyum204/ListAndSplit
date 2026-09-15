@@ -84,6 +84,15 @@ integrated against this updated base only in a later task.
 
 ## Client composition
 
+Android push uses the native Firebase Messaging SDK behind a Flutter platform
+adapter and feature-owned repository/controller. Supabase Auth remains the sole
+account authority. A separate private outbox separates committed business events
+from bounded Edge HTTP dispatch. The native service validates account/binding and
+deduplicates data-only packets before generic notifications; authenticated RPCs
+resolve destinations. See [ANDROID_PUSH.md](ANDROID_PUSH.md) for the exact
+registration/rotation capability, security, concurrency, retention and rollout
+contract. APNs and Production push remain deferred.
+
 `StartupHost` starts configuration/Supabase initialization immediately while a
 localized charcoal brand cover animates. Once ready, the real application mounts
 behind that cover, so restoration and routing proceed during the three-second

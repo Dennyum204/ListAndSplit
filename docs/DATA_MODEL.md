@@ -1042,6 +1042,17 @@ number of transactions.
 
 ## Notifications and actions
 
+Private-beta push adds two operational private tables: `push_devices` (hashed
+installation capability, current profile/session/binding, FCM token, enabled flag
+and last registration) and `push_deliveries` (device/binding plus exactly one
+notification/message reference, expiry, bounded attempt/lease/status). Both force
+RLS and reject direct API access. Source/account/session/device deletion cascades
+delivery state. Ten-device enrollment is serialized per account; registrations
+expire at 30 days and hints at 15 minutes. Queue overflow is a soft cap of 10,000
+rows. Tokens/capabilities do not enter exports, Realtime or notification payloads.
+The background rotation capability cannot enroll or extend registration. See
+[ANDROID_PUSH.md](ANDROID_PUSH.md), P-063/A-079, for the exact boundaries.
+
 ### Persistent notification
 
 A notification belongs to one recipient. The current

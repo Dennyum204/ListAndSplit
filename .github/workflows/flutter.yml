@@ -44,3 +44,15 @@ jobs:
 
       - name: Test
         run: flutter test
+
+      - name: Set up Java for Android push boundary checks
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Compile Android and test native push envelope guards
+        run: |
+          flutter build apk --debug --flavor dev --no-pub
+          cd android
+          ./gradlew testDevDebugUnitTest

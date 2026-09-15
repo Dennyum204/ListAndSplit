@@ -28,6 +28,15 @@ void main() {
         '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">\n${paths.map((p) => '  <path android:pathData="$p" android:fillColor="#00000000" android:strokeColor="$color" android:strokeWidth="5" android:strokeLineCap="round" android:strokeLineJoin="round"/>').join('\n')}\n</vector>';
     write('$root/drawable/ic_launcher_foreground.xml', vector('#F4AE45'));
     write('$root/drawable/ic_launcher_monochrome.xml', vector('#FFFFFF'));
+    write(
+        '$root/drawable/ic_stat_list_split.xml',
+        vector('#FFFFFF')
+            .replaceAll(
+                'android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"',
+                'android:width="24dp" android:height="24dp" android:viewportWidth="64" android:viewportHeight="64"')
+            .replaceFirst('>\n  <path',
+                '>\n  <group android:translateX="-22" android:translateY="-20">\n  <path')
+            .replaceFirst('</vector>', '  </group>\n</vector>'));
     write('$root/values/brand_colors.xml',
         '<resources><color name="brand_charcoal">#202020</color></resources>');
     for (final version in [26, 33]) {

@@ -80,6 +80,8 @@ below as `P-033a`, `P-034a`, `A-035a`, and `A-036a`.
 | P-061 | Profile adds Language near Appearance: System (default), English and Português (European Portuguese). It applies immediately and is local to this device, survives restart/sign-out, and uses the existing supported-locale fallback in System mode. | Preserve authentication, router identity, selected tab and unsaved form contents. Language names replace flags. Read/write failures have localized, recoverable feedback; the selected value must reconcile with persisted storage after a failed write. No additional languages or account/export fields are introduced. |
 | P-062 | Optional current profile avatars are selected separately from PR #33: choose from the gallery, replace or remove; show the current image on existing authorized identity surfaces including Profile, Chat and Split. Any verified completed caller authorized to view the profile may view its avatar; friendship is not required and either-direction blocks deny access. | No public URLs, original photos, historical image snapshots, new Chat profile identifier, camera, list covers, template images or category icons. Removing the photo before Auth deletion is explicitly approved: on failure the account remains but the photo may already be gone. Export v13 includes only the owner's current sanitized image. See [PROFILE_AVATARS.md](PROFILE_AVATARS.md). |
 
+| P-063 | The next private-beta update selects Chat scroll/reconciliation stability, Login placeholders with persistent accessible names, original yellow/charcoal launcher branding and an approximately three-second concurrent cold welcome, plus Android FCM push for existing notification events and other participants' Chat messages. | Preserve live content, pagination, permissions, account restoration and offline recovery. Push is optional per device after sign-in, with generic EN/PT lock-screen text, current access/block/session checks and no history replay or sender self-alert. Suppress alerts for the visible Chat. Force Stop prevents delivery until reopening. Other media, APNs and public distribution remain deferred. |
+
 ### Architecture and delivery
 
 | ID | Decision | Consequence |
@@ -157,6 +159,7 @@ below as `P-033a`, `P-034a`, `A-035a`, and `A-036a`.
 | A-077 | The 2026-09-15 consolidated Android milestone authorizes release infrastructure in a dependent branch while PR #33/#34 acceptance completes. Pin the supported API36 toolchain, explicit native Production project reference, public-only client settings, secure external signing, versioned APK/AAB and symbol verification. | This supersedes A-069's deferral of local release preparation, not its public-distribution gates. Production project creation, paid resources and deployment still require approval; unconfigured Production fails closed. Preserve the legacy unsuffixed installation and signing material. O-P18, final branding, Play distribution and iOS remain separate. |
 
 | A-078 | The immediate milestone is a zero-cost private Android beta for Fernando and his wife on the existing List & Split Dev project, `lzwsgxziqxpxwyalkfuy`. Retain the separate `.dev` application ID and existing Dev signing identity for in-place updates. | No paid resources, subscriptions, purchases or Production creation. Preserve both users' content and sessions; no hosted reset/reseed or fixture cleanup against their data. Email verification and recovery must work through a free sender without weakening authentication. Template images and cosmetic work remain deferred. Public Chat moderation/terms, legal details, final branding, Production and Play are future gates, approximately 1–2 months later, not prerequisites for this private trial. Existing public features are not silently disabled. |
+| A-079 | A dedicated free Firebase Spark project supplies Android FCM only; Supabase remains the account and business authority. The selected Dev rollout uses private session-bound device registrations, committed-event outbox rows and a dedicated-secret Edge HTTP v1 dispatcher. | Per-account enrollment is bounded to ten devices; token rotation uses the original unexposed installation capability, binding and previous token without transferring authentication credentials to native code. Deliveries expire after 15 minutes, with four leased attempts and bounded retention; callbacks reauthorize destinations. Never send HTTP inside business mutations. Firebase credentials remain server-only. No billing, unrelated Firebase resources, Production, SMTP changes or historical backfill. Exact contracts and rollout/recovery gates are in [ANDROID_PUSH.md](ANDROID_PUSH.md); local tests are not end-to-end FCM evidence. |
 
 A-074's follow-up visual references require the selected navigation pill to
 enclose both icon and label, compact overview cards with accessible metadata, and
@@ -191,14 +194,14 @@ These items are part of the agreed direction but intentionally deferred:
 
 - Local SQLite caching for offline-tolerant active-list usage.
 - Presence, Broadcast Replay, and client-originated Broadcast.
-- FCM and APNs push delivery; Firebase project creation requires separate explicit
-  authorization.
+- APNs push delivery. Android FCM and a dedicated free Firebase project are now
+  selected by P-063/A-079; actual delivery remains gated by verified setup.
 - Notification preferences and physical cleanup.
 - Moderator assignment and each environment's retention scheduling require
   separate controlled rollout steps; Production remains separately authorized.
 - Production backend/environment creation under a separate explicit authorization.
 - List Chat attachments, images/files, reactions, typing indicators, audio/video,
-  push, and general private messages.
+  and general private messages. Android push is selected separately by P-063.
 - Play Console, final launcher branding, store publication, and iOS/TestFlight
   until the A-069 gates; A-077 now permits local signing/AAB/versioning preparation.
 
@@ -225,7 +228,7 @@ These items are part of the agreed direction but intentionally deferred:
 | O-A05 | What offline transaction boundaries extend the accepted online list/template copy versioning model? |
 | O-A07 | Which SQLite package, cache schema, mutation queue, tombstone, retry, and conflict algorithm should be used? |
 | O-A08 | What physical identifiers, audit/soft-delete conventions, indexes, and constraint strategy should future stored aggregates use beyond the accepted read-through feed and template-send model? |
-| O-A12 | What payload/localization contracts for later notification types and what push-token/delivery schema are needed? |
+| O-A12 | P-063/A-079 resolve Android private-beta delivery for existing notification types and Chat. What contracts extend these to future notification types or APNs? |
 | O-A13 | P-062/A-076 resolve current private profile avatars. Other binary objects and their parent lifecycle remain unselected. |
 | O-A14 | Which logging, analytics, crash reporting, privacy controls, and performance budgets are appropriate? |
 | O-A15 | What extended automated environment will exercise hosted Realtime, Storage, and later cross-service integration beyond deterministic bounded-handshake/recovery and gateway-to-mounted-projection tests, the accepted local private-channel transport smoke test, and CI migration/database/RLS coverage? |

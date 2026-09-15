@@ -404,6 +404,13 @@ payment-provider or money-transfer integration remain out of scope.
 
 ## Phase 5 — Offline tolerance and push delivery (optional later backlog)
 
+The 2026-09-15 private-beta request explicitly selects **Android FCM push** now,
+including free Spark project setup and strictly required additive Dev rollout.
+It does not select offline queues, APNs, Production or public distribution. The
+three draft PRs and exact verification/rollout checkpoint are recorded in
+[PRIVATE_BETA_NEXT_CHECKPOINT.md](PRIVATE_BETA_NEXT_CHECKPOINT.md) and
+[ANDROID_PUSH.md](ANDROID_PUSH.md). Hosted/physical completion must be witnessed.
+
 Goal: improve reliability and timeliness after online data flows are stable.
 
 Candidate slices:

@@ -7,6 +7,11 @@ import 'package:list_and_split/core/supabase/supabase_client_provider.dart';
 import 'package:list_and_split/features/account/domain/account_deletion_repository.dart';
 import 'package:list_and_split/features/account/presentation/account_deletion_providers.dart';
 import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
+import 'dart:async';
+import 'package:go_router/go_router.dart';
+import 'package:list_and_split/app/router/app_router.dart';
+import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/features/push/presentation/push_providers.dart';
 
 class AccountSessionLifecycle extends ConsumerStatefulWidget {
   const AccountSessionLifecycle({required this.child, super.key});
@@ -21,6 +26,17 @@ class AccountSessionLifecycle extends ConsumerStatefulWidget {
 class _AccountSessionLifecycleState
     extends ConsumerState<AccountSessionLifecycle> with WidgetsBindingObserver {
   var _isValidating = false;
+  GoRouter? _pushRouter;
+
+  void _syncPushRoute() {
+    if (!mounted || _pushRouter == null) return;
+    final match = RegExp(r'^/lists/([0-9a-f-]{36})/chat$')
+        .firstMatch(_pushRouter!.routeInformationProvider.value.uri.path);
+    unawaited(ref
+        .read(pushControllerProvider.notifier)
+        .visibleChat(match?.group(1))
+        .catchError((Object _) {}));
+  }
 
   @override
   void initState() {
@@ -30,6 +46,7 @@ class _AccountSessionLifecycleState
 
   @override
   void dispose() {
+    _pushRouter?.routeInformationProvider.removeListener(_syncPushRoute);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -38,6 +55,10 @@ class _AccountSessionLifecycleState
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _validateSession();
+      if (ref.read(supabaseRuntimeReadyProvider)) {
+        unawaited(ref.read(pushControllerProvider.notifier).refresh());
+        _syncPushRoute();
+      }
     }
   }
 
@@ -70,6 +91,19 @@ class _AccountSessionLifecycleState
       ref.watch(authSessionProvider);
       if (ref.watch(supabaseRuntimeReadyProvider)) {
         ref.watch(accountReconciliationCoordinatorProvider);
+        ref.watch(pushControllerProvider);
+        ref.listen(pushDestinationProvider, (_, destination) {
+          if (destination == null) return;
+          ref.read(appRouterProvider).go(destination.kind == 'chat'
+              ? AppRoutes.listChat(destination.listId!)
+              : AppRoutes.notifications);
+          ref.read(pushDestinationProvider.notifier).state = null;
+        });
+        if (_pushRouter == null) {
+          _pushRouter = ref.read(appRouterProvider);
+          _pushRouter!.routeInformationProvider.addListener(_syncPushRoute);
+          WidgetsBinding.instance.addPostFrameCallback((_) => _syncPushRoute());
+        }
       }
     }
     return widget.child;

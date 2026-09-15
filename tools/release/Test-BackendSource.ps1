@@ -14,7 +14,7 @@ foreach ($entry in $entries) {
 $actual = @(Get-ChildItem "$root/supabase/migrations/*.sql" | ForEach-Object { $_.Name } | Sort-Object)
 $expected = @($manifest.migrations | ForEach-Object { Split-Path $_.path -Leaf } | Sort-Object)
 if (Compare-Object $actual $expected) { throw 'Unexpected migration set.' }
-foreach ($name in 'delete-account','profile-avatar') {
+foreach ($name in 'delete-account','profile-avatar','push-dispatch') {
     $config = Get-Content "$root/supabase/config.toml" -Raw
     if ($config -notmatch "(?s)\[functions\.$name\][^\[]*?verify_jwt\s*=\s*false") { throw 'Reviewed function authentication configuration changed.' }
 }

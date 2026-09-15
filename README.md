@@ -1,6 +1,16 @@
 # List & Split
 
-## Private Android beta checkpoint — 2026-09-15
+## Next private-beta update
+
+Fernando and Susana report successful use of their existing accounts. The next
+update is tracked in [PRIVATE_BETA_NEXT_CHECKPOINT.md](docs/PRIVATE_BETA_NEXT_CHECKPOINT.md):
+Chat/Login fixes, original launcher/welcome and Android push in three new draft
+PRs. Push setup and actual FCM acceptance remain pending; see the exact
+[free Dev rollout plan](docs/ANDROID_PUSH.md). Existing data and signing identity
+are preserved. The prior release evidence below is historical, not a request to
+repeat the couple acceptance pass.
+
+## Previous private Android beta checkpoint — 2026-09-15
 
 Immediate target: zero-cost private beta for Fernando and his wife using existing
 List & Split Dev (`lzwsgxziqxpxwyalkfuy`) and the existing `.dev` signing identity.
@@ -12,10 +22,12 @@ Live dashboard: Fernando **Free**, all quotas below limits. Existing Gmail custo
 SMTP is enabled. A disposable account received confirmation, completed verified
 password login, and received recovery mail with confirmation protections intact.
 It was deleted through avatar-aware self-service afterward. This proves delivery
-and login for the configured sender, not the wife's as-yet-unwitnessed phone flow.
+and login for the configured sender. Fernando and Susana subsequently reported
+successful use of their own accounts.
 
-This is the single current release checkpoint. Optional template images, further
-cosmetic redesign, offline queues, push, extra languages and iOS release are deferred.
+Optional template images, further cosmetic redesign, offline queues, extra
+languages and iOS release remain deferred. The next update explicitly selects
+Android push and launcher branding.
 
 | Gate | Current evidence / next action |
 | --- | --- |
@@ -31,7 +43,7 @@ cosmetic redesign, offline queues, push, extra languages and iOS release are def
 | Emulator network recovery | A later Chat refresh warning was traced to emulator DNS failure. Same read-only RPC returned HTTP 200 from Windows in 0.5 seconds. A cold emulator boot using the Windows router DNS restored resolution and Chat loading, retaining login/data; no backend change or reset. |
 | Protected content | QA account A, its avatar and “Coisas para Casa 😁” are preserved. User adopted this account, so it is excluded from all fixture cleanup. Its current `example.test` email cannot receive recovery mail; changing it or moving user content requires a deliberate owner flow, never silent replacement. Both devices currently use A; wife uses her own verified real email. |
 | Signing / recovery | Exact existing Dev signer pinned, encrypted PKCS12 backup outside Git, restored private-key signing challenge verified and restored key used for this APK. Original key unchanged. Local DPAPI password recovery works on this Windows account; independent offline key/password storage is still required for PC-loss recovery. Protected unsuffixed app untouched. |
-| Remaining couple pass | Wife's own installation, email activation and recovery callback/password change, then mutual friendship, one disposable shared-list edit and Chat message each, agreeing Split balances and current avatars. Generic two-account functional coverage already passed; do not repeat destructive scenarios. |
+| Couple feedback | Fernando and Susana report successful use of their existing accounts. Reuse the existing functional evidence; this does not claim every future feature or recovery/accessibility scenario was physically checked. |
 | PR #36 / future release | Private-beta signer guards and release tooling are verified; Production remains fail-closed and unconfigured. Public Chat moderation/terms, owner/legal details, final branding, separate Production, durable public signing/backup and Play remain future gates in roughly 1–2 months. No paid resources or Production access is authorized. |
 
 Local evidence: `C:/Work/QA/ListAndSplit/release-20260915/device-qa`,

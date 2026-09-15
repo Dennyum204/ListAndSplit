@@ -3,8 +3,8 @@ $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $head = (git -C $root rev-parse HEAD).Trim()
 $manifest = & "$PSScriptRoot/Test-BackendSource.ps1" -ExpectedHead $head
-if ($manifest.migrations.Count -ne 30 -or $manifest.functions.Count -ne 2) { throw 'Unexpected reviewed backend inventory.' }
-'PASS exact clean source, 30 migration hashes and two function bundles'
+if ($manifest.migrations.Count -ne 31 -or $manifest.functions.Count -ne 3) { throw 'Unexpected reviewed backend inventory.' }
+'PASS exact clean source, 31 migration hashes and three function bundles'
 function Assert-Rejected([scriptblock]$Action, [string]$Message) {
     try { & $Action | Out-Null }
     catch { if ($_.Exception.Message -like "*$Message*") { "PASS $Message"; return }; throw }

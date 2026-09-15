@@ -1508,5 +1508,12 @@
   "hidePasswordButton": "Hide password",
   "welcomeMessage": "Good to have you here.",
   "welcomeRetryMessage": "We could not finish starting. Please try again.",
-  "welcomeRetryButton": "Try again"
+  "welcomeRetryButton": "Try again",
+  "pushTitle": "Push notifications",
+  "pushExplanation": "Get private alerts for invitations, updates and Chat. Lock-screen alerts do not include names, message text or amounts. Android asks permission when you enable them.",
+  "pushEnable": "Enable on this phone",
+  "pushUnavailable": "Push is not configured in this build. In-app notifications and Chat still work.",
+  "pushFailed": "Could not update notification settings. Try again when connected.",
+  "pushPermissionDenied": "Android notifications are off. You can allow them in Android settings.",
+  "pushOpenSettings": "Open Android notification settings"
 }
