@@ -6,9 +6,11 @@ param(
     [Parameter(Mandatory)][ValidateRange(2,2100000000)][int]$VersionCode,
     [Parameter(Mandatory)][string]$OutputDirectory,
     [string]$ConfigurationFile,
-    [switch]$PackagingOnly
+    [switch]$PackagingOnly,
+    [switch]$PrivateBeta
 )
 $ErrorActionPreference = 'Stop'
+if ($PrivateBeta -and ($Environment -ne 'dev' -or $PackagingOnly)) { throw 'Private beta requires configured Dev; Production is not permitted.' }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 Set-Location -LiteralPath $root
 if ((git rev-parse HEAD).Trim() -ne $ExpectedHead -or (git status --porcelain)) { throw 'Build requires the exact clean reviewed commit.' }
@@ -54,7 +56,7 @@ try {
     Copy-Item -LiteralPath "build/app/outputs/bundle/${Environment}Release/app-$Environment-release.aab" -Destination "$out/list-and-split.aab"
     if (Test-Path "build/app/outputs/mapping/${Environment}Release") { Copy-Item "build/app/outputs/mapping/${Environment}Release" "$out/android-symbols" -Recurse }
     $package = if ($Environment -eq 'dev') { 'com.ferbatech.listandsplit.dev' } else { 'com.ferbatech.listandsplit' }
-    $verification = & (Join-Path $PSScriptRoot 'Test-AndroidArtifacts.ps1') -Apk "$out/list-and-split.apk" -Aab "$out/list-and-split.aab" -Package $package -VersionName $VersionName -VersionCode $VersionCode
+    $verification = & (Join-Path $PSScriptRoot 'Test-AndroidArtifacts.ps1') -Apk "$out/list-and-split.apk" -Aab "$out/list-and-split.aab" -Package $package -VersionName $VersionName -VersionCode $VersionCode -PrivateBeta:$PrivateBeta
     $manifest = [ordered]@{Source=$ExpectedHead;Environment=$Environment;Configured=(!$PackagingOnly);Distributable=$false;DistributionGate='Backend smoke tests, signer continuity and owner authorization still required';VersionName=$VersionName;VersionCode=$VersionCode;Flutter=$pin.flutter;Verification=$verification;Artifacts=@()}
     foreach ($file in 'list-and-split.apk','list-and-split.aab') { $manifest.Artifacts += @{Name=$file;Sha256=(Get-FileHash "$out/$file").Hash.ToLowerInvariant()} }
     $manifest | ConvertTo-Json -Depth 8 | Set-Content "$out/manifest.json"

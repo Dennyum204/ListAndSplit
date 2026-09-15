@@ -1,6 +1,16 @@
 # List & Split
 
-## Android release checkpoint — 2026-09-15
+## Private Android beta checkpoint — 2026-09-15
+
+Immediate target: zero-cost private beta for Fernando and his wife using existing
+List & Split Dev (`lzwsgxziqxpxwyalkfuy`) and the existing `.dev` signing identity.
+No paid services or Production creation. Public/Play release is deferred roughly
+1–2 months; its branding/legal/moderation/infrastructure gates do not block this
+trial. The [private-beta procedure](docs/ANDROID_RELEASE.md#immediate-private-beta-a-078)
+records updates, free-plan limits, account setup, export and recovery limitations.
+Live dashboard: Fernando Free plan, all quotas below limits. Custom SMTP is off;
+default team-only email delivery blocks ordinary spouse signup/recovery until a
+free sender is configured and actual delivery is tested. Confirmation stays on.
 
 This is the single current release checkpoint. Optional template images, further
 cosmetic redesign, offline queues, push, extra languages and iOS release are deferred.
@@ -19,10 +29,12 @@ cosmetic redesign, offline queues, push, extra languages and iOS release are def
 | Signing | Protected unsuffixed Samsung app is debug-signed, fingerprint `acee26ad210976eb7796bb3884a02f7e404cba688fa96a51eccb6f6cf07a7055`. New durable signer outside Git is pinned in `tools/release/release-signer.sha256`. Owner decision on package/signing continuity and independent encrypted key backup is required before installation. |
 | Public distribution | O-P18 Chat terms/reporting/moderation, owner/legal details, external deletion URL and approved launcher branding remain open. Drafts are not published commitments. |
 
-Next: complete spoken TalkBack acceptance and obtain one batched owner decision
-for signing continuity, key backup, the focused Dev forward migration and the
-concrete Production rollout in [ANDROID_RELEASE.md](docs/ANDROID_RELEASE.md).
-Production scripts are prepared, not remotely executed or approved. Public material
+Next: finish spoken TalkBack acceptance, the authorized focused Dev conflict
+migration, dependency-ordered review/merges and a consistently signed configured
+Dev APK. The current Dev key has an encrypted backup outside Git, with a restored
+private-key signing challenge verified; an independent offline/password copy is
+still needed for PC-loss recovery. Production scripts are prepared, not remotely
+executed or approved. Public material
 is drafted in [PUBLIC_RELEASE_DRAFTS.md](docs/PUBLIC_RELEASE_DRAFTS.md).
 
 Harness corrections did not weaken product coverage: unavailable Chat raises

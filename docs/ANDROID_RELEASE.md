@@ -7,6 +7,101 @@ Do not use Dev or the unrelated discovered `Supabase Store` as Production.
 
 ## Source, toolchain and packaging
 
+### Immediate private beta (A-078)
+
+Use only existing Dev `lzwsgxziqxpxwyalkfuy`, package
+`com.ferbatech.listandsplit.dev`. This is a private two-person trial, not a public
+release. Billing must remain Free. Never reset/reseed hosted Dev, invoke cleanup
+against user content, or uninstall/clear either user's app to resolve updates.
+The protected unsuffixed app remains untouched. All destructive verification
+uses isolated local environments or explicitly task-owned disposable fixtures.
+
+For a clean reviewed commit, load the existing Dev key through the four local
+`LIST_AND_SPLIT_RELEASE_*` variables, and use `Build-AndroidRelease.ps1` with
+`-Environment dev -PrivateBeta -ConfigurationFile <local-public-json>` and an
+increasing versionCode. The JSON contains exactly APP_ENV=dev, SUPABASE_URL for
+the approved Dev host, and its public SUPABASE_PUBLISHABLE_KEY. The private-beta
+switch pins `private-beta-signer.sha256`; it cannot approve the protected package
+or unconfigured packaging. Although the historical Dev certificate is named
+Android Debug, the beta APK itself is a verified non-debuggable release build.
+Never replace this key with the unrelated new Production key. Keep one identical
+APK for both phones; AAB/public upload is not part of this trial.
+
+The encrypted Dev key backup and restored build key live outside Git at
+`%USERPROFILE%/.listandsplit/private-beta-signing/`. The restore test signs and
+verifies a challenge with the restored private key and compares its certificate
+to the installed Dev signer, also checking that the original key is unchanged.
+The local password is Windows-user DPAPI protected. This permits recovery on this
+Windows account; it is **not** disaster recovery after loss of the PC/account.
+Before relying on that protection, copy a separately password-encrypted keystore
+to owner-controlled USB/offline storage and keep its password separately. Restore
+to a new directory, sign a challenge, verify the pinned certificate, then verify
+an APK update on the Dev package; never overwrite the only key or test by
+uninstalling an app. Keep the original APK, SHA-256 manifest and symbols too.
+
+Install/update: transfer the local APK by USB or a private owner-controlled file
+transfer; verify its SHA-256 against the manifest. On each phone allow installation
+from that file app if needed, open the APK and choose Install/Update. Disable that
+file app's install permission afterward. Open **List & Split Dev**. An update must
+retain data and sessions; a signature mismatch is a stop condition, not a reason
+to uninstall. Both phones use the same version and signer for future updates.
+
+Each person uses their own verified email/password and username. Create account,
+open the confirmation email on that phone, complete onboarding, then test Forgot
+password with a newly received link. Enter passwords only on the phone. Confirm
+the `.dev` callback is allowed in Supabase Auth. Default Supabase SMTP delivers
+only to project team addresses, with two messages/hour; do not grant a spouse
+infrastructure access to work around this. Use an existing no-cost SMTP sender
+with verified sender identity and preserve confirmation protections. Actual
+delivery, activation and recovery remain a gate until witnessed on her account.
+
+Free-plan monitoring: inspect Fernando's Usage page weekly and before a larger
+test batch. At 2026-09-15 it showed 0.034/0.5 GB database, 0.008/5 GB egress,
+0/5 GB cached egress, rounded 0/1 GB Storage, 11/50,000 MAU, 204/500,000 Edge
+invocations, 566/2,000,000 Realtime messages and 3/200 peak connections. Metrics
+can lag (MAU up to 24h); rounded Storage does not mean no avatar exists. Quotas
+are shared across the organization. Exceeding Free quotas may restrict service;
+no automatic paid upgrade is authorized. Free projects may pause after inactivity
+and have no paid availability/backup guarantee. Paid image transformations are
+not required: the existing avatar client/Edge pipeline produces its own PNG.
+
+Zero-cost data protection: each user should use Profile → Export account data
+weekly and before risky changes, saving the JSON in encrypted owner-controlled
+storage and a separate offline copy. Export v13 includes the caller's current
+avatar, own permitted records, owned-list data, own authored Chat and applicable
+Split history. It intentionally excludes other people's private content, passwords,
+sessions and internal authorization data. Export both accounts, keep original
+avatar photographs and record important shared balances. There is no app import
+or one-click restore: these exports support manual reconstruction and are not a
+full database backup. No real-user export is performed by test harnesses.
+
+For fuller operator recovery, use the documented Supabase CLI database dump
+procedure against verified Dev and save roles/schema/data encrypted outside Git;
+read-only dump is distinct from a reset. Separately retain Storage binaries and
+the matching metadata because database backups do not contain avatar files.
+Auth, custom roles, extensions, Edge source/settings and secrets require their
+own reviewed restore steps. Restore testing belongs in an isolated local stack;
+never restore over hosted user data. Until that full restore is demonstrated,
+claim only the weekly export target (up to seven days of loss; manual recovery,
+no guaranteed recovery time), not a tested full-system backup.
+
+Existing retention continues unchanged: notifications expire at 180 days;
+terminal template-send history is cleaned after 180 days; fully closed inactive
+public-template moderation evidence after 24 months; Chat after 365 days under
+its existing daily schedule. Deleted usernames remain reserved for 30 days.
+Open evidence/active restrictions and pending offers follow their existing
+contracts. Account/list deletion remains permanent, with surviving other owners'
+Split history anonymized; avatar replacement/removal deletes superseded files.
+Exports cannot resurrect expired/deleted data. Do not invoke retention manually.
+
+Reuse the completed friendship/list/Chat/Split/avatar device and backend evidence.
+The final couple pass only needs both own accounts logged in, mutual friendship,
+one disposable shared list change each, one Chat message each, agreed Split
+balances and current avatars. Spoken TalkBack remains separately recorded.
+Public work resumes from this checkpoint: review O-P18 moderation/terms, owner
+and legal details, final branding, separate Production/SMTP/backups/signing,
+current Play requirements and publishing approval. None is claimed complete.
+
 Use a clean commit from `codex/android-release-readiness`, stacked on PR #35 and
 then #34/#33 until their individual review/acceptance gates pass. Never infer a
 merged state from a successful build. `tools/release/toolchain.json` pins Flutter

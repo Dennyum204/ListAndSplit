@@ -4,13 +4,20 @@ param(
     [Parameter(Mandatory)][string]$Aab,
     [Parameter(Mandatory)][string]$Package,
     [Parameter(Mandatory)][string]$VersionName,
-    [Parameter(Mandatory)][int]$VersionCode
+    [Parameter(Mandatory)][int]$VersionCode,
+    [switch]$PrivateBeta
 )
 $ErrorActionPreference = 'Stop'
-$buildTools = Join-Path $env:ANDROID_HOME 'build-tools/36.0.0'
 $expectedSigner = (Get-Content (Join-Path $PSScriptRoot 'release-signer.sha256') -Raw).Trim()
+if ($PrivateBeta) {
+    if ($Package -ne 'com.ferbatech.listandsplit.dev') { throw 'Private beta verification only permits the separate Dev package.' }
+    # Preserve updates to the existing private Dev installation. Never use this
+    # historical debug certificate to approve the protected Production package.
+    $expectedSigner = (Get-Content (Join-Path $PSScriptRoot 'private-beta-signer.sha256') -Raw).Trim()
+}
+$buildTools = Join-Path $env:ANDROID_HOME 'build-tools/36.0.0'
 $certificate = (& "$buildTools/apksigner.bat" verify --print-certs $Apk) -join "`n"
-if ($LASTEXITCODE -ne 0 -or $certificate -notmatch 'Signer #1 certificate SHA-256 digest: ([a-f0-9]+)' -or $Matches[1] -ne $expectedSigner -or $certificate -match 'CN=Android Debug') { throw 'APK signing identity verification failed.' }
+if ($LASTEXITCODE -ne 0 -or $certificate -notmatch 'Signer #1 certificate SHA-256 digest: ([a-f0-9]+)' -or $Matches[1] -ne $expectedSigner -or (!$PrivateBeta -and $certificate -match 'CN=Android Debug')) { throw 'APK signing identity verification failed.' }
 $badging = (& "$buildTools/aapt.exe" dump badging $Apk) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $badging -notmatch "package: name='$([regex]::Escape($Package))' versionCode='$VersionCode' versionName='$([regex]::Escape($VersionName))'" -or $badging -match 'application-debuggable' -or $badging -notmatch "sdkVersion:'24'" -or $badging -notmatch "targetSdkVersion:'36'") { throw 'Package, version, SDK or release-mode verification failed.' }
 $permissions = @([regex]::Matches($badging, "uses-permission: name='([^']+)'") | ForEach-Object { $_.Groups[1].Value })
