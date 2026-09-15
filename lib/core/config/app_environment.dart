@@ -39,16 +39,20 @@ class NativeAppIdentity {
   const NativeAppIdentity.android({
     required this.flavor,
     required this.applicationId,
+    this.productionProjectRef = '',
   }) : isAndroid = true;
 
   const NativeAppIdentity.nonAndroid()
       : isAndroid = false,
         flavor = null,
-        applicationId = null;
+        applicationId = null,
+        productionProjectRef = null;
+  String get approvedProductionProjectRef => productionProjectRef ?? '';
 
   final bool isAndroid;
   final String? flavor;
   final String? applicationId;
+  final String? productionProjectRef;
 }
 
 abstract interface class NativeAppIdentityReader {
@@ -80,6 +84,7 @@ class PlatformNativeAppIdentityReader implements NativeAppIdentityReader {
       return NativeAppIdentity.android(
         flavor: identity['flavor']!,
         applicationId: identity['applicationId']!,
+        productionProjectRef: identity['productionProjectRef'] ?? '',
       );
     } catch (_) {
       throw const NativeAppIdentityException();

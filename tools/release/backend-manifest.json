@@ -1,0 +1,190 @@
+{
+  "format": 1,
+  "normalization": "UTF-8, LF",
+  "migrations": [
+    {
+      "path": "supabase/migrations/20260718080943_auth_profile_foundation.sql",
+      "sha256": "a664d8380390c09b21ae46c17d2c4ea07d441cf4b76b2594a991c2a25f5040c0"
+    },
+    {
+      "path": "supabase/migrations/20260718154506_blocking_discovery_foundation.sql",
+      "sha256": "1bb7fe84ca1b6ddbe87c80876365d93eaf2ad77bbd54459fc01d1bb006b4e784"
+    },
+    {
+      "path": "supabase/migrations/20260718163525_user_blocks_explicit_rejection_policy.sql",
+      "sha256": "32425d327f37126a71f784e4dd1598261d2845530031be51fe586a4303985630"
+    },
+    {
+      "path": "supabase/migrations/20260718174550_friendship_relationship_foundation.sql",
+      "sha256": "76f4948f6ba965ad4cba8714bd465db438f3cf27f8f61ce9ad2f625665844067"
+    },
+    {
+      "path": "supabase/migrations/20260718185625_friendship_block_privacy_send_idempotency.sql",
+      "sha256": "ab74a2d8bd3374c393edf1b011eeeefc7448691260bed79cec00ebe8b6c0642a"
+    },
+    {
+      "path": "supabase/migrations/20260719055848_friend_request_notifications.sql",
+      "sha256": "49fdb04948fdd90daad2b64654d34a911921c3004ed1cc10b6cb0157155c4f4d"
+    },
+    {
+      "path": "supabase/migrations/20260719085810_account_data_export.sql",
+      "sha256": "d9a4292a78ddd6110b581099909eedfa2045ed3d4db19a10b88df5c4b738bca1"
+    },
+    {
+      "path": "supabase/migrations/20260719175110_account_deletion_lifecycle.sql",
+      "sha256": "e1f8290ddafa1e922251a35d5b0a5100e125eba9ae837829b76f980b519c0b50"
+    },
+    {
+      "path": "supabase/migrations/20260720141225_active_list_foundation.sql",
+      "sha256": "8e35e0bbf4aff6fa73c3c94ed9f4ca323d42fd45cacb1d7c8d77587b9ba88db7"
+    },
+    {
+      "path": "supabase/migrations/20260720181352_shared_list_membership.sql",
+      "sha256": "a7d7b0716102deb268197d77832ba0b33cce39064508cf863d9b80f92aea0767"
+    },
+    {
+      "path": "supabase/migrations/20260721054826_private_account_broadcast_invalidations.sql",
+      "sha256": "189bd988b42ee6c9c7a1a8c3f3ada287fe9b8b221a94d375d4d4c77288793c6d"
+    },
+    {
+      "path": "supabase/migrations/20260721092726_list_ownership_transfer.sql",
+      "sha256": "8021b5f7b7a873eba18445fc861a59f3f550105ce9459df6eac596b7fea6df79"
+    },
+    {
+      "path": "supabase/migrations/20260721132405_private_templates_categories.sql",
+      "sha256": "cb1425aa0a20ac65e1508d671ac30a02d3ec413b13e093eb4f2ab77e8f0b62c0"
+    },
+    {
+      "path": "supabase/migrations/20260722052638_expense_splitting_foundation.sql",
+      "sha256": "c79bea7b0d8515281bfdb247068774a8e4282d9908bd61f6d78ef0031fbf6ef2"
+    },
+    {
+      "path": "supabase/migrations/20260723121712_split_settle_up_foundation.sql",
+      "sha256": "130bffc15bd69beb019ce7bfa49fece494b3397981e39228a3da96cc9d20da5d"
+    },
+    {
+      "path": "supabase/migrations/20260724061756_split_exact_custom_shares.sql",
+      "sha256": "f886ab6d74c7ec955e6bed657cba9c05373c2291665e15d3c9f491ba54224e79"
+    },
+    {
+      "path": "supabase/migrations/20260724141759_item_assignments_foundation.sql",
+      "sha256": "7e7c7f2c7f7b68e358968b80843d2977c44e87f50ffb7bc17943430867bf76f0"
+    },
+    {
+      "path": "supabase/migrations/20260725072303_general_note_mentions_foundation.sql",
+      "sha256": "396c6d54a6a338559a790f8aa02014039851d981de2fe9a947408303a7a01b19"
+    },
+    {
+      "path": "supabase/migrations/20260725193306_public_template_foundation.sql",
+      "sha256": "8457fe500a73db22265e6327d4e8d9fed0382f9d011207b7fe6ed68ec373af94"
+    },
+    {
+      "path": "supabase/migrations/20260726072024_public_template_reporting_moderation.sql",
+      "sha256": "dc99c1ea96ff538a0b3bfe405c25a6d61b543da6917358df5143ca829c6435c4"
+    },
+    {
+      "path": "supabase/migrations/20260727095449_schedule_public_template_moderation_retention.sql",
+      "sha256": "e1f610bfba8cb8af3f5c4c05cb3e7e9316caa1e553af24bd6f1e8da855a7f614"
+    },
+    {
+      "path": "supabase/migrations/20260727112325_template_sends_foundation.sql",
+      "sha256": "17d0e1488da3c7a190148477782ea4d49dcdf691e544b09f0c59763a6601b3a7"
+    },
+    {
+      "path": "supabase/migrations/20260727144646_schedule_template_send_retention.sql",
+      "sha256": "479ae06c93e50415f5a25da9fe65952a44fa4aa20b65276c43c1a6e6fe4a1bb6"
+    },
+    {
+      "path": "supabase/migrations/20260727171949_friends_public_template_feed.sql",
+      "sha256": "a0769b7d6fd6e2422d1b7e8b28dc6a1d79cfed15874107b822fa880be41e80d2"
+    },
+    {
+      "path": "supabase/migrations/20260729102317_list_chat_foundation.sql",
+      "sha256": "59726ca51978284fc2d0b4058f222313e5b14583511bc066c9dcf8c361ccdfbf"
+    },
+    {
+      "path": "supabase/migrations/20260731042805_schedule_list_chat_retention.sql",
+      "sha256": "06af2f021f70fa45ae899a2d411e1e1387b697d773d3fe38e5195346f915a6a4"
+    },
+    {
+      "path": "supabase/migrations/20260831192751_list_participant_counts.sql",
+      "sha256": "bd43bc8f74e76253816ee7d7f2f6bba076e417d4870e69d3ca020d63ece1748f"
+    },
+    {
+      "path": "supabase/migrations/20260907221034_profile_avatars.sql",
+      "sha256": "6106d72f69f8c791780849e4ea601a0c96687c4e10d3e3f221329c41016791d2"
+    },
+    {
+      "path": "supabase/migrations/20260914222013_profile_avatar_stale_conflict.sql",
+      "sha256": "beeb9e18f16002b781156d9c815d0c9536698e56a54960e2e1d515bc7ab36844"
+    },
+    {
+      "path": "supabase/migrations/20260914232057_recoverable_business_conflicts.sql",
+      "sha256": "53e57192f1ad58309809e2b17898295d0f7a2cd884be4cefa25fc3356685282e"
+    }
+  ],
+  "functions": [
+    {
+      "name": "delete-account",
+      "verify_jwt": false,
+      "authentication": "withSupabase auth:user",
+      "files": [
+        {
+          "path": "supabase/functions/delete-account/index.ts",
+          "sha256": "5c2a421047ba0b6fa0637d83aa4eb23c01c45df1d33ffcbd6d1fc27a86c8720c"
+        },
+        {
+          "path": "supabase/functions/delete-account/handler.ts",
+          "sha256": "7a76b446d4f9ff3de5cafea651a2213abca2ec6a9e40e475cfa4d46fe693ee52"
+        },
+        {
+          "path": "supabase/functions/delete-account/supabase_adapters.ts",
+          "sha256": "695fe8378990f0548ef8b704b3dd681d53d60cb87f3c307dc0111db3e7bd6dee"
+        },
+        {
+          "path": "supabase/functions/delete-account/deno.json",
+          "sha256": "ee3bd04dc5ed1abc5b1465fb4355de5357a2067b3d9b1c96b686dc3d66f91cbb"
+        },
+        {
+          "path": "supabase/functions/delete-account/deno.lock",
+          "sha256": "edd2d833c8873782ae1b1ae1c93645570bec4332cce21b0acf2b2fbdb576db02"
+        },
+        {
+          "path": "supabase/functions/_shared/avatar_service.ts",
+          "sha256": "33c9785b108779985e861ff4a1c23e454811c31f451f41437b6cf0da313ffd68"
+        }
+      ]
+    },
+    {
+      "name": "profile-avatar",
+      "verify_jwt": false,
+      "authentication": "withSupabase auth:user",
+      "files": [
+        {
+          "path": "supabase/functions/profile-avatar/index.ts",
+          "sha256": "3da166d66c9c62692ff9806b0bec9f9e9bea731512581c6004b9e95c86d8bc9c"
+        },
+        {
+          "path": "supabase/functions/profile-avatar/handler.ts",
+          "sha256": "4f72fae218a98dfb4ff4202d0f1e9a0f6dffc79c61a7b0cb2eff5a36c6c98ade"
+        },
+        {
+          "path": "supabase/functions/profile-avatar/deno.json",
+          "sha256": "fd21bffcf66ee2c73a21dc38e6bd5acb7b6f08811b9b04a821484946f857672d"
+        },
+        {
+          "path": "supabase/functions/profile-avatar/deno.lock",
+          "sha256": "edd2d833c8873782ae1b1ae1c93645570bec4332cce21b0acf2b2fbdb576db02"
+        },
+        {
+          "path": "supabase/functions/_shared/avatar_service.ts",
+          "sha256": "33c9785b108779985e861ff4a1c23e454811c31f451f41437b6cf0da313ffd68"
+        },
+        {
+          "path": "supabase/functions/_shared/avatar_png.ts",
+          "sha256": "daff1271e4b9a9af548f0b20fd4df8653773184e0d5cd1eaca847c0cd20dee25"
+        }
+      ]
+    }
+  ]
+}

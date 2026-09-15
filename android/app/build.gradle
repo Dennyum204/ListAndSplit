@@ -22,20 +22,32 @@ if (flutterVersionName == null) {
     flutterVersionName = '1.0'
 }
 
+def productionProperties = new Properties()
+rootProject.file('production.properties').withInputStream { productionProperties.load(it) }
+def productionProjectRef = productionProperties.getProperty('projectRef', '')
+if (productionProjectRef && (!(productionProjectRef ==~ /[a-z]{20}/) ||
+        productionProjectRef == 'lzwsgxziqxpxwyalkfuy')) {
+    throw new GradleException('Invalid approved Production project reference.')
+}
+def signingNames = ['STORE_FILE', 'STORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD']
+def releaseSigning = signingNames.collectEntries { [it, System.getenv("LIST_AND_SPLIT_RELEASE_${it}")] }
+def hasReleaseSigning = releaseSigning.values().every { it != null && !it.isEmpty() }
+
 android {
     namespace "com.ferbatech.listandsplit"
-    compileSdk flutter.compileSdkVersion
-    ndkVersion flutter.ndkVersion
+    compileSdk 36
+    ndkVersion '28.2.13676358'
+    buildFeatures { buildConfig true }
 
     flavorDimensions "environment"
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = '17'
     }
 
     sourceSets {
@@ -46,8 +58,8 @@ android {
         applicationId "com.ferbatech.listandsplit"
         // You can update the following values to match your application needs.
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
-        minSdkVersion flutter.minSdkVersion
-        targetSdkVersion flutter.targetSdkVersion
+        minSdkVersion 24
+        targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
     }
@@ -56,6 +68,7 @@ android {
         dev {
             dimension "environment"
             applicationIdSuffix ".dev"
+            buildConfigField 'String', 'PRODUCTION_PROJECT_REF', '""'
             resValue "string", "app_name", "List & Split Dev"
             manifestPlaceholders = [
                 authRedirectScheme: "com.ferbatech.listandsplit.dev",
@@ -63,6 +76,7 @@ android {
         }
         prod {
             dimension "environment"
+            buildConfigField 'String', 'PRODUCTION_PROJECT_REF', "\"${productionProjectRef}\""
             resValue "string", "app_name", "List & Split"
             manifestPlaceholders = [
                 authRedirectScheme: "com.ferbatech.listandsplit",
@@ -70,11 +84,21 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(releaseSigning.STORE_FILE)
+                storePassword releaseSigning.STORE_PASSWORD
+                keyAlias releaseSigning.KEY_ALIAS
+                keyPassword releaseSigning.KEY_PASSWORD
+            }
+        }
+    }
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
+            debuggable false
+            ndk { debugSymbolLevel 'FULL' }
         }
     }
 }
@@ -86,6 +110,10 @@ flutter {
 dependencies {}
 
 gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.project == project && it.name.toLowerCase().contains('release') } &&
+            !hasReleaseSigning) {
+        throw new GradleException('Release signing is required. Load LIST_AND_SPLIT_RELEASE_* locally; never use debug signing.')
+    }
     def ambiguousVariantTasks = [
         "assembleDebug",
         "assembleProfile",

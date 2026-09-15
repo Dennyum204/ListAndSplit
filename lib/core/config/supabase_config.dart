@@ -22,10 +22,12 @@ enum AppConfigurationIssue {
   nativeApplicationIdMismatch,
   supabaseUrlMissing,
   publishableKeyMissing,
+  publishableKeyInvalid,
   supabaseUrlMalformed,
   devProjectMismatch,
   productionDevProjectRejected,
   productionUnavailable,
+  productionProjectMismatch,
 }
 
 class AppConfiguration {
@@ -144,6 +146,12 @@ class AppConfiguration {
         isPartiallyConfigured: true,
       );
     }
+    if (!RegExp(r'^sb_publishable_[A-Za-z0-9_-]+$').hasMatch(publishableKey)) {
+      return AppConfiguration.invalid(
+        environment: environment,
+        issue: AppConfigurationIssue.publishableKeyInvalid,
+      );
+    }
 
     final uri = Uri.tryParse(supabaseUrl);
     if (!_isValidSupabaseUrl(uri)) {
@@ -177,9 +185,26 @@ class AppConfiguration {
       );
     }
 
-    return AppConfiguration.invalid(
+    final approvedRef = nativeIdentity.approvedProductionProjectRef;
+    if (!nativeIdentity.isAndroid ||
+        !RegExp(r'^[a-z]{20}$').hasMatch(approvedRef) ||
+        '$approvedRef.supabase.co' == devProjectHost) {
+      return AppConfiguration.invalid(
+        environment: environment,
+        issue: AppConfigurationIssue.productionUnavailable,
+      );
+    }
+    if (uri.host != '$approvedRef.supabase.co') {
+      return AppConfiguration.invalid(
+        environment: environment,
+        issue: AppConfigurationIssue.productionProjectMismatch,
+      );
+    }
+    return AppConfiguration._valid(
       environment: environment,
-      issue: AppConfigurationIssue.productionUnavailable,
+      authCallbackUri: environment.authCallbackUri,
+      supabaseUrl: supabaseUrl,
+      publishableKey: publishableKey,
     );
   }
 
@@ -222,6 +247,7 @@ Future<void> initializeSupabase(AppConfiguration configuration) async {
   await Supabase.initialize(
     url: configuration._supabaseUrl!,
     publishableKey: configuration._publishableKey!,
+    debug: false,
     realtimeClientOptions: RealtimeClientOptions(
       transport: const BoundedRealtimeWebSocketTransport().connect,
     ),

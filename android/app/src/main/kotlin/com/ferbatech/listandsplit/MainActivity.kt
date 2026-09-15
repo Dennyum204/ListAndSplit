@@ -21,6 +21,7 @@ class MainActivity : FlutterActivity() {
                     "platform" to "android",
                     "flavor" to BuildConfig.FLAVOR,
                     "applicationId" to applicationContext.packageName,
+                    "productionProjectRef" to BuildConfig.PRODUCTION_PROJECT_REF,
                 ),
             )
         }

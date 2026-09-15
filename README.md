@@ -1,5 +1,56 @@
 # List & Split
 
+## Private Android beta checkpoint — 2026-09-15
+
+Immediate target: zero-cost private beta for Fernando and his wife using existing
+List & Split Dev (`lzwsgxziqxpxwyalkfuy`) and the existing `.dev` signing identity.
+No paid services or Production creation. Public/Play release is deferred roughly
+1–2 months; its branding/legal/moderation/infrastructure gates do not block this
+trial. The [private-beta procedure](docs/ANDROID_RELEASE.md#immediate-private-beta-a-078)
+records updates, free-plan limits, account setup, export and recovery limitations.
+Live dashboard: Fernando **Free**, all quotas below limits. Existing Gmail custom
+SMTP is enabled. A disposable account received confirmation, completed verified
+password login, and received recovery mail with confirmation protections intact.
+It was deleted through avatar-aware self-service afterward. This proves delivery
+and login for the configured sender, not the wife's as-yet-unwitnessed phone flow.
+
+This is the single current release checkpoint. Optional template images, further
+cosmetic redesign, offline queues, push, extra languages and iOS release are deferred.
+
+| Gate | Current evidence / next action |
+| --- | --- |
+| PR #33 | Merged by squash as `c06e1cbdc332168e4d2b6494b0b7ec367e97d941`, from reviewed `cab51df18059ddcedca0e8f60ea6b17336895e1f`; exact-head Flutter CI passed. Review found no unresolved blocker. |
+| PR #34 | Merged by squash as `0dfe3029f07b8b5c30397e627d12354a2a6c24f0`. Normal main integration retained the already-tested combined avatar/UI tree; effective 58-file avatar diff reviewed. Resulting-head `f57ed9e236d8e76bf3e3a37e4dac8bbeb8a455c7` Flutter/Supabase CI passed (34916595642/34916595714). |
+| PR #35 | Merged by squash as `2fdcf3de9f21eae149ae3d51c12f4141911778be`, from normal integration head `4edd8a4237d97288f18b602be073d7171a9c2f48`; Flutter/Supabase CI passed (34916945118/34916945102). Forward migration `20260914232057_recoverable_business_conflicts.sql` deployed to Dev exactly once: 77 pinned deliberate raises in 51 functions become PT409; genuine serialization failures remain distinct. |
+| Dev backend | 30 matching migrations. Four single-attempt hosted HTTP stale checks returned 409/PT409 in 0.047–0.297 seconds, left state unchanged, and permitted fresh success; both disposable accounts were cleaned. The CLI's post-apply cache-export warning was resolved by authoritative history/definition verification, not reapplication. Avatar functions remain profile-avatar v2 / delete-account v3, unchanged. |
+| Reused tests | 2,033 isolated SQL assertions, 68 Edge tests, real HTTP conflicts and isolated avatar lifecycle, plus earlier 49 disposable hosted avatar checks. 964 Flutter tests (one existing opt-in skip), analysis/format and platform builds passed. Do not rerun unchanged suites without a reason; resulting-head CI remains a merge gate. |
+| Device acceptance | Samsung and emulator functional evidence covers avatar cancel/upload/replace/remove, cross-device refresh, account-switch isolation, blocking/access loss, quick-add/offline draft recovery, Chat unread, settlement/reversal, EN/PT light/dark persistence and 200% text. Existing evidence is reused. Owner's “all good” is general visual feedback. |
+| Spoken acceptance | Actual TalkBack 16 emulator speaker captures and focus inspection passed Chat label/isolated focus/double-tap route opening, avatar action purposes, language caption/current choice/options, quick-add field and disabled/enabled Add item speech. Temporary draft erased without submission; TalkBack restored off. This is agent-operated emulator evidence, not a Samsung user listening pass or full accessibility certification. |
+| Configured private APK | `1.0.0+3`, source `342470822fc3057db6605f64fd1ce7f31b042b71`, local `C:/Work/QA/ListAndSplit/private-beta-20260915-v3/list-and-split.apk`. SHA-256 `c1ee287934214cfe30eace81c79c1f455c949a2bd4109fd3665a5e21b319f644`. Dev host/public configuration, non-debuggable, API36, package/callback, TLS/backup, permissions and 16 KB APK/ELF checks passed. No public upload. |
+| Installation / sessions | Same APK updated Samsung and emulator in place, without uninstall/clear. Emulator login persisted. Samsung showed sign-in after update; no immediate pre-update UI evidence establishes when that session ended. Same preserved A account was reauthenticated, and a cold restart retained login. Do not claim both update sessions were proven preserved. |
+| Emulator network recovery | A later Chat refresh warning was traced to emulator DNS failure. Same read-only RPC returned HTTP 200 from Windows in 0.5 seconds. A cold emulator boot using the Windows router DNS restored resolution and Chat loading, retaining login/data; no backend change or reset. |
+| Protected content | QA account A, its avatar and “Coisas para Casa 😁” are preserved. User adopted this account, so it is excluded from all fixture cleanup. Its current `example.test` email cannot receive recovery mail; changing it or moving user content requires a deliberate owner flow, never silent replacement. Both devices currently use A; wife uses her own verified real email. |
+| Signing / recovery | Exact existing Dev signer pinned, encrypted PKCS12 backup outside Git, restored private-key signing challenge verified and restored key used for this APK. Original key unchanged. Local DPAPI password recovery works on this Windows account; independent offline key/password storage is still required for PC-loss recovery. Protected unsuffixed app untouched. |
+| Remaining couple pass | Wife's own installation, email activation and recovery callback/password change, then mutual friendship, one disposable shared-list edit and Chat message each, agreeing Split balances and current avatars. Generic two-account functional coverage already passed; do not repeat destructive scenarios. |
+| PR #36 / future release | Private-beta signer guards and release tooling are verified; Production remains fail-closed and unconfigured. Public Chat moderation/terms, owner/legal details, final branding, separate Production, durable public signing/backup and Play remain future gates in roughly 1–2 months. No paid resources or Production access is authorized. |
+
+Local evidence: `C:/Work/QA/ListAndSplit/release-20260915/device-qa`,
+`dev-conflicts-ed8bbc3`, `private-beta-email-20260915`, and
+`private-beta-20260915-v3`. The original unconfigured Production packaging remains
+archived and non-distributable; it is not the private Dev APK above. The final
+PR URLs/main merge revision are recorded in the owner's local release result and
+GitHub merge records. Public material remains a draft in
+[PUBLIC_RELEASE_DRAFTS.md](docs/PUBLIC_RELEASE_DRAFTS.md).
+
+Harness corrections did not weaken product coverage: unavailable Chat raises
+`P0002`, mapped by PostgREST to HTTP 500 (the client correctly treats its code as
+unavailable); the initial ad-hoc status expectation was wrong. A cleanup assertion
+incorrectly expected settlements inside the expense snapshot; deletion was not
+repeated, authoritative account state was checked and original expense rows were
+compared before continuing. Local advisors reported only 1 existing unindexed FK
+and 10 unused-index INFO findings. Existing hosted SECURITY DEFINER warnings remain
+reviewed authorization boundaries; no policy or grant was relaxed.
+
 List & Split is an Android and iOS app for collaborative active lists,
 reusable templates, a mutual-friend community, and an optional expense ledger.
 The repository provides the runnable Flutter application and current identity,

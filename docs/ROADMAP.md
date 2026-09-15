@@ -498,5 +498,14 @@ reporting/moderation workflow remain open.
 P-059/A-073 select participant counts as the next bounded addition before the UI
 refactor. Other ideas remain subject to the feature-freeze review and explicit
 selection; their presence in the backlog is not authorization to implement them.
-Play/signing/AAB/icon/store work is deferred by A-069, and Production remains
-separately authorized.
+A-077 now authorizes local Android signing, API36 APK/AAB and release runbook
+preparation. Final icon/Play publication remain gated by A-069; Production creation
+and rollout remain separately authorized. Optional backlog is frozen for this
+consolidated milestone.
+
+A-078 changes the immediate target to a free private Android beta for Fernando
+and his wife on the existing Dev backend, with the same `.dev` signer and preserved
+data. Free email activation/recovery, in-place updates, retained signing backup
+and compact two-account acceptance are its gates. Production, paid services,
+public moderation/legal/branding and Play are deferred approximately 1–2 months;
+they do not block this private trial or guarded release-preparation merges.
