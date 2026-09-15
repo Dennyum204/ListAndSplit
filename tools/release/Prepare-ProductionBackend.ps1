@@ -24,8 +24,22 @@ supabase link --project-ref $ProjectRef --workdir $out
 if ($LASTEXITCODE -ne 0) { throw 'Link failed; no deployment attempted.' }
 $historySql = Join-Path $out 'history.sql'
 'select version from supabase_migrations.schema_migrations order by version;' | Set-Content $historySql
-$history = supabase db query --linked --workdir $out -f $historySql -o json | ConvertFrom-Json
-if ($LASTEXITCODE -ne 0 -or $null -eq $history.rows) { throw 'Cannot establish authoritative migration history.' }
+$emptySql = Join-Path $out 'empty-target.sql'
+@'
+select to_regclass('supabase_migrations.schema_migrations') is not null as history_present,
+  (select count(*) from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind in ('r','p')) as application_tables,
+  (select count(*) from auth.users) as users,
+  (select count(*) from storage.buckets) as buckets;
+'@ | Set-Content $emptySql
+$empty = supabase db query --linked --workdir $out -f $emptySql -o json | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0 -or @($empty.rows).Count -ne 1) { throw 'Cannot establish fresh target state.' }
+$row = $empty.rows[0]
+if ($row.application_tables -ne 0 -or $row.users -ne 0 -or $row.buckets -ne 0) { throw 'Target has existing application data/schema; stop.' }
+$history = @{rows=@()}
+if ($row.history_present -eq $true) {
+    $history = supabase db query --linked --workdir $out -f $historySql -o json | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or $null -eq $history.rows) { throw 'Cannot establish authoritative migration history.' }
+}
 if (@($history.rows).Count) { throw 'Target already has migrations; stop for a separately reviewed incremental plan.' }
 $functions = @(supabase functions list --project-ref $ProjectRef -o json | ConvertFrom-Json)
 if ($LASTEXITCODE -ne 0 -or @($functions | Where-Object { $_ }).Count) { throw 'Unexpected existing Edge deployment; stop.' }

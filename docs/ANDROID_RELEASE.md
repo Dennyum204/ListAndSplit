@@ -128,9 +128,9 @@ For a newly approved empty Production project:
 
 The scripts' remote happy path remains unexecuted until authorization; local source
 hash, parser and negative-target checks are separate evidence, not a claimed
-Production dry run. A new project whose migration-history table is not yet
-available requires authoritative empty-state inspection rather than assuming an
-error means empty history.
+Production dry run. A missing migration-history table is accepted only after an
+authoritative catalog check and zero application-table, Auth-user and Storage-
+bucket counts; query errors never count as empty history.
 
 ### Auth, Storage, Realtime and retention
 
