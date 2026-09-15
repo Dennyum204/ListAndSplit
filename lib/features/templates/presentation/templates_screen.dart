@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/features/templates/domain/private_template.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
@@ -24,14 +26,14 @@ class TemplatesScreen extends ConsumerWidget {
       }
     });
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         title: Text(localizations.templatesTitle),
         actions: [
           IconButton(
             key: const Key('sharedTemplatesButton'),
             onPressed: () => context.push(AppRoutes.sharedTemplates),
             tooltip: localizations.templateSendsOpenSharedTooltip,
-            icon: const Icon(Icons.send_and_archive_outlined),
+            icon: const Icon(Icons.history_rounded),
           ),
           IconButton(
             key: const Key('manageTemplateCategoriesButton'),
@@ -39,7 +41,7 @@ class TemplatesScreen extends ConsumerWidget {
                 ? null
                 : () => _showCategoryManagement(context),
             tooltip: localizations.templatesManageCategoriesButton,
-            icon: const Icon(Icons.category_outlined),
+            icon: const Icon(Icons.folder_copy_outlined),
           ),
           IconButton(
             onPressed: state.isMutating
@@ -54,6 +56,7 @@ class TemplatesScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'createPrivateTemplate',
         key: const Key('createTemplateButton'),
         onPressed:
             state.isMutating ? null : () => _showCreateTemplate(context, ref),
@@ -134,7 +137,7 @@ class PrivateTemplatePickerScreen extends ConsumerWidget {
     final provider = privateTemplatePickerControllerProvider(destinationListId);
     final state = ref.watch(provider);
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         title: Text(localizations.templatesImportPickerTitle),
         actions: [
           IconButton(
@@ -239,6 +242,7 @@ class _PrivateTemplateCatalogState extends State<_PrivateTemplateCatalog> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: TextField(
+            style: AppPalette.inputTextStyle(context),
             key: const Key('templateSearchField'),
             controller: _searchController,
             textInputAction: TextInputAction.search,
@@ -261,36 +265,47 @@ class _PrivateTemplateCatalogState extends State<_PrivateTemplateCatalog> {
           ),
         ),
         _TemplateFilters(state: state, onFilter: widget.onFilter),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Divider(),
+        ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: DropdownButtonFormField<PrivateTemplateSort>(
-            key: const Key('templateSortField'),
-            // ignore: deprecated_member_use
-            value: state.sort,
-            decoration: InputDecoration(
-              labelText: localizations.templatesSortLabel,
-              isDense: true,
-            ),
-            items: [
-              DropdownMenuItem(
-                value: PrivateTemplateSort.recent,
-                child: Text(localizations.templatesSortRecent),
-              ),
-              DropdownMenuItem(
-                value: PrivateTemplateSort.alphabetic,
-                child: Text(localizations.templatesSortAlphabetic),
-              ),
-              DropdownMenuItem(
-                value: PrivateTemplateSort.newest,
-                child: Text(localizations.templatesSortNewest),
-              ),
-            ],
-            onChanged: state.isMutating
-                ? null
-                : (sort) {
-                    if (sort != null) widget.onSort(sort);
-                  },
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          child: AppDialogField(
+              label: localizations.templatesSortLabel,
+              child: DropdownButtonFormField<PrivateTemplateSort>(
+                isDense: false,
+                style: AppPalette.inputTextStyle(context),
+                dropdownColor: AppPalette.inputCream,
+                iconEnabledColor: AppPalette.navy,
+                key: const Key('templateSortField'),
+                // ignore: deprecated_member_use
+                value: state.sort,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  contentPadding: AppDialogField.dropdownPadding,
+                  isDense: true,
+                ),
+                items: [
+                  DropdownMenuItem(
+                    value: PrivateTemplateSort.recent,
+                    child: Text(localizations.templatesSortRecent),
+                  ),
+                  DropdownMenuItem(
+                    value: PrivateTemplateSort.alphabetic,
+                    child: Text(localizations.templatesSortAlphabetic),
+                  ),
+                  DropdownMenuItem(
+                    value: PrivateTemplateSort.newest,
+                    child: Text(localizations.templatesSortNewest),
+                  ),
+                ],
+                onChanged: state.isMutating
+                    ? null
+                    : (sort) {
+                        if (sort != null) widget.onSort(sort);
+                      },
+              )),
         ),
         const SizedBox(height: 8),
         Expanded(
@@ -317,7 +332,7 @@ class _TemplateFilters extends StatelessWidget {
     final categories =
         state.categories.valueOrNull ?? const <TemplateCategory>[];
     return SizedBox(
-      height: 56,
+      height: 40 + MediaQuery.textScalerOf(context).scale(16),
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         scrollDirection: Axis.horizontal,
@@ -407,10 +422,9 @@ class _TemplatesBody extends StatelessWidget {
               return Card(
                 child: ListTile(
                   key: Key('template-${template.id}'),
-                  leading: const CircleAvatar(
-                    child: Icon(Icons.copy_all_outlined),
-                  ),
-                  title: Text(template.name, maxLines: 2),
+                  leading: const Icon(Icons.description_outlined),
+                  title: Text(template.name,
+                      style: Theme.of(context).textTheme.titleMedium),
                   subtitle: Wrap(
                     crossAxisAlignment: WrapCrossAlignment.center,
                     spacing: 10,
@@ -527,12 +541,6 @@ class _CategoryManagementSheet extends ConsumerWidget {
                 localizations.templatesCategoryManagementTitle,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              trailing: IconButton(
-                onPressed:
-                    state.isMutating ? null : () => _editCategory(context, ref),
-                tooltip: localizations.templatesCreateCategoryButton,
-                icon: const Icon(Icons.add),
-              ),
             ),
             Expanded(
               child: categories.isEmpty
@@ -543,28 +551,28 @@ class _CategoryManagementSheet extends ConsumerWidget {
                       itemCount: categories.length,
                       itemBuilder: (context, index) {
                         final category = categories[index];
-                        return ListTile(
-                          title: Text(category.name),
-                          subtitle: Text(
-                            localizations.templatesCategoryCount(
-                              category.templateCount,
-                            ),
-                          ),
-                          trailing: Wrap(
-                            children: [
-                              IconButton(
-                                onPressed: state.isMutating
-                                    ? null
-                                    : () => _editCategory(
-                                          context,
-                                          ref,
-                                          category: category,
-                                        ),
-                                tooltip:
-                                    localizations.templatesRenameCategoryButton,
-                                icon: const Icon(Icons.edit_outlined),
+                        return Card(
+                          color:
+                              Theme.of(context).colorScheme.secondaryContainer,
+                          margin: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
+                          child: Tooltip(
+                            message:
+                                localizations.templatesRenameCategoryButton,
+                            child: ListTile(
+                              leading: Icon(Icons.folder_outlined,
+                                  color: Theme.of(context).colorScheme.primary),
+                              title: Text(category.name),
+                              onTap: state.isMutating
+                                  ? null
+                                  : () => _editCategory(context, ref,
+                                      category: category),
+                              subtitle: Text(
+                                localizations.templatesCategoryCount(
+                                  category.templateCount,
+                                ),
                               ),
-                              IconButton(
+                              trailing: IconButton(
                                 onPressed: state.isMutating
                                     ? null
                                     : () => _deleteCategory(
@@ -574,13 +582,30 @@ class _CategoryManagementSheet extends ConsumerWidget {
                                         ),
                                 tooltip:
                                     localizations.templatesDeleteCategoryButton,
-                                icon: const Icon(Icons.delete_outline),
+                                icon: Icon(Icons.delete_outline,
+                                    color: Theme.of(context).colorScheme.error),
                               ),
-                            ],
+                            ),
                           ),
                         );
                       },
                     ),
+            ),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Tooltip(
+                  message: localizations.templatesCreateCategoryButton,
+                  child: FilledButton.icon(
+                    onPressed: state.isMutating
+                        ? null
+                        : () => _editCategory(context, ref),
+                    icon: const Icon(Icons.add),
+                    label: Text(localizations.templatesCreateCategoryButton),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -621,10 +646,11 @@ class _CategoryManagementSheet extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.templatesDeleteCategoryTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.templatesDeleteCategoryTitle),
         content: Text(localizations.templatesDeleteCategoryDescription),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(localizations.cancelButton),
           ),
@@ -682,18 +708,22 @@ class _CategoryNameDialogState extends State<_CategoryNameDialog> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     return AlertDialog(
-      title: Text(widget.title),
-      content: TextField(
-        key: const Key('categoryNameField'),
-        controller: _nameController,
-        autofocus: true,
-        decoration: InputDecoration(
-          labelText: localizations.templatesCategoryNameLabel,
+      titlePadding: EdgeInsets.zero,
+      title: AppDialogTitle(widget.title),
+      content: SingleChildScrollView(
+        child: AppDialogField(
+          label: localizations.templatesCategoryNameLabel,
+          child: TextField(
+            style: AppPalette.inputTextStyle(context),
+            key: const Key('categoryNameField'),
+            controller: _nameController,
+            autofocus: true,
+            onSubmitted: _isClosing ? null : _close,
+          ),
         ),
-        onSubmitted: _isClosing ? null : _close,
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           key: const Key('cancelCategoryNameButton'),
           onPressed: _isClosing ? null : _close,
           child: Text(localizations.cancelButton),
@@ -753,45 +783,54 @@ class _NamedCategoryDialogState extends State<_NamedCategoryDialog> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     return AlertDialog(
-      title: Text(widget.title),
+      titlePadding: EdgeInsets.zero,
+      title: AppDialogTitle(widget.title),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              key: const Key('templateNameField'),
-              controller: _nameController,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: localizations.templatesNameLabel,
+            AppDialogField(
+              label: localizations.templatesNameLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('templateNameField'),
+                controller: _nameController,
+                autofocus: true,
               ),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String?>(
-              key: const Key('templateCategoryField'),
-              // ignore: deprecated_member_use
-              value: _categoryId,
-              decoration: InputDecoration(
-                labelText: localizations.templatesCategoryLabel,
-              ),
-              items: [
-                DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text(localizations.templatesNoCategoryLabel),
-                ),
-                for (final category in widget.categories)
+            AppDialogField(
+              label: localizations.templatesCategoryLabel,
+              child: DropdownButtonFormField<String?>(
+                isDense: false,
+                style: AppPalette.inputTextStyle(context),
+                dropdownColor: AppPalette.inputCream,
+                iconEnabledColor: AppPalette.navy,
+                key: const Key('templateCategoryField'),
+                // ignore: deprecated_member_use
+                value: _categoryId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding),
+                items: [
                   DropdownMenuItem<String?>(
-                    value: category.id,
-                    child: Text(category.name),
+                    value: null,
+                    child: Text(localizations.templatesNoCategoryLabel),
                   ),
-              ],
-              onChanged: (value) => setState(() => _categoryId = value),
+                  for (final category in widget.categories)
+                    DropdownMenuItem<String?>(
+                      value: category.id,
+                      child: Text(category.name),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _categoryId = value),
+              ),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: () => Navigator.pop(context),
           child: Text(localizations.cancelButton),
         ),

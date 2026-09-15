@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/auth/presentation/auth_actions_controller.dart';
@@ -42,6 +43,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 : authMessageText(localizations, state.message!),
           ),
           TextField(
+            style: AppPalette.inputTextStyle(context),
             key: const Key('forgotPasswordEmail'),
             controller: _email,
             enabled: !state.isSubmitting,

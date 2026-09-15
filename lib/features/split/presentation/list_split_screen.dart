@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/features/split/domain/list_split.dart';
 import 'package:list_and_split/features/split/presentation/list_split_controller.dart';
@@ -18,7 +21,7 @@ class ListSplitScreen extends ConsumerWidget {
     final overview = state.overview.valueOrNull;
     final localizations = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         title: Text(
           overview == null
               ? localizations.splitTitle
@@ -26,16 +29,22 @@ class ListSplitScreen extends ConsumerWidget {
         ),
         actions: const [NotificationBell()],
       ),
-      floatingActionButton:
+      bottomNavigationBar:
           overview?.enabled == true && overview?.writable == true
-              ? FloatingActionButton.extended(
-                  key: const Key('addExpenseButton'),
-                  onPressed: state.isMutating ||
-                          overview!.expenses.length >= splitExpenseCapacity
-                      ? null
-                      : () => _showExpenseDialog(context, ref, overview),
-                  icon: const Icon(Icons.add_rounded),
-                  label: Text(localizations.splitAddExpenseButton),
+              ? SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                    child: FilledButton.icon(
+                      key: const Key('addExpenseButton'),
+                      onPressed: state.isMutating ||
+                              overview!.expenses.length >= splitExpenseCapacity
+                          ? null
+                          : () => _showExpenseDialog(context, ref, overview),
+                      icon: const Icon(Icons.add_rounded),
+                      label: Text(localizations.splitAddExpenseButton),
+                    ),
+                  ),
                 )
               : null,
       body: SafeArea(
@@ -108,6 +117,12 @@ class _SplitBody extends ConsumerWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
       children: [
+        ListSectionNavigation(
+          listId: listId,
+          selected: ListDetailSection.split,
+          enabled: !state.isMutating,
+        ),
+        const SizedBox(height: 12),
         if (overview.listStatus == SplitListStatus.archived)
           Card(
             color: Theme.of(context).colorScheme.secondaryContainer,
@@ -130,10 +145,26 @@ class _SplitBody extends ConsumerWidget {
           if (overview.participants.isEmpty)
             Text(localizations.splitNoBalancesMessage)
           else
-            ...overview.participants.map(
-              (participant) => _BalanceTile(
-                participant: participant,
-                currency: overview.currency!,
+            Card(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? AppPalette.darkCard
+                  : AppPalette.inputCream,
+              child: SingleChildScrollView(
+                key: const Key('splitBalanceCards'),
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final participant in overview.participants)
+                      SizedBox(
+                        width: MediaQuery.textScalerOf(context).scale(72) + 24,
+                        child: _BalanceTile(
+                            participant: participant,
+                            currency: overview.currency!),
+                      ),
+                  ],
+                ),
               ),
             ),
           const SizedBox(height: 20),
@@ -225,27 +256,36 @@ class _DisabledSplitStateState extends ConsumerState<_DisabledSplitState> {
             ),
             if (canEnable) ...[
               const SizedBox(height: 20),
-              DropdownButtonFormField<SplitCurrency>(
-                key: const Key('splitCurrencyField'),
-                // Keep the initializer supported by the Flutter 3.19 floor.
-                // ignore: deprecated_member_use
-                value: _currency,
-                decoration: InputDecoration(
-                  labelText: localizations.splitCurrencyLabel,
-                ),
-                items: [
-                  for (final currency in SplitCurrency.values)
-                    DropdownMenuItem(
-                      value: currency,
-                      child: Text(currency.code),
+              AppDialogField(
+                  label: localizations.splitCurrencyLabel,
+                  child: DropdownButtonFormField<SplitCurrency>(
+                    isDense: false,
+                    isExpanded: true,
+                    iconEnabledColor: AppPalette.navy,
+                    style: AppPalette.inputTextStyle(context),
+                    dropdownColor: AppPalette.inputCream,
+                    key: const Key('splitCurrencyField'),
+                    // Keep the initializer supported by the Flutter 3.19 floor.
+                    // ignore: deprecated_member_use
+                    value: _currency,
+                    decoration: const InputDecoration(
+                      contentPadding: AppDialogField.dropdownPadding,
                     ),
-                ],
-                onChanged: widget.state.isMutating
-                    ? null
-                    : (value) {
-                        if (value != null) setState(() => _currency = value);
-                      },
-              ),
+                    items: [
+                      for (final currency in SplitCurrency.values)
+                        DropdownMenuItem(
+                          value: currency,
+                          child: Text(currency.code),
+                        ),
+                    ],
+                    onChanged: widget.state.isMutating
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              setState(() => _currency = value);
+                            }
+                          },
+                  )),
               const SizedBox(height: 16),
               FilledButton(
                 key: const Key('enableSplitButton'),
@@ -340,25 +380,35 @@ class _SplitSummaryCard extends ConsumerWidget {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(AppLocalizations.of(context).splitChangeCurrencyTitle),
-          content: DropdownButtonFormField<SplitCurrency>(
-            key: const Key('changeSplitCurrencyField'),
-            // Keep the initializer supported by the Flutter 3.19 floor.
-            // ignore: deprecated_member_use
-            value: selected,
-            decoration: InputDecoration(
-              labelText: AppLocalizations.of(context).splitCurrencyLabel,
+          titlePadding: EdgeInsets.zero,
+          title: AppDialogTitle(
+              AppLocalizations.of(context).splitChangeCurrencyTitle),
+          content: AppDialogField(
+            label: AppLocalizations.of(context).splitCurrencyLabel,
+            child: DropdownButtonFormField<SplitCurrency>(
+              isExpanded: true,
+              isDense: false,
+              iconEnabledColor: AppPalette.navy,
+              style: AppPalette.inputTextStyle(context),
+              dropdownColor: AppPalette.inputCream,
+              key: const Key('changeSplitCurrencyField'),
+              // Keep the initializer supported by the Flutter 3.19 floor.
+              // ignore: deprecated_member_use
+              value: selected,
+              decoration: const InputDecoration(
+                contentPadding: AppDialogField.dropdownPadding,
+              ),
+              items: [
+                for (final currency in SplitCurrency.values)
+                  DropdownMenuItem(value: currency, child: Text(currency.code)),
+              ],
+              onChanged: (value) {
+                if (value != null) setDialogState(() => selected = value);
+              },
             ),
-            items: [
-              for (final currency in SplitCurrency.values)
-                DropdownMenuItem(value: currency, child: Text(currency.code)),
-            ],
-            onChanged: (value) {
-              if (value != null) setDialogState(() => selected = value);
-            },
           ),
           actions: [
-            TextButton(
+            OutlinedButton(
               onPressed: () => Navigator.pop(context),
               child: Text(AppLocalizations.of(context).cancelButton),
             ),
@@ -401,21 +451,66 @@ class _BalanceTile extends StatelessWidget {
                 _formatMinor(balance.abs(), currency),
               )
             : localizations.splitParticipantSettled(name);
-    return Card(
-      child: ListTile(
-        key: ValueKey('splitBalance-${participant.id}'),
-        leading: CircleAvatar(
-          child: Icon(
-            participant.isAnonymized
-                ? Icons.person_off_outlined
-                : Icons.person_outline,
+    return Semantics(
+      key: ValueKey('splitBalance-${participant.id}'),
+      label: text,
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Column(
+            children: [
+              IdentityBadge(
+                  backgroundColor:
+                      Theme.of(context).brightness == Brightness.dark
+                          ? AppPalette.inputCream
+                          : AppPalette.cardBlue,
+                  label: participant.isAnonymized ? '' : name,
+                  size: 40),
+              const SizedBox(height: 4),
+              Text(name,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelMedium),
+              const SizedBox(height: 4),
+              Text(
+                '${balance > 0 ? '+' : balance < 0 ? '−' : ''}${_formatMinor(balance.abs(), currency)}',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: balance < 0
+                        ? Theme.of(context).colorScheme.error
+                        : balance > 0
+                            ? (Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF9AD7A0)
+                                : const Color(0xFF236B32))
+                            : null),
+              ),
+            ],
           ),
         ),
-        title: Text(name),
-        subtitle: Text(text),
       ),
     );
   }
+}
+
+class _SplitIdentity extends StatelessWidget {
+  const _SplitIdentity({required this.name});
+  final String name;
+  @override
+  Widget build(BuildContext context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IdentityBadge(
+              backgroundColor: Theme.of(context).brightness == Brightness.dark
+                  ? AppPalette.inputCream
+                  : AppPalette.cardBlue,
+              label: name,
+              size: 32),
+          const SizedBox(height: 4),
+          Text(name,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelSmall)
+        ],
+      );
 }
 
 class _SettlementSuggestionsSection extends StatelessWidget {
@@ -491,51 +586,73 @@ class _SettlementSuggestionCard extends StatelessWidget {
       recipientName,
       _formatMinor(suggestion.amountMinor, overview.currency!),
     );
-    return Card(
-      key: ValueKey(
-        'splitSuggestion-${suggestion.payerParticipantId}-'
-        '${suggestion.recipientParticipantId}',
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    final flow = Semantics(
+      label: description,
+      child: ExcludeSemantics(
+        child: Row(
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.payments_outlined),
-                const SizedBox(width: 12),
-                Expanded(child: Text(description)),
-              ],
-            ),
-            if (overview.writable) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: FilledButton.tonal(
-                  key: ValueKey(
-                    'recordSuggestedPayment-'
-                    '${suggestion.payerParticipantId}-'
-                    '${suggestion.recipientParticipantId}',
-                  ),
-                  onPressed: isBusy
-                      ? null
-                      : () => showDialog<void>(
-                            context: context,
-                            barrierDismissible: !isBusy,
-                            builder: (_) => SettlementFormDialog(
-                              listId: listId,
-                              initialOverview: overview,
-                              initialSuggestion: suggestion,
-                            ),
-                          ),
-                  child: Text(localizations.splitRecordPaymentButton),
-                ),
-              ),
-            ],
+            Expanded(child: _SplitIdentity(name: payerName)),
+            Flexible(
+                child: Column(children: [
+              const Icon(Icons.arrow_forward_rounded),
+              Text(_formatMinor(suggestion.amountMinor, overview.currency!),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelMedium),
+            ])),
+            Expanded(child: _SplitIdentity(name: recipientName)),
           ],
         ),
+      ),
+    );
+    final action = FilledButton.tonal(
+      key: ValueKey(
+        'recordSuggestedPayment-'
+        '${suggestion.payerParticipantId}-'
+        '${suggestion.recipientParticipantId}',
+      ),
+      onPressed: isBusy
+          ? null
+          : () => showDialog<void>(
+                context: context,
+                barrierDismissible: !isBusy,
+                builder: (_) => SettlementFormDialog(
+                  listId: listId,
+                  initialOverview: overview,
+                  initialSuggestion: suggestion,
+                ),
+              ),
+      child: Text(localizations.splitRecordPaymentButton),
+    );
+    return Card(
+      key: ValueKey(
+          'splitSuggestion-${suggestion.payerParticipantId}-${suggestion.recipientParticipantId}'),
+      color: Theme.of(context).brightness == Brightness.dark
+          ? AppPalette.darkCard
+          : AppPalette.inputCream,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final stacked = constraints.maxWidth < 320 ||
+              MediaQuery.textScalerOf(context).scale(14) > 18;
+          if (!overview.writable) {
+            return flow;
+          }
+          if (stacked) {
+            return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  flow,
+                  const SizedBox(height: 8),
+                  Align(
+                      alignment: AlignmentDirectional.centerEnd, child: action),
+                ]);
+          }
+          return Row(children: [
+            Expanded(flex: 3, child: flow),
+            const SizedBox(width: 8),
+            Flexible(flex: 2, child: action)
+          ]);
+        }),
       ),
     );
   }
@@ -821,7 +938,8 @@ class _SettlementFormDialogState extends ConsumerState<SettlementFormDialog> {
     return PopScope(
       canPop: !state.isMutating && !_submitted,
       child: AlertDialog(
-        title: Text(localizations.splitRecordPaymentTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.splitRecordPaymentTitle),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -829,91 +947,118 @@ class _SettlementFormDialogState extends ConsumerState<SettlementFormDialog> {
             children: [
               Text(localizations.splitRecordPaymentBookkeepingNotice),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                key: const Key('settlementPayerField'),
-                // Keep the initializer supported by the Flutter 3.19 floor.
-                // ignore: deprecated_member_use
-                value: payerChoices.any((entry) => entry.id == _payerId)
-                    ? _payerId
-                    : null,
-                decoration: InputDecoration(
-                  labelText: localizations.splitSettlementPayerLabel,
-                  errorText: _showValidation && !endpointsValid
-                      ? localizations.splitSettlementEndpointsInvalid
+              AppDialogField(
+                label: localizations.splitSettlementPayerLabel,
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  isDense: false,
+                  iconEnabledColor: AppPalette.navy,
+                  style: AppPalette.inputTextStyle(context),
+                  dropdownColor: AppPalette.inputCream,
+                  key: const Key('settlementPayerField'),
+                  // Keep the initializer supported by the Flutter 3.19 floor.
+                  // ignore: deprecated_member_use
+                  value: payerChoices.any((entry) => entry.id == _payerId)
+                      ? _payerId
                       : null,
-                ),
-                items: [
-                  for (final participant in payerChoices)
-                    DropdownMenuItem(
-                      value: participant.id,
-                      child: Text(_participantName(localizations, participant)),
-                    ),
-                ],
-                onChanged: fieldsEnabled
-                    ? (value) {
-                        if (value != null) setState(() => _payerId = value);
-                      }
-                    : null,
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                key: const Key('settlementRecipientField'),
-                // Keep the initializer supported by the Flutter 3.19 floor.
-                // ignore: deprecated_member_use
-                value: recipientChoices.any((entry) => entry.id == _recipientId)
-                    ? _recipientId
-                    : null,
-                decoration: InputDecoration(
-                  labelText: localizations.splitSettlementRecipientLabel,
-                ),
-                items: [
-                  for (final participant in recipientChoices)
-                    DropdownMenuItem(
-                      value: participant.id,
-                      child: Text(_participantName(localizations, participant)),
-                    ),
-                ],
-                onChanged: fieldsEnabled
-                    ? (value) {
-                        if (value != null) setState(() => _recipientId = value);
-                      }
-                    : null,
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                key: const Key('settlementAmountField'),
-                controller: _amount,
-                autofocus: true,
-                enabled: fieldsEnabled,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  labelText: localizations
-                      .splitExpenseAmountLabel(overview.currency!.code),
-                  helperText: maximum > 0
-                      ? localizations.splitSettlementMaximum(
-                          _formatMinor(maximum, overview.currency!),
-                        )
-                      : null,
-                  errorText: _showValidation && parsed == null
-                      ? localizations.splitSettlementAmountInvalid
+                  decoration: InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding,
+                    errorText: _showValidation && !endpointsValid
+                        ? localizations.splitSettlementEndpointsInvalid
+                        : null,
+                  ),
+                  items: [
+                    for (final participant in payerChoices)
+                      DropdownMenuItem(
+                        value: participant.id,
+                        child:
+                            Text(_participantName(localizations, participant)),
+                      ),
+                  ],
+                  onChanged: fieldsEnabled
+                      ? (value) {
+                          if (value != null) setState(() => _payerId = value);
+                        }
                       : null,
                 ),
               ),
               const SizedBox(height: 8),
-              TextField(
-                key: const Key('settlementNoteField'),
-                controller: _note,
-                enabled: fieldsEnabled,
-                maxLength: splitSettlementNoteMaxLength,
-                textCapitalization: TextCapitalization.sentences,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  labelText: localizations.splitSettlementNoteLabel,
-                  errorText: _showValidation && !noteValid
-                      ? localizations.splitSettlementNoteInvalid
+              AppDialogField(
+                label: localizations.splitSettlementRecipientLabel,
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  isDense: false,
+                  iconEnabledColor: AppPalette.navy,
+                  style: AppPalette.inputTextStyle(context),
+                  dropdownColor: AppPalette.inputCream,
+                  key: const Key('settlementRecipientField'),
+                  // Keep the initializer supported by the Flutter 3.19 floor.
+                  // ignore: deprecated_member_use
+                  value:
+                      recipientChoices.any((entry) => entry.id == _recipientId)
+                          ? _recipientId
+                          : null,
+                  decoration: const InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding,
+                  ),
+                  items: [
+                    for (final participant in recipientChoices)
+                      DropdownMenuItem(
+                        value: participant.id,
+                        child:
+                            Text(_participantName(localizations, participant)),
+                      ),
+                  ],
+                  onChanged: fieldsEnabled
+                      ? (value) {
+                          if (value != null) {
+                            setState(() => _recipientId = value);
+                          }
+                        }
                       : null,
+                ),
+              ),
+              const SizedBox(height: 8),
+              AppDialogField(
+                label: localizations
+                    .splitExpenseAmountLabel(overview.currency!.code),
+                child: TextField(
+                  style: AppPalette.inputTextStyle(context),
+                  key: const Key('settlementAmountField'),
+                  controller: _amount,
+                  autofocus: true,
+                  enabled: fieldsEnabled,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    helperText: maximum > 0
+                        ? localizations.splitSettlementMaximum(
+                            _formatMinor(maximum, overview.currency!),
+                          )
+                        : null,
+                    errorText: _showValidation && parsed == null
+                        ? localizations.splitSettlementAmountInvalid
+                        : null,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              AppDialogField(
+                label: localizations.splitSettlementNoteLabel,
+                child: TextField(
+                  style: AppPalette.inputTextStyle(context),
+                  key: const Key('settlementNoteField'),
+                  controller: _note,
+                  enabled: fieldsEnabled,
+                  maxLength: splitSettlementNoteMaxLength,
+                  textCapitalization: TextCapitalization.sentences,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    errorText: _showValidation && !noteValid
+                        ? localizations.splitSettlementNoteInvalid
+                        : null,
+                  ),
                 ),
               ),
               if (_retryLocked) ...[
@@ -928,7 +1073,7 @@ class _SettlementFormDialogState extends ConsumerState<SettlementFormDialog> {
           ),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: state.isMutating || _dialogClosing
                 ? null
                 : () {
@@ -1108,7 +1253,8 @@ class _SettlementReversalDialogState
     return PopScope(
       canPop: !state.isMutating && !_submitted,
       child: AlertDialog(
-        title: Text(localizations.splitReverseSettlementTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.splitReverseSettlementTitle),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1116,19 +1262,22 @@ class _SettlementReversalDialogState
             children: [
               Text(localizations.splitReverseSettlementDescription),
               const SizedBox(height: 12),
-              TextField(
-                key: const Key('settlementReversalReasonField'),
-                controller: _reason,
-                autofocus: true,
-                enabled: fieldEnabled,
-                maxLength: splitSettlementReversalReasonMaxLength,
-                textCapitalization: TextCapitalization.sentences,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  labelText: localizations.splitReversalReasonLabel,
-                  errorText: _showValidation && !valid
-                      ? localizations.splitReversalReasonInvalid
-                      : null,
+              AppDialogField(
+                label: localizations.splitReversalReasonLabel,
+                child: TextField(
+                  style: AppPalette.inputTextStyle(context),
+                  key: const Key('settlementReversalReasonField'),
+                  controller: _reason,
+                  autofocus: true,
+                  enabled: fieldEnabled,
+                  maxLength: splitSettlementReversalReasonMaxLength,
+                  textCapitalization: TextCapitalization.sentences,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    errorText: _showValidation && !valid
+                        ? localizations.splitReversalReasonInvalid
+                        : null,
+                  ),
                 ),
               ),
               if (_retryLocked) ...[
@@ -1143,7 +1292,7 @@ class _SettlementReversalDialogState
           ),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: state.isMutating || _dialogClosing
                 ? null
                 : () {
@@ -1244,8 +1393,23 @@ class _ExpenseCardState extends ConsumerState<_ExpenseCard> {
     final payer = widget.overview.participantById(
       widget.expense.payerParticipantId,
     );
+    final payerName = payer == null
+        ? localizations.splitFormerParticipant
+        : _participantName(localizations, payer);
+    final beneficiaryNames = [
+      for (final id in widget.expense.beneficiaryParticipantIds)
+        widget.overview.participantById(id) == null
+            ? localizations.splitFormerParticipant
+            : _participantName(
+                localizations, widget.overview.participantById(id)!)
+    ];
     return Card(
+      color: Theme.of(context).brightness == Brightness.dark
+          ? AppPalette.darkCard
+          : AppPalette.inputCream,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         key: ValueKey('splitExpense-${widget.expense.id}'),
         onTap: !widget.overview.writable || widget.isBusy
             ? null
@@ -1257,24 +1421,50 @@ class _ExpenseCardState extends ConsumerState<_ExpenseCard> {
                     expense: widget.expense,
                   ),
                 ),
-        title: Text(widget.expense.description),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              localizations.splitExpensePaidBy(
-                payer == null
-                    ? localizations.splitFormerParticipant
-                    : _participantName(localizations, payer),
-                widget.expense.beneficiaryParticipantIds.length,
+        title: Text(widget.expense.description,
+            style: Theme.of(context).textTheme.titleSmall),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Semantics(
+                label:
+                    '${localizations.splitExpenseParticipantsLabel}: ${beneficiaryNames.join(', ')}',
+                child: ExcludeSemantics(
+                    child: Wrap(spacing: 2, runSpacing: 2, children: [
+                  for (final name in beneficiaryNames)
+                    IdentityBadge(
+                        backgroundColor:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? AppPalette.inputCream
+                                : AppPalette.cardBlue,
+                        label: name,
+                        size: 24),
+                ])),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              _formatMinor(widget.expense.amountMinor, currency),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ],
+              Semantics(
+                label: localizations.splitExpensePaidBy(
+                    payerName, beneficiaryNames.length),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  IdentityBadge(
+                      backgroundColor:
+                          Theme.of(context).brightness == Brightness.dark
+                              ? AppPalette.inputCream
+                              : AppPalette.cardBlue,
+                      label: payerName,
+                      size: 24),
+                  const SizedBox(width: 6),
+                  Flexible(
+                      child: Text(
+                          _formatMinor(widget.expense.amountMinor, currency),
+                          style: Theme.of(context).textTheme.labelLarge)),
+                ]),
+              ),
+            ],
+          ),
         ),
         trailing: widget.overview.writable
             ? IconButton(
@@ -1298,7 +1488,9 @@ class _ExpenseCardState extends ConsumerState<_ExpenseCard> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text(AppLocalizations.of(context).splitDeleteExpenseTitle),
+          titlePadding: EdgeInsets.zero,
+          title: AppDialogTitle(
+              AppLocalizations.of(context).splitDeleteExpenseTitle),
           content: Text(
             AppLocalizations.of(context).splitDeleteExpenseConfirmation(
               widget.expense.description,
@@ -1491,7 +1683,8 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
     return PopScope(
       canPop: !state.isMutating && !_submitted,
       child: AlertDialog(
-        title: Text(
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(
           widget.expense == null
               ? localizations.splitAddExpenseTitle
               : localizations.splitEditExpenseTitle,
@@ -1501,69 +1694,85 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
-                key: const Key('splitExpenseDescriptionField'),
-                controller: _description,
-                autofocus: true,
-                enabled: formEnabled,
-                maxLength: splitExpenseDescriptionMaxLength,
-                textCapitalization: TextCapitalization.sentences,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  labelText: localizations.splitExpenseDescriptionLabel,
-                  errorText: _showValidation && !descriptionValid
-                      ? localizations.splitInvalidDescriptionMessage
-                      : null,
+              AppDialogField(
+                label: localizations.splitExpenseDescriptionLabel,
+                child: TextField(
+                  style: AppPalette.inputTextStyle(context),
+                  key: const Key('splitExpenseDescriptionField'),
+                  controller: _description,
+                  autofocus: true,
+                  enabled: formEnabled,
+                  maxLength: splitExpenseDescriptionMaxLength,
+                  textCapitalization: TextCapitalization.sentences,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    errorText: _showValidation && !descriptionValid
+                        ? localizations.splitInvalidDescriptionMessage
+                        : null,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
-              TextField(
-                key: const Key('splitExpenseAmountField'),
-                controller: _amount,
-                enabled: formEnabled,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  labelText:
-                      localizations.splitExpenseAmountLabel(currency.code),
-                  helperText: localizations.splitExpenseAmountHelper,
-                  errorText: _showValidation && parsed == null
-                      ? localizations.splitInvalidAmountMessage
-                      : null,
+              AppDialogField(
+                label: localizations.splitExpenseAmountLabel(currency.code),
+                child: TextField(
+                  style: AppPalette.inputTextStyle(context),
+                  key: const Key('splitExpenseAmountField'),
+                  controller: _amount,
+                  enabled: formEnabled,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    helperText: localizations.splitExpenseAmountHelper,
+                    errorText: _showValidation && parsed == null
+                        ? localizations.splitInvalidAmountMessage
+                        : null,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                key: const Key('splitExpensePayerField'),
-                // Keep the initializer supported by the Flutter 3.19 floor.
-                // ignore: deprecated_member_use
-                value: payerValid ? _payerId : null,
-                decoration: InputDecoration(
-                  labelText: localizations.splitExpensePayerLabel,
-                  errorText: _showValidation && !payerValid
-                      ? localizations.splitPayerRequiredMessage
+              AppDialogField(
+                label: localizations.splitExpensePayerLabel,
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  isDense: false,
+                  iconEnabledColor: AppPalette.navy,
+                  style: AppPalette.inputTextStyle(context),
+                  dropdownColor: AppPalette.inputCream,
+                  key: const Key('splitExpensePayerField'),
+                  // Keep the initializer supported by the Flutter 3.19 floor.
+                  // ignore: deprecated_member_use
+                  value: payerValid ? _payerId : null,
+                  decoration: InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding,
+                    errorText: _showValidation && !payerValid
+                        ? localizations.splitPayerRequiredMessage
+                        : null,
+                  ),
+                  items: [
+                    for (final participant in payerChoices)
+                      DropdownMenuItem(
+                        value: participant.id,
+                        child:
+                            Text(_participantName(localizations, participant)),
+                      ),
+                  ],
+                  onChanged: formEnabled
+                      ? (value) => setState(() => _payerId = value)
                       : null,
                 ),
-                items: [
-                  for (final participant in payerChoices)
-                    DropdownMenuItem(
-                      value: participant.id,
-                      child: Text(_participantName(localizations, participant)),
-                    ),
-                ],
-                onChanged: formEnabled
-                    ? (value) => setState(() => _payerId = value)
-                    : null,
               ),
               const SizedBox(height: 16),
-              Row(
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Expanded(
-                    child: Text(
-                      localizations.splitExpenseParticipantsLabel,
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
+                  Text(
+                    localizations.splitExpenseParticipantsLabel,
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
                   TextButton(
                     key: const Key('selectAllSplitParticipantsButton'),
@@ -1649,31 +1858,33 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
                   if (_beneficiaryIds.contains(participant.id))
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
-                      child: TextField(
-                        key: ValueKey(
-                          'splitCustomShareAmount-${participant.id}',
+                      child: AppDialogField(
+                        label: localizations.splitExpenseCustomAmountLabel(
+                          _participantName(localizations, participant),
+                          currency.code,
                         ),
-                        controller: _customAmountController(participant.id),
-                        enabled: formEnabled,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        textInputAction: TextInputAction.next,
-                        onChanged: (value) => _customAmountChanged(
-                          participant.id,
-                          value,
-                          currency,
-                        ),
-                        decoration: InputDecoration(
-                          labelText:
-                              localizations.splitExpenseCustomAmountLabel(
-                            _participantName(localizations, participant),
-                            currency.code,
+                        child: TextField(
+                          style: AppPalette.inputTextStyle(context),
+                          key: ValueKey(
+                            'splitCustomShareAmount-${participant.id}',
                           ),
-                          errorText: _customAmountError(
-                                  participant.id, currency)
-                              ? localizations.splitExpenseCustomAmountInvalid
-                              : null,
+                          controller: _customAmountController(participant.id),
+                          enabled: formEnabled,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          textInputAction: TextInputAction.next,
+                          onChanged: (value) => _customAmountChanged(
+                            participant.id,
+                            value,
+                            currency,
+                          ),
+                          decoration: InputDecoration(
+                            errorText: _customAmountError(
+                                    participant.id, currency)
+                                ? localizations.splitExpenseCustomAmountInvalid
+                                : null,
+                          ),
                         ),
                       ),
                     ),
@@ -1688,7 +1899,7 @@ class _ExpenseFormDialogState extends ConsumerState<ExpenseFormDialog> {
           ),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: state.isMutating || _dialogClosing
                 ? null
                 : () {

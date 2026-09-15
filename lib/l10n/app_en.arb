@@ -1,6 +1,12 @@
 {
   "@@locale": "en",
   "appTitle": "List & Split",
+  "appearanceTitle": "Appearance",
+  "appearanceDeviceHelper": "Choose the theme for this device. System follows your device settings.",
+  "appearanceSystem": "System",
+  "appearanceLight": "Light",
+  "appearanceDark": "Dark",
+  "appearanceSaveFailed": "We couldn't save your theme. Your previous theme is still selected. Please try again.",
   "@appTitle": {
     "description": "The application display title."
   },
@@ -73,7 +79,7 @@
   "@confirmPasswordLabel": {
     "description": "Password confirmation field label."
   },
-  "signInTitle": "Welcome back",
+  "signInTitle": "Sign in to your account",
   "@signInTitle": {
     "description": "Sign-in screen title."
   },
@@ -724,6 +730,14 @@
   "listsLoadingMoreLabel": "Loading more lists",
   "listsItemCount": "{count, plural, =0{No items} =1{1 item} other{{count} items}}",
   "@listsItemCount": {
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "listsParticipantCount": "{count, plural, =1{1 participant} other{{count} participants}}",
+  "listSectionLabel": "List",
+  "listChatSectionLabel": "Chat",
+  "listsWelcomeLabel": "Welcome",
+  "@listsParticipantCount": {
+    "description": "Current list participants, including the owner and accepted members only.",
     "placeholders": {"count": {"type": "int"}}
   },
   "listsCompletedCount": "{completed} of {total} complete",
@@ -1473,5 +1487,11 @@
   "@templateSendNotificationTitle": {
     "placeholders": {"templateName": {"type": "String"}}
   },
-  "templateSendNotificationUnavailable": "This template invitation is no longer actionable."
+  "templateSendNotificationUnavailable": "This template invitation is no longer actionable.",
+  "itemQuickAddHint": "Add an item…",
+  "languageTitle": "Language",
+  "languageSystem": "System",
+  "languageDeviceHelper": "Applies only on this device. System follows your device language.",
+  "languageSaveFailed": "We couldn't save your language. Try again.",
+  "languageReadFailed": "Your saved language could not be read. Try again to restore it."
 }

@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_chat.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_chat_controller.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_chat_providers.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_controller.dart';
+import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
@@ -65,7 +68,7 @@ class _ActiveListChatScreenState extends ConsumerState<ActiveListChatScreen> {
         ? localizations.listsTitle
         : localizations.listChatTitle(detail.summary.title);
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         title: Text(title),
         actions: [
           IconButton(
@@ -99,6 +102,15 @@ class _ActiveListChatScreenState extends ConsumerState<ActiveListChatScreen> {
             constraints: const BoxConstraints(maxWidth: 760),
             child: Column(
               children: [
+                if (detail != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: ListSectionNavigation(
+                      listId: widget.listId,
+                      selected: ListDetailSection.chat,
+                      enabled: !mutationInProgress,
+                    ),
+                  ),
                 if (archived) const _ArchivedChatBanner(),
                 Expanded(
                   child: chatState.messages.when(
@@ -336,7 +348,7 @@ class _ActiveListChatScreenState extends ConsumerState<ActiveListChatScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.listChatDeleteTitle),
+        title: AppDialogTitle(localizations.listChatDeleteTitle),
         content: Text(localizations.listChatDeleteDescription),
         actions: [
           TextButton(
@@ -493,31 +505,53 @@ class _ChatComposerState extends State<_ChatComposer> {
         ? () => widget.onSend()
         : null;
     return Material(
-      elevation: 3,
+      elevation: 0,
       color: Theme.of(context).colorScheme.surface,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextField(
-                key: const Key('listChatComposer'),
-                controller: widget.controller,
-                focusNode: widget.focusNode,
-                minLines: 1,
-                maxLines: 5,
-                textCapitalization: TextCapitalization.sentences,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
-                decoration: InputDecoration(
-                  labelText: localizations.listChatComposerLabel,
-                  helperText: localizations.listChatComposerHelper,
-                  counterText: localizations.listChatCharacterCount(count),
-                  errorText: widget.controller.text.isNotEmpty && !valid
-                      ? localizations.listChatInvalidMessage
-                      : null,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    style: AppPalette.inputTextStyle(context),
+                    key: const Key('listChatComposer'),
+                    controller: widget.controller,
+                    focusNode: widget.focusNode,
+                    minLines: 1,
+                    maxLines: 5,
+                    textCapitalization: TextCapitalization.sentences,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    decoration: InputDecoration(
+                      hintText: localizations.listChatComposerLabel,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(32),
+                          borderSide: const BorderSide(
+                              color: AppPalette.orange, width: 1.5)),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(32),
+                          borderSide: const BorderSide(
+                              color: AppPalette.orange, width: 1.5)),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(32),
+                          borderSide: const BorderSide(
+                              color: AppPalette.navy, width: 2)),
+                      errorText: widget.controller.text.isNotEmpty && !valid
+                          ? localizations.listChatInvalidMessage
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(localizations.listChatComposerHelper,
+                      style: Theme.of(context).textTheme.bodySmall),
+                  Text(localizations.listChatCharacterCount(count),
+                      style: Theme.of(context).textTheme.bodySmall),
+                ],
               ),
             ),
             const SizedBox(width: 4),
@@ -531,6 +565,10 @@ class _ChatComposerState extends State<_ChatComposer> {
               onTap: onSend,
               child: IconButton.filled(
                 key: const Key('listChatSendButton'),
+                style: IconButton.styleFrom(
+                    backgroundColor: AppPalette.inputCream,
+                    foregroundColor: AppPalette.navy,
+                    minimumSize: const Size(48, 48)),
                 onPressed: onSend,
                 tooltip: localizations.listChatSendButton,
                 icon: widget.isSending
@@ -631,85 +669,110 @@ class _ChatMessageCard extends StatelessWidget {
         localizations.listChatDeletedWithAccount,
       null => message.body!,
     };
-    final colors = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Semantics(
       container: true,
       label: localizations.listChatMessageSemantics(
-        sender,
-        timestampLabel,
-        displayedMessage,
-      ),
+          sender, timestampLabel, displayedMessage),
       child: Align(
-        alignment:
-            message.isMine ? Alignment.centerRight : Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 580),
-          child: Card(
-            color: message.isMine
-                ? colors.primaryContainer
-                : colors.secondaryContainer,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 6, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          sender,
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (message.isDeleted) ...[
-                              const Icon(Icons.delete_outline, size: 18),
-                              const SizedBox(width: 6),
-                            ],
-                            Expanded(
-                              child: Text(
+        alignment: message.isMine
+            ? AlignmentDirectional.centerEnd
+            : AlignmentDirectional.centerStart,
+        child: Padding(
+          padding: EdgeInsetsDirectional.only(
+            start: message.isMine ? 40 : 0,
+            end: message.isMine ? 0 : 24,
+            bottom: 8,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 580),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!message.isMine) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: IdentityBadge(
+                        label: message.senderDisplayName ?? '', size: 32),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: message.isMine
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+                    children: [
+                      ExcludeSemantics(
+                          child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        child: Text(sender,
+                            style: Theme.of(context).textTheme.labelSmall),
+                      )),
+                      Card(
+                        margin: EdgeInsets.zero,
+                        color: dark
+                            ? (message.isMine
+                                ? AppPalette.darkCard
+                                : AppPalette.darkIncomingMessage)
+                            : (message.isMine
+                                ? AppPalette.cardBlue
+                                : AppPalette.inputCream),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (message.isDeleted) ...[
+                                const ExcludeSemantics(
+                                    child:
+                                        Icon(Icons.delete_outline, size: 18)),
+                                const SizedBox(width: 6),
+                              ],
+                              Flexible(
+                                  child: ExcludeSemantics(
+                                      child: Text(
                                 displayedMessage,
                                 style: message.isDeleted
                                     ? Theme.of(context)
                                         .textTheme
                                         .bodyMedium
-                                        ?.copyWith(
-                                          fontStyle: FontStyle.italic,
-                                        )
+                                        ?.copyWith(fontStyle: FontStyle.italic)
                                     : null,
                                 softWrap: true,
-                              ),
-                            ),
-                          ],
+                              ))),
+                              if (canDelete)
+                                IconButton(
+                                  key: Key('delete-chat-message-${message.id}'),
+                                  onPressed: isDeleting ? null : onDelete,
+                                  tooltip: localizations.listChatDeleteButton,
+                                  icon: isDeleting
+                                      ? const SizedBox.square(
+                                          dimension: 18,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2))
+                                      : const Icon(Icons.delete_outline),
+                                ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          timestampLabel,
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
-                      ],
-                    ),
+                      ),
+                      ExcludeSemantics(
+                          child: Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 2, 6, 0),
+                        child: Text(timestampLabel,
+                            style: Theme.of(context).textTheme.labelSmall),
+                      )),
+                    ],
                   ),
-                  if (canDelete)
-                    IconButton(
-                      key: Key('delete-chat-message-${message.id}'),
-                      onPressed: isDeleting ? null : onDelete,
-                      tooltip: localizations.listChatDeleteButton,
-                      icon: isDeleting
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.delete_outline),
-                    ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

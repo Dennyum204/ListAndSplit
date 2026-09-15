@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
+import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/split/domain/list_split.dart';
@@ -15,8 +17,100 @@ import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fake_list_split_repository.dart';
 import '../../helpers/fakes.dart';
+import '../../support/ui_preview_capture.dart';
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
+  for (final locale in [const Locale('en'), const Locale('pt')]) {
+    for (final dark in [false, true]) {
+      testWidgets(
+          'Split cards preserve exact amounts at 200% ${locale.languageCode} dark=$dark',
+          (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = FakeListSplitRepository(
+          initial: enabledSplitOverview(expenses: [splitExpense()]),
+        );
+        await _pump(tester, repository,
+            locale: locale, dark: dark, textScale: 2, redesignedTheme: true);
+        expect(find.byKey(const Key('listSectionNavigation')), findsOneWidget);
+        await captureUiPreview(tester,
+            'split-${locale.languageCode}-${dark ? 'dark' : 'light'}-large');
+        await _scrollSplitUntilVisible(
+            tester,
+            find.byKey(
+                const ValueKey('splitBalance-$splitOwnerParticipantId')));
+        expect(find.byKey(const Key('splitBalanceCards')), findsOneWidget);
+        final expense = repository.overview.expenses.single;
+        await _scrollSplitUntilVisible(
+            tester, find.byKey(ValueKey('splitExpense-${expense.id}')));
+        expect(find.text(expense.description), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        expect(repository.overview.expenses.single.amountMinor,
+            expense.amountMinor);
+      });
+      testWidgets(
+          'expense modal keeps plain external labels at 200% ${locale.languageCode} dark=$dark',
+          (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = FakeListSplitRepository();
+        await _pump(tester, repository,
+            locale: locale, dark: dark, textScale: 2, redesignedTheme: true);
+        await tester.tap(find.byKey(const Key('addExpenseButton')));
+        await tester.pumpAndSettle();
+        final dialog = find.byType(AlertDialog);
+        final localizations = AppLocalizations.of(tester.element(dialog));
+        for (final entry in {
+          'splitExpenseDescriptionField':
+              localizations.splitExpenseDescriptionLabel,
+          'splitExpenseAmountField':
+              localizations.splitExpenseAmountLabel('CHF'),
+          'splitExpensePayerField': localizations.splitExpensePayerLabel,
+        }.entries) {
+          final field = find.byKey(Key(entry.key));
+          final caption =
+              find.ancestor(of: field, matching: find.byType(AppDialogField));
+          expect(caption, findsOneWidget);
+          expect(tester.widget<AppDialogField>(caption).label, entry.value);
+          final captionText = tester.widget<Text>(
+              find.descendant(of: caption, matching: find.text(entry.value)));
+          expect(captionText.style?.background, isNull);
+          expect(captionText.style?.backgroundColor, isNull);
+          if (entry.key != 'splitExpensePayerField') {
+            expect(
+                tester.widget<TextField>(field).decoration?.labelText, isNull);
+          } else {
+            expect(
+                tester
+                    .widget<DropdownButtonFormField<String>>(field)
+                    .decoration
+                    .labelText,
+                isNull);
+          }
+        }
+        await tester.enterText(
+            find.byKey(const Key('splitExpenseDescriptionField')),
+            'Unsaved dinner');
+        await tester.pumpAndSettle();
+        await captureUiPreview(tester,
+            'expense-dialog-${locale.languageCode}-${dark ? 'dark' : 'light'}-large');
+        final cancel =
+            find.widgetWithText(OutlinedButton, localizations.cancelButton);
+        await tester.ensureVisible(cancel);
+        await tester.tap(cancel);
+        await tester.pumpAndSettle();
+        expect(dialog, findsNothing);
+        expect(repository.createCalls, 0);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
   testWidgets('owner enables Split while member sees owner-only guidance',
       (tester) async {
     final ownerRepository = FakeListSplitRepository(
@@ -94,9 +188,12 @@ void main() {
       find.byKey(const Key('splitExpenseAmountField')),
       '10.01',
     );
-    await tester.tap(
-      find.byKey(const ValueKey('splitBeneficiary-$splitOwnerParticipantId')),
-    );
+    final ownerBeneficiary =
+        find.byKey(const ValueKey('splitBeneficiary-$splitOwnerParticipantId'));
+    await tester.ensureVisible(ownerBeneficiary);
+    await tester.pumpAndSettle();
+    expect(ownerBeneficiary.hitTestable(), findsOneWidget);
+    await tester.tap(ownerBeneficiary);
     await tester.pump();
     await tester.tap(find.byKey(const Key('saveSplitExpenseButton')));
     await tester.pumpAndSettle();
@@ -468,51 +565,58 @@ void main() {
 
   testWidgets('renders positive, negative, zero, and historical balances',
       (tester) async {
-    final repository = FakeListSplitRepository(
-      initial: enabledSplitOverview(
-        participants: const [
-          ListSplitParticipant(
-            id: splitOwnerParticipantId,
-            profileId: splitOwnerProfileId,
-            username: 'fernando',
-            displayName: 'Fernando',
-            isAnonymized: false,
-            isCurrent: true,
-            paidMinor: 1000,
-            owedMinor: 500,
-            balanceMinor: 500,
-          ),
-          ListSplitParticipant(
-            id: splitMemberParticipantId,
-            profileId: splitMemberProfileId,
-            username: 'susana',
-            displayName: 'Susana',
-            isAnonymized: false,
-            isCurrent: true,
-            paidMinor: 0,
-            owedMinor: 500,
-            balanceMinor: -500,
-          ),
-          ListSplitParticipant(
-            id: '30000000-0000-4000-8000-000000000003',
-            profileId: null,
-            username: null,
-            displayName: null,
-            isAnonymized: true,
-            isCurrent: false,
-            paidMinor: 250,
-            owedMinor: 250,
-            balanceMinor: 0,
-          ),
-        ],
-      ),
-    );
-    await _pump(tester, repository);
+    final semantics = tester.ensureSemantics();
+    try {
+      final repository = FakeListSplitRepository(
+        initial: enabledSplitOverview(
+          participants: const [
+            ListSplitParticipant(
+              id: splitOwnerParticipantId,
+              profileId: splitOwnerProfileId,
+              username: 'fernando',
+              displayName: 'Fernando',
+              isAnonymized: false,
+              isCurrent: true,
+              paidMinor: 1000,
+              owedMinor: 500,
+              balanceMinor: 500,
+            ),
+            ListSplitParticipant(
+              id: splitMemberParticipantId,
+              profileId: splitMemberProfileId,
+              username: 'susana',
+              displayName: 'Susana',
+              isAnonymized: false,
+              isCurrent: true,
+              paidMinor: 0,
+              owedMinor: 500,
+              balanceMinor: -500,
+            ),
+            ListSplitParticipant(
+              id: '30000000-0000-4000-8000-000000000003',
+              profileId: null,
+              username: null,
+              displayName: null,
+              isAnonymized: true,
+              isCurrent: false,
+              paidMinor: 250,
+              owedMinor: 250,
+              balanceMinor: 0,
+            ),
+          ],
+        ),
+      );
+      await _pump(tester, repository);
 
-    expect(find.text('You are owed CHF 5.00'), findsOneWidget);
-    expect(find.text('Fernando is owed CHF 5.00'), findsOneWidget);
-    expect(find.text('Susana owes CHF 5.00'), findsOneWidget);
-    expect(find.text('Former participant is settled up'), findsOneWidget);
+      expect(find.text('You are owed CHF 5.00'), findsOneWidget);
+      expect(
+          find.bySemanticsLabel('Fernando is owed CHF 5.00'), findsOneWidget);
+      expect(find.bySemanticsLabel('Susana owes CHF 5.00'), findsOneWidget);
+      expect(find.bySemanticsLabel('Former participant is settled up'),
+          findsOneWidget);
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('invalid amount and zero beneficiaries never submit',
@@ -926,6 +1030,8 @@ Future<ProviderContainer> _pump(
   String authenticatedProfileId = splitOwnerProfileId,
   FakeNotificationRepository? notifications,
   bool dark = false,
+  Locale locale = const Locale('en'),
+  bool redesignedTheme = false,
   double textScale = 1,
   bool settle = true,
 }) async {
@@ -944,14 +1050,15 @@ Future<ProviderContainer> _pump(
         builder: (context) {
           container = ProviderScope.containerOf(context);
           return MaterialApp(
-            theme: ThemeData.light(),
-            darkTheme: ThemeData.dark(),
+            theme: redesignedTheme ? AppTheme.light : ThemeData.light(),
+            darkTheme: redesignedTheme ? AppTheme.dark : ThemeData.dark(),
+            locale: locale,
             themeMode: dark ? ThemeMode.dark : ThemeMode.light,
             builder: (context, child) => MediaQuery(
               data: MediaQuery.of(context).copyWith(
                 textScaler: TextScaler.linear(textScale),
               ),
-              child: child!,
+              child: uiPreviewBoundary(child!),
             ),
             localizationsDelegates: const [
               AppLocalizations.delegate,
@@ -1021,7 +1128,8 @@ Future<void> _scrollSplitUntilVisible(
     300,
     scrollable: find.descendant(
       of: find.byKey(const Key('splitOverview')),
-      matching: find.byType(Scrollable),
+      matching: find.byWidgetPredicate((widget) =>
+          widget is Scrollable && widget.axisDirection == AxisDirection.down),
     ),
     maxScrolls: 20,
   );

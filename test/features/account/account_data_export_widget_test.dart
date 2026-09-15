@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/account/domain/account_data_export_share_service.dart';
 import 'package:list_and_split/features/account/presentation/account_data_export_action.dart';
@@ -16,9 +17,64 @@ import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fakes.dart';
 import '../../helpers/fake_public_template_moderation_repository.dart';
+import '../../support/ui_preview_capture.dart';
 import 'account_data_export_fixtures.dart';
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
+  for (final configuration in [
+    (locale: const Locale('en'), mode: ThemeMode.light),
+    (locale: const Locale('pt'), mode: ThemeMode.dark),
+  ]) {
+    testWidgets(
+        'redesigned Profile preserves locked identity and account actions '
+        'on a narrow 200-percent screen ${configuration.locale.languageCode}',
+        (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await _pumpScreen(tester,
+          child: const ProfileScreen(),
+          locale: configuration.locale,
+          themeMode: configuration.mode,
+          textScale: 2,
+          overrides: [
+            ownProfileProvider.overrideWith(
+                (ref) async => FakeProfileRepository.completeProfile),
+            profileRepositoryProvider.overrideWithValue(FakeProfileRepository(
+                profile: FakeProfileRepository.completeProfile)),
+            accountDataExportRepositoryProvider
+                .overrideWithValue(FakeAccountDataExportRepository()),
+            accountDataExportShareServiceProvider
+                .overrideWithValue(FakeAccountDataExportShareService()),
+            notificationRepositoryProvider
+                .overrideWithValue(FakeNotificationRepository()),
+          ]);
+      expect(find.byType(AppPageHeader), findsOneWidget);
+      expect(find.byType(IdentityBadge), findsOneWidget);
+      expect(find.byType(Image), findsNothing);
+      final username = tester.widget<EditableText>(find.descendant(
+        of: find.byKey(const Key('profileUsername')),
+        matching: find.byType(EditableText),
+      ));
+      expect(username.readOnly, isTrue);
+      await captureUiPreview(tester,
+          'own-profile-large-${configuration.mode == ThemeMode.dark ? 'dark' : 'light'}');
+      for (final key in [
+        const Key('previewPublicProfileButton'),
+        const Key('profileSignOutButton'),
+        const Key('downloadAccountDataButton'),
+        const Key('deleteAccountButton'),
+      ]) {
+        await tester.ensureVisible(find.byKey(key));
+        await tester.pumpAndSettle();
+        expect(
+            tester.getSize(find.byKey(key)).height, greaterThanOrEqualTo(48));
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final themeMode in [ThemeMode.light, ThemeMode.dark]) {
     testWidgets('renders localized accessible action in ${themeMode.name}',
         (tester) async {
@@ -187,6 +243,8 @@ Future<void> _pumpScreen(
   required Widget child,
   List<Override> overrides = const [],
   ThemeMode themeMode = ThemeMode.light,
+  Locale? locale,
+  double textScale = 1,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -206,6 +264,12 @@ Future<void> _pumpScreen(
         ...overrides,
       ],
       child: MaterialApp(
+        locale: locale,
+        builder: (context, child) => uiPreviewBoundary(MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        )),
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: themeMode,

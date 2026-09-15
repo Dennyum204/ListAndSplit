@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
+import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
@@ -14,12 +16,243 @@ import 'package:list_and_split/features/templates/domain/private_template_reposi
 import 'package:list_and_split/features/templates/presentation/private_template_detail_screen.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/templates_screen.dart';
+import 'package:list_and_split/features/templates/presentation/template_selection_dialog.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fake_private_template_repository.dart';
 import '../../helpers/fakes.dart';
+import '../../support/ui_preview_capture.dart';
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
+  for (final dark in [false, true]) {
+    for (final textScale in [1.0, 2.0]) {
+      testWidgets(
+          'category dialog has a clean external label '
+          '${dark ? 'dark' : 'light'} at ${textScale * 100} percent',
+          (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = FakePrivateTemplateRepository();
+        await _pump(
+          tester,
+          repository: repository,
+          lists: FakeActiveListRepository(),
+          child: const TemplatesScreen(),
+          dark: dark,
+          textScale: textScale,
+        );
+        await tester.tap(
+          find.byKey(const Key('manageTemplateCategoriesButton')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Create category'));
+        await tester.pumpAndSettle();
+
+        final field = find.byKey(const Key('categoryNameField'));
+        final label = find.descendant(
+          of: find.byType(AppDialogField),
+          matching: find.text('Category name'),
+        );
+        expect(label, findsOneWidget);
+        expect(tester.widget<TextField>(field).decoration?.labelText, isNull);
+        expect(tester.widget<TextField>(field).decoration?.label, isNull);
+        expect(tester.widget<Text>(label).style?.backgroundColor, isNull);
+        expect(tester.getBottomLeft(label).dy,
+            lessThan(tester.getTopLeft(field).dy));
+
+        final cancel = find.byKey(const Key('cancelCategoryNameButton'));
+        final confirm = find.byKey(const Key('confirmCategoryNameButton'));
+        expect(tester.widget(cancel), isA<OutlinedButton>());
+        expect(tester.getSize(cancel).height, greaterThanOrEqualTo(48));
+        expect(tester.getSize(confirm).height, greaterThanOrEqualTo(48));
+        expect(tester.takeException(), isNull);
+
+        await tester.enterText(field, 'Weekend');
+        await tester.pumpAndSettle();
+        expect(label, findsOneWidget);
+        expect(tester.getBottomLeft(label).dy,
+            lessThan(tester.getTopLeft(field).dy));
+        await captureUiPreview(tester,
+            'category-clean-label-${dark ? 'dark' : 'light'}-${(textScale * 100).round()}');
+        await tester.tap(cancel);
+        await tester.pumpAndSettle();
+        expect(repository.categories, isEmpty);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+  for (final dark in [false, true]) {
+    testWidgets('reference catalog at normal text ${dark ? 'dark' : 'light'}',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repository = FakePrivateTemplateRepository();
+      final category =
+          await repository.createCategory('Recipes', requestId: 'category');
+      for (final name in [
+        'Pizza with olives',
+        'Beef with rice',
+        'Cheesecake'
+      ]) {
+        await repository.createTemplate(name,
+            requestId: name, categoryId: category.id);
+      }
+      await _pump(tester,
+          repository: repository,
+          lists: FakeActiveListRepository(),
+          child: const TemplatesScreen(),
+          dark: dark);
+      expect(find.byIcon(Icons.description_outlined), findsNWidgets(3));
+      expect(tester.takeException(), isNull);
+      await captureUiPreview(
+          tester, 'templates-catalog-en-${dark ? 'dark' : 'light'}-100');
+    });
+  }
+
+  for (final locale in [const Locale('en'), const Locale('pt')]) {
+    for (final dark in [false, true]) {
+      testWidgets(
+          'reference selection keeps capacity guards at 200 percent '
+          '${locale.languageCode} ${dark ? 'dark' : 'light'}', (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = FakePrivateTemplateRepository();
+        final template =
+            await repository.createTemplate('Weekend', requestId: 'template');
+        for (final name in ['Sunscreen', 'Towels']) {
+          await repository.createItem(template.id, name,
+              requestId: name, expectedTemplateVersion: 1);
+        }
+        await _pump(tester,
+            repository: repository,
+            lists: FakeActiveListRepository(),
+            locale: locale,
+            dark: dark,
+            textScale: 2, child: Builder(builder: (context) {
+          final strings = AppLocalizations.of(context);
+          return Scaffold(
+            body: FilledButton(
+              key: const Key('openSelection'),
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => TemplateSelectionDialog(
+                  title: strings.templatesImportTitle,
+                  items: repository.itemsByTemplate[template.id]!,
+                  remainingCapacity: 1,
+                  confirmLabel: strings.templatesConfirmImportButton,
+                ),
+              ),
+              child: Text(strings.templatesImportListButton),
+            ),
+          );
+        }));
+        await tester.tap(find.byKey(const Key('openSelection')));
+        await tester.pumpAndSettle();
+        final confirm = find.byKey(const Key('confirmTemplateSelectionButton'));
+        expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+        expect(tester.takeException(), isNull);
+        await captureUiPreview(tester,
+            'template-selection-${locale.languageCode}-${dark ? 'dark' : 'light'}-200');
+        await tester.ensureVisible(find.byType(CheckboxListTile).first);
+        await tester.tap(find.byType(CheckboxListTile).first);
+        await tester.pumpAndSettle();
+        expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+        final strings = AppLocalizations.of(tester.element(confirm));
+        await tester
+            .ensureVisible(find.text(strings.templatesClearSelectionButton));
+        await tester.tap(find.text(strings.templatesClearSelectionButton));
+        await tester.pumpAndSettle();
+        expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets(
+          'reference catalog and category dialog remain usable at 200 percent '
+          '${locale.languageCode} ${dark ? 'dark' : 'light'}', (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = FakePrivateTemplateRepository();
+        final category =
+            await repository.createCategory('Recipes', requestId: 'category');
+        await repository.createTemplate('Weekend preparation',
+            requestId: 'template', categoryId: category.id);
+        await _pump(tester,
+            repository: repository,
+            lists: FakeActiveListRepository(),
+            child: const TemplatesScreen(),
+            locale: locale,
+            dark: dark,
+            textScale: 2);
+
+        expect(find.text('Weekend preparation'), findsOneWidget);
+        expect(find.byIcon(Icons.description_outlined), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await captureUiPreview(tester,
+            'templates-catalog-${locale.languageCode}-${dark ? 'dark' : 'light'}-200');
+        await tester
+            .tap(find.byKey(const Key('manageTemplateCategoriesButton')));
+        await tester.pumpAndSettle();
+        final categoryTile = find.widgetWithText(ListTile, 'Recipes');
+        expect(categoryTile, findsOneWidget);
+        await tester.tap(categoryTile);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('categoryNameField')), findsOneWidget);
+        expect(find.byIcon(Icons.edit_outlined), findsNothing);
+        expect(tester.takeException(), isNull);
+        await captureUiPreview(tester,
+            'templates-category-${locale.languageCode}-${dark ? 'dark' : 'light'}-200');
+        await tester.tap(find.byKey(const Key('cancelCategoryNameButton')));
+        await tester.pumpAndSettle();
+        expect(repository.categories.single.name, 'Recipes');
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets(
+          'blank reference detail keeps guarded item management at 200 percent '
+          '${locale.languageCode} ${dark ? 'dark' : 'light'}', (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = FakePrivateTemplateRepository();
+        final template = await repository.createTemplate('Beach Trip',
+            requestId: 'template');
+        await _pump(tester,
+            repository: repository,
+            lists: FakeActiveListRepository(),
+            child: PrivateTemplateDetailScreen(templateId: template.id),
+            locale: locale,
+            dark: dark,
+            textScale: 2);
+        final addButton = find.byKey(const Key('addTemplateItemButton'));
+        expect(tester.getSize(addButton).height, greaterThanOrEqualTo(48));
+        await tester.tap(addButton);
+        await tester.pumpAndSettle();
+        await tester.enterText(
+            find.byKey(const Key('templateItemNameField')), 'Sunscreen');
+        final strings = AppLocalizations.of(
+            tester.element(find.byKey(const Key('templateItemNameField'))));
+        await tester.tap(find.widgetWithText(FilledButton, strings.saveButton));
+        await tester.pumpAndSettle();
+        expect(find.text('Sunscreen'), findsOneWidget);
+        expect(
+            repository.itemsByTemplate[template.id]!.single.name, 'Sunscreen');
+        expect(tester.takeException(), isNull);
+        await captureUiPreview(tester,
+            'template-detail-${locale.languageCode}-${dark ? 'dark' : 'light'}-200');
+      });
+    }
+  }
+
   testWidgets('owned private template exposes the Send action', (tester) async {
     final repository = FakePrivateTemplateRepository();
     final template = await repository.createTemplate(
@@ -484,6 +717,7 @@ Future<void> _pump(
   required Widget child,
   bool dark = false,
   double textScale = 1,
+  Locale locale = const Locale('en'),
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -496,14 +730,15 @@ Future<void> _pump(
         ),
       ],
       child: MaterialApp(
-        theme: ThemeData.light(),
-        darkTheme: ThemeData.dark(),
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        locale: locale,
         themeMode: dark ? ThemeMode.dark : ThemeMode.light,
         builder: (context, materialChild) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(textScale),
           ),
-          child: materialChild!,
+          child: uiPreviewBoundary(materialChild!),
         ),
         localizationsDelegates: const [
           AppLocalizations.delegate,

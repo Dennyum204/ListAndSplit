@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/templates/domain/public_template.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/public_templates_controller.dart';
 import 'package:list_and_split/features/templates/presentation/template_send_screens.dart';
+import 'package:list_and_split/features/templates/presentation/template_item_tile.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class PublicTemplateDetailScreen extends ConsumerStatefulWidget {
@@ -72,7 +75,7 @@ class _PublicTemplateDetailScreenState
       }
     });
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         title: Text(
           detail?.summary.name ?? localizations.publicTemplatesDetailTitle,
         ),
@@ -160,7 +163,8 @@ class _PublicTemplateDetailScreenState
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      const Icon(Icons.person_outline_rounded),
+                                      IdentityBadge(
+                                          label: loaded.profile.displayName),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
@@ -251,15 +255,10 @@ class _PublicTemplateDetailScreenState
                                 item.name,
                                 quantity,
                               ),
-                              child: Card(
+                              child: TemplateItemTile(
                                 key: Key('publicTemplateItem-$index'),
-                                child: ListTile(
-                                  leading: CircleAvatar(
-                                    child: Text('${index + 1}'),
-                                  ),
-                                  title: Text(item.name, maxLines: 2),
-                                  subtitle: Text(quantity),
-                                ),
+                                name: item.name,
+                                quantity: quantity,
                               ),
                             );
                           },
@@ -312,12 +311,13 @@ class _PublicTemplateDetailScreenState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.publicTemplatesCopyDialogTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.publicTemplatesCopyDialogTitle),
         content: SingleChildScrollView(
           child: Text(localizations.publicTemplatesCopyDialogDescription),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(localizations.cancelButton),
           ),
@@ -346,12 +346,13 @@ class _PublicTemplateDetailScreenState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(
           localizations.communityBlockDialogTitle(detail.profile.username),
         ),
         content: Text(localizations.communityBlockDialogDescription),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(localizations.cancelButton),
           ),
@@ -404,7 +405,8 @@ class _PublicTemplateDetailScreenState
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.publicTemplateReportSuccessTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.publicTemplateReportSuccessTitle),
         content: SingleChildScrollView(
           child: Text(localizations.publicTemplateReportSuccessDescription),
         ),
@@ -516,7 +518,8 @@ class _PublicTemplateReportDialogState
     return PopScope(
       canPop: !_isSubmitting,
       child: AlertDialog(
-        title: Text(localizations.publicTemplateReportDialogTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.publicTemplateReportDialogTitle),
         content: SizedBox(
           width: 480,
           child: Form(
@@ -528,60 +531,67 @@ class _PublicTemplateReportDialogState
                 children: [
                   Text(localizations.publicTemplateReportPrivacyDescription),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<PublicTemplateReportReason>(
-                    key: const Key('publicTemplateReportReason'),
-                    // ignore: deprecated_member_use
-                    value: _reason,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: localizations.publicTemplateReportReasonLabel,
-                    ),
-                    items: [
-                      for (final reason in PublicTemplateReportReason.values)
-                        DropdownMenuItem(
-                          value: reason,
-                          child: Text(
-                            _reportReasonLabel(localizations, reason),
-                            overflow: TextOverflow.ellipsis,
+                  AppDialogField(
+                    label: localizations.publicTemplateReportReasonLabel,
+                    child: DropdownButtonFormField<PublicTemplateReportReason>(
+                      isDense: false,
+                      style: AppPalette.inputTextStyle(context),
+                      dropdownColor: AppPalette.inputCream,
+                      iconEnabledColor: AppPalette.navy,
+                      key: const Key('publicTemplateReportReason'),
+                      // ignore: deprecated_member_use
+                      value: _reason,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                          contentPadding: AppDialogField.dropdownPadding),
+                      items: [
+                        for (final reason in PublicTemplateReportReason.values)
+                          DropdownMenuItem(
+                            value: reason,
+                            child: Text(
+                              _reportReasonLabel(localizations, reason),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                    ],
-                    onChanged: _isSubmitting
-                        ? null
-                        : (reason) {
-                            if (reason != null) {
-                              setState(() => _reason = reason);
-                            }
-                          },
+                      ],
+                      onChanged: _isSubmitting
+                          ? null
+                          : (reason) {
+                              if (reason != null) {
+                                setState(() => _reason = reason);
+                              }
+                            },
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
-                    key: const Key('publicTemplateReportExplanation'),
-                    controller: _explanation,
-                    enabled: !_isSubmitting,
-                    minLines: 3,
-                    maxLines: 6,
-                    maxLength: 500,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      labelText:
-                          localizations.publicTemplateReportExplanationLabel,
-                      helperText:
-                          localizations.publicTemplateReportExplanationHelper,
-                      alignLabelWithHint: true,
+                  AppDialogField(
+                    label: localizations.publicTemplateReportExplanationLabel,
+                    child: TextFormField(
+                      style: AppPalette.inputTextStyle(context),
+                      key: const Key('publicTemplateReportExplanation'),
+                      controller: _explanation,
+                      enabled: !_isSubmitting,
+                      minLines: 3,
+                      maxLines: 6,
+                      maxLength: 500,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        helperText:
+                            localizations.publicTemplateReportExplanationHelper,
+                      ),
+                      validator: (value) {
+                        final normalized = value?.trim() ?? '';
+                        if (_reason.requiresExplanation && normalized.isEmpty) {
+                          return localizations
+                              .publicTemplateReportExplanationRequired;
+                        }
+                        if (normalized.characters.length > 500) {
+                          return localizations
+                              .publicTemplateReportExplanationTooLong;
+                        }
+                        return null;
+                      },
                     ),
-                    validator: (value) {
-                      final normalized = value?.trim() ?? '';
-                      if (_reason.requiresExplanation && normalized.isEmpty) {
-                        return localizations
-                            .publicTemplateReportExplanationRequired;
-                      }
-                      if (normalized.characters.length > 500) {
-                        return localizations
-                            .publicTemplateReportExplanationTooLong;
-                      }
-                      return null;
-                    },
                   ),
                   if (_reason ==
                       PublicTemplateReportReason.copyrightTrademark) ...[
@@ -597,7 +607,7 @@ class _PublicTemplateReportDialogState
           ),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             key: const Key('cancelPublicTemplateReportButton'),
             onPressed: _isSubmitting || _isClosing
                 ? null

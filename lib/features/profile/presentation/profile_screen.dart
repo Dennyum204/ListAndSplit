@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/account/presentation/account_data_export_action.dart';
 import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
 import 'package:list_and_split/features/account/presentation/account_deletion_action.dart';
@@ -15,6 +17,8 @@ import 'package:list_and_split/features/notifications/presentation/notification_
 import 'package:list_and_split/features/profile/presentation/profile_controller.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_ui.dart';
+import 'package:list_and_split/features/settings/presentation/theme_preference_selector.dart';
+import 'package:list_and_split/features/settings/presentation/language_preference_selector.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -69,111 +73,175 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
         deletionState.isSubmitting ||
         authActions.isSubmitting;
     final displayNameError = state.fieldErrors[ProfileField.displayName];
-    return FormPageFrame(
-      title: localizations.profileTitle,
-      description: localizations.usernameImmutableHelper,
-      actions: const [NotificationBell()],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          FormMessageBanner(
-            message: state.message == null
-                ? null
-                : profileMessageText(localizations, state.message!),
-          ),
-          FormMessageBanner(
-            message: authActions.message == AuthActionMessage.operationFailed
-                ? localizations.operationFailedMessage
-                : null,
-          ),
-          TextFormField(
-            key: const Key('profileUsername'),
-            initialValue: widget.profile.username,
-            readOnly: true,
-            enableInteractiveSelection: true,
-            decoration: InputDecoration(
-              labelText: localizations.usernameLabel,
-              helperText: localizations.usernameImmutableHelper,
-              suffixIcon: const Icon(Icons.lock_outline_rounded),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            key: const Key('profileDisplayName'),
-            controller: _displayName,
-            enabled: !isBusy,
-            autofillHints: const [AutofillHints.name],
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.done,
-            maxLength: 50,
-            onSubmitted: (_) => _submit(),
-            decoration: InputDecoration(
-              labelText: localizations.displayNameLabel,
-              helperText: localizations.displayNameHelper,
-              errorText: displayNameError == null
-                  ? null
-                  : profileValidationText(
-                      localizations,
-                      displayNameError,
+    return Scaffold(
+      appBar: AppPageHeader(
+        title: Text(localizations.profileTitle),
+        automaticallyImplyLeading: false,
+        actions: const [NotificationBell()],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FormMessageBanner(
+                    message: state.message == null
+                        ? null
+                        : profileMessageText(localizations, state.message!),
+                  ),
+                  FormMessageBanner(
+                    message:
+                        authActions.message == AuthActionMessage.operationFailed
+                            ? localizations.operationFailedMessage
+                            : null,
+                  ),
+                  LayoutBuilder(builder: (context, constraints) {
+                    final identity = IdentityBadge(
+                      label: widget.profile.displayName ??
+                          widget.profile.username!,
+                      size: 72,
+                    );
+                    final username = Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(localizations.usernameLabel),
+                        const SizedBox(height: 6),
+                        Semantics(
+                          label: localizations.usernameLabel,
+                          child: TextFormField(
+                            key: const Key('profileUsername'),
+                            style: AppPalette.inputTextStyle(context),
+                            initialValue: widget.profile.username,
+                            readOnly: true,
+                            enableInteractiveSelection: true,
+                            decoration: const InputDecoration(
+                              suffixIcon: Icon(Icons.lock_outline_rounded),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                    if (constraints.maxWidth < 440 &&
+                        MediaQuery.textScalerOf(context).scale(1) > 1.3) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          identity,
+                          const SizedBox(height: 12),
+                          username
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        identity,
+                        const SizedBox(width: 16),
+                        Expanded(child: username)
+                      ],
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                  Text(localizations.usernameImmutableHelper,
+                      style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 16),
+                  Text(localizations.displayNameLabel),
+                  const SizedBox(height: 6),
+                  Semantics(
+                    label: localizations.displayNameLabel,
+                    child: TextField(
+                      key: const Key('profileDisplayName'),
+                      style: AppPalette.inputTextStyle(context),
+                      controller: _displayName,
+                      enabled: !isBusy,
+                      autofillHints: const [AutofillHints.name],
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.done,
+                      maxLength: 50,
+                      onSubmitted: (_) => _submit(),
+                      decoration: InputDecoration(
+                        errorText: displayNameError == null
+                            ? null
+                            : profileValidationText(
+                                localizations,
+                                displayNameError,
+                              ),
+                      ),
                     ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          SubmissionButton(
-            label: localizations.saveChangesButton,
-            isSubmitting: state.isSubmitting,
-            onPressed: exportState.isBusy || deletionState.isSubmitting
-                ? null
-                : _submit,
-          ),
-          TextButton.icon(
-            key: const Key('previewPublicProfileButton'),
-            onPressed: isBusy
-                ? null
-                : () => context.push(
-                      AppRoutes.publicProfile(widget.profile.id),
+                  ),
+                  Text(localizations.displayNameHelper,
+                      style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 20),
+                  SubmissionButton(
+                    label: localizations.saveChangesButton,
+                    isSubmitting: state.isSubmitting,
+                    onPressed: exportState.isBusy || deletionState.isSubmitting
+                        ? null
+                        : _submit,
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    key: const Key('previewPublicProfileButton'),
+                    onPressed: isBusy
+                        ? null
+                        : () => context.push(
+                              AppRoutes.publicProfile(widget.profile.id),
+                            ),
+                    icon: const Icon(Icons.public_rounded),
+                    label:
+                        Text(localizations.publicTemplatesPreviewProfileButton),
+                  ),
+                  if (hasModerationAccess)
+                    TextButton.icon(
+                      key: const Key('openModerationButton'),
+                      onPressed: isBusy
+                          ? null
+                          : () => context.push(AppRoutes.moderation),
+                      icon: const Icon(Icons.gavel_rounded),
+                      label: Text(localizations.moderationSettingsAction),
                     ),
-            icon: const Icon(Icons.public_rounded),
-            label: Text(localizations.publicTemplatesPreviewProfileButton),
-          ),
-          if (hasModerationAccess)
-            TextButton.icon(
-              key: const Key('openModerationButton'),
-              onPressed:
-                  isBusy ? null : () => context.push(AppRoutes.moderation),
-              icon: const Icon(Icons.gavel_rounded),
-              label: Text(localizations.moderationSettingsAction),
+                  const SizedBox(height: 20),
+                  const ThemePreferenceSelector(),
+                  const SizedBox(height: 16),
+                  const LanguagePreferenceSelector(),
+                  const SizedBox(height: 20),
+                  TextButton.icon(
+                    key: const Key('profileSignOutButton'),
+                    onPressed: isBusy
+                        ? null
+                        : () => ref
+                            .read(
+                              authActionsControllerProvider(
+                                      AuthActionFlow.session)
+                                  .notifier,
+                            )
+                            .signOut(),
+                    icon: authActions.isSubmitting
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.logout_rounded),
+                    label: Text(localizations.signOutButton),
+                  ),
+                  AccountDataExportAction(
+                    enabled: !state.isSubmitting && !deletionState.isSubmitting,
+                  ),
+                  if (email != null)
+                    AccountDeletionAction(
+                      email: email,
+                      confirmationTarget: widget.profile.username!,
+                      enabled: !state.isSubmitting && !exportState.isBusy,
+                      onDeleted: () => context.go(AppRoutes.signIn),
+                    ),
+                ],
+              ),
             ),
-          AccountDataExportAction(
-            enabled: !state.isSubmitting && !deletionState.isSubmitting,
           ),
-          if (email != null)
-            AccountDeletionAction(
-              email: email,
-              confirmationTarget: widget.profile.username!,
-              enabled: !state.isSubmitting && !exportState.isBusy,
-              onDeleted: () => context.go(AppRoutes.signIn),
-            ),
-          const SizedBox(height: 8),
-          TextButton.icon(
-            key: const Key('profileSignOutButton'),
-            onPressed: isBusy
-                ? null
-                : () => ref
-                    .read(
-                      authActionsControllerProvider(AuthActionFlow.session)
-                          .notifier,
-                    )
-                    .signOut(),
-            icon: authActions.isSubmitting
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.logout_rounded),
-            label: Text(localizations.signOutButton),
-          ),
-        ],
+        ),
       ),
     );
   }

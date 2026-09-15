@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/account/domain/account_deletion_repository.dart';
 import 'package:list_and_split/features/account/presentation/account_deletion_controller.dart';
@@ -51,8 +53,9 @@ class AccountDeletionAction extends ConsumerWidget {
           child: OutlinedButton.icon(
             key: const Key('deleteAccountButton'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-              side: BorderSide(color: Theme.of(context).colorScheme.error),
+              backgroundColor: const Color(0xFFBD2428),
+              foregroundColor: Colors.white,
+              side: BorderSide.none,
             ),
             onPressed: enabled && !state.isSubmitting
                 ? () => _openDialog(context, ref)
@@ -172,39 +175,45 @@ class _AccountDeletionDialogState
                     ),
               ),
               const SizedBox(height: 16),
-              TextField(
-                key: const Key('accountDeletionConfirmationField'),
-                controller: _confirmation,
-                enabled: !state.isSubmitting,
-                autocorrect: false,
-                textCapitalization: TextCapitalization.none,
-                textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  labelText: localizations.accountDeletionConfirmationLabel,
-                  errorText: confirmationError == null
-                      ? null
-                      : _fieldIssueText(
-                          localizations,
-                          confirmationError,
-                        ),
+              AppDialogField(
+                label: localizations.accountDeletionConfirmationLabel,
+                child: TextField(
+                  style: AppPalette.inputTextStyle(context),
+                  key: const Key('accountDeletionConfirmationField'),
+                  controller: _confirmation,
+                  enabled: !state.isSubmitting,
+                  autocorrect: false,
+                  textCapitalization: TextCapitalization.none,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    errorText: confirmationError == null
+                        ? null
+                        : _fieldIssueText(
+                            localizations,
+                            confirmationError,
+                          ),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
-              TextField(
-                key: const Key('accountDeletionPasswordField'),
-                controller: _password,
-                enabled: !state.isSubmitting,
-                obscureText: true,
-                autocorrect: false,
-                enableSuggestions: false,
-                autofillHints: const [AutofillHints.password],
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _submit(),
-                decoration: InputDecoration(
-                  labelText: localizations.accountDeletionPasswordLabel,
-                  errorText: passwordError == null
-                      ? null
-                      : localizations.passwordRequiredError,
+              AppDialogField(
+                label: localizations.accountDeletionPasswordLabel,
+                child: TextField(
+                  style: AppPalette.inputTextStyle(context),
+                  key: const Key('accountDeletionPasswordField'),
+                  controller: _password,
+                  enabled: !state.isSubmitting,
+                  obscureText: true,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  autofillHints: const [AutofillHints.password],
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submit(),
+                  decoration: InputDecoration(
+                    errorText: passwordError == null
+                        ? null
+                        : localizations.passwordRequiredError,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -257,7 +266,7 @@ class _AccountDeletionDialogState
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           key: const Key('cancelAccountDeletionButton'),
           onPressed: state.isSubmitting
               ? null

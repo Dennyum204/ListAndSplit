@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/auth/domain/auth_validation.dart';
 import 'package:list_and_split/features/auth/presentation/auth_actions_controller.dart';
 import 'package:list_and_split/features/auth/presentation/auth_ui.dart';
@@ -34,16 +35,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     return FormPageFrame(
       title: localizations.signInTitle,
       description: localizations.signInDescription,
+      centerTitle: true,
       child: AutofillGroup(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            TextButton(
+              onPressed:
+                  state.isSubmitting ? null : () => context.go('/sign-up'),
+              child: Text(localizations.createAccountButton),
+            ),
+            const SizedBox(height: 20),
             FormMessageBanner(
               message: state.message == null
                   ? null
                   : authMessageText(localizations, state.message!),
             ),
             TextField(
+              style: AppPalette.inputTextStyle(context),
               key: const Key('signInEmail'),
               controller: _email,
               enabled: !state.isSubmitting,
@@ -52,6 +61,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               textInputAction: TextInputAction.next,
               autocorrect: false,
               decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.person_outline_rounded),
                 labelText: localizations.emailLabel,
                 errorText: _errorText(
                   localizations,
@@ -61,6 +71,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             ),
             const SizedBox(height: 16),
             TextField(
+              style: AppPalette.inputTextStyle(context),
               key: const Key('signInPassword'),
               controller: _password,
               enabled: !state.isSubmitting,
@@ -69,6 +80,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _submit(),
               decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.key_outlined),
                 labelText: localizations.passwordLabel,
                 errorText: _errorText(
                   localizations,
@@ -76,22 +88,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            SubmissionButton(
-              label: localizations.signInButton,
-              isSubmitting: state.isSubmitting,
-              onPressed: _submit,
-            ),
+            const SizedBox(height: 16),
             TextButton(
               onPressed: state.isSubmitting
                   ? null
                   : () => context.go('/forgot-password'),
               child: Text(localizations.forgotPasswordButton),
             ),
-            TextButton(
-              onPressed:
-                  state.isSubmitting ? null : () => context.go('/sign-up'),
-              child: Text(localizations.createAccountButton),
+            const SizedBox(height: 48),
+            SubmissionButton(
+              label: localizations.signInButton,
+              isSubmitting: state.isSubmitting,
+              onPressed: _submit,
             ),
           ],
         ),

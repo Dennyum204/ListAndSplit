@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/private_templates_controller.dart';
 import 'package:list_and_split/features/templates/presentation/template_selection_dialog.dart';
@@ -42,7 +43,7 @@ class _PrivateTemplateImportScreenState
     );
     final templateName = state.detail.valueOrNull?.summary.name;
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         title: Text(templateName ?? localizations.templatesImportTitle),
       ),
       body: SafeArea(

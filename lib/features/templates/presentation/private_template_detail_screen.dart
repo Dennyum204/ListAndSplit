@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
@@ -9,6 +11,7 @@ import 'package:list_and_split/features/notifications/presentation/notification_
 import 'package:list_and_split/features/templates/domain/private_template.dart';
 import 'package:list_and_split/features/templates/presentation/private_template_providers.dart';
 import 'package:list_and_split/features/templates/presentation/private_templates_controller.dart';
+import 'package:list_and_split/features/templates/presentation/template_item_tile.dart';
 import 'package:list_and_split/features/templates/presentation/template_selection_dialog.dart';
 import 'package:list_and_split/features/templates/presentation/template_send_screens.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
@@ -46,8 +49,17 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
       }
     });
     return Scaffold(
-      appBar: AppBar(
-        title: Text(detail?.summary.name ?? localizations.templatesTitle),
+      appBar: AppPageHeader(
+        title: Tooltip(
+          message: localizations.templatesEditButton,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: detail == null || state.isMutating
+                ? null
+                : () => _showTemplateEditor(context, ref),
+            child: Text(detail?.summary.name ?? localizations.templatesTitle),
+          ),
+        ),
         actions: [
           const NotificationBell(),
           if (detail != null)
@@ -92,18 +104,18 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
             ),
         ],
       ),
-      floatingActionButton: detail == null
+      bottomNavigationBar: detail == null
           ? null
-          : FloatingActionButton.extended(
-              key: const Key('addTemplateItemButton'),
-              onPressed: state.isMutating || detail.remainingCapacity == 0
-                  ? null
-                  : () => _showItemEditor(context, ref),
-              tooltip: detail.remainingCapacity == 0
-                  ? localizations.templatesCapacityReached
-                  : localizations.templatesAddItemButton,
-              icon: const Icon(Icons.add),
-              label: Text(localizations.templatesAddItemButton),
+          : SafeArea(
+              minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: OutlinedButton.icon(
+                key: const Key('addTemplateItemButton'),
+                onPressed: state.isMutating || detail.remainingCapacity == 0
+                    ? null
+                    : () => _showItemEditor(context, ref),
+                icon: const Icon(Icons.add),
+                label: Text(localizations.templatesAddItemButton),
+              ),
             ),
       body: SafeArea(
         child: Center(
@@ -125,37 +137,58 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                        child: Card(
-                          child: ListTile(
-                            leading: const Icon(Icons.category_outlined),
-                            title: Text(
-                              loaded.summary.categoryName ??
-                                  localizations.templatesNoCategoryLabel,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: state.isMutating
+                                      ? null
+                                      : () => _showTemplateEditor(context, ref),
+                                  icon: const Icon(Icons.folder_outlined),
+                                  label: Text(
+                                    loaded.summary.categoryName ??
+                                        localizations.templatesNoCategoryLabel,
+                                  ),
+                                ),
+                                Chip(
+                                  key: const Key(
+                                      'templateDetailPublicationState'),
+                                  avatar: Icon(
+                                    loaded.summary.isModerated
+                                        ? Icons.gavel_rounded
+                                        : loaded.summary.isPublic
+                                            ? Icons.public_rounded
+                                            : Icons.lock_outline_rounded,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    loaded.summary.isModerated
+                                        ? localizations
+                                            .templatesRemovedByModerationLabel
+                                        : loaded.summary.isPublic
+                                            ? localizations.templatesPublicLabel
+                                            : localizations
+                                                .templatesPrivateLabel,
+                                  ),
+                                ),
+                              ],
                             ),
-                            subtitle: Text(
+                            const SizedBox(height: 8),
+                            Text(
                               '${localizations.templatesItemCount(loaded.items.length)} · '
                               '${localizations.templatesRemainingCapacity(loaded.remainingCapacity)}',
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
-                            trailing: Chip(
-                              key: const Key('templateDetailPublicationState'),
-                              avatar: Icon(
-                                loaded.summary.isModerated
-                                    ? Icons.gavel_rounded
-                                    : loaded.summary.isPublic
-                                        ? Icons.public_rounded
-                                        : Icons.lock_outline_rounded,
-                                size: 18,
-                              ),
-                              label: Text(
-                                loaded.summary.isModerated
-                                    ? localizations
-                                        .templatesRemovedByModerationLabel
-                                    : loaded.summary.isPublic
-                                        ? localizations.templatesPublicLabel
-                                        : localizations.templatesPrivateLabel,
-                              ),
-                            ),
-                          ),
+                            if (loaded.remainingCapacity == 0)
+                              Text(localizations.templatesCapacityReached,
+                                  style: Theme.of(context).textTheme.bodySmall),
+                          ],
                         ),
                       ),
                     ),
@@ -193,42 +226,43 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
                                 },
                           itemBuilder: (context, index) {
                             final item = loaded.items[index];
-                            return Card(
+                            return TemplateItemTile(
                               key: ValueKey(item.id),
-                              child: ListTile(
-                                title: Text(item.name, maxLines: 2),
-                                subtitle: Text(item.quantity.format()),
-                                onTap: state.isMutating
-                                    ? null
-                                    : () => _showItemEditor(
-                                          context,
-                                          ref,
-                                          item: item,
-                                        ),
-                                trailing: Wrap(
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    IconButton(
-                                      onPressed: state.isMutating
-                                          ? null
-                                          : () => _confirmDeleteItem(
-                                                context,
-                                                ref,
-                                                item,
-                                              ),
-                                      tooltip:
-                                          localizations.templatesDeleteButton,
-                                      icon: const Icon(Icons.delete_outline),
-                                    ),
-                                    ReorderableDragStartListener(
-                                      index: index,
-                                      child: const Padding(
-                                        padding: EdgeInsets.all(12),
-                                        child: Icon(Icons.drag_handle),
+                              name: item.name,
+                              quantity: item.quantity.format(),
+                              onTap: state.isMutating
+                                  ? null
+                                  : () => _showItemEditor(
+                                        context,
+                                        ref,
+                                        item: item,
                                       ),
+                              actions: Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  IconButton(
+                                    onPressed: state.isMutating
+                                        ? null
+                                        : () => _confirmDeleteItem(
+                                              context,
+                                              ref,
+                                              item,
+                                            ),
+                                    tooltip:
+                                        localizations.templatesDeleteButton,
+                                    icon: Icon(Icons.delete_outline,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .error),
+                                  ),
+                                  ReorderableDragStartListener(
+                                    index: index,
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: Icon(Icons.drag_handle),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             );
                           },
@@ -337,7 +371,8 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.templatesDeleteDialogTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.templatesDeleteDialogTitle),
         content: SingleChildScrollView(
           child: Text(
             isPublic
@@ -346,7 +381,7 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
           ),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(localizations.cancelButton),
           ),
@@ -379,7 +414,8 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(
           willPublish
               ? localizations.templatesPublishDialogTitle
               : localizations.templatesUnpublishDialogTitle,
@@ -392,7 +428,7 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
           ),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(localizations.cancelButton),
           ),
@@ -443,10 +479,11 @@ class PrivateTemplateDetailScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.templatesDeleteButton),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.templatesDeleteButton),
         content: Text(item.name),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(localizations.cancelButton),
           ),
@@ -594,7 +631,8 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     return AlertDialog(
-      title: Text(localizations.templatesEditDialogTitle),
+      titlePadding: EdgeInsets.zero,
+      title: AppDialogTitle(localizations.templatesEditDialogTitle),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -606,37 +644,45 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
               ),
               const SizedBox(height: 12),
             ],
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: localizations.templatesNameLabel,
+            AppDialogField(
+              label: localizations.templatesNameLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                controller: _nameController,
               ),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String?>(
-              // ignore: deprecated_member_use
-              value: _categoryId,
-              decoration: InputDecoration(
-                labelText: localizations.templatesCategoryLabel,
-              ),
-              items: [
-                DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text(localizations.templatesNoCategoryLabel),
-                ),
-                for (final category in widget.categories)
+            AppDialogField(
+              label: localizations.templatesCategoryLabel,
+              child: DropdownButtonFormField<String?>(
+                isDense: false,
+                style: AppPalette.inputTextStyle(context),
+                dropdownColor: AppPalette.inputCream,
+                iconEnabledColor: AppPalette.navy,
+                // ignore: deprecated_member_use
+                value: _categoryId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                    contentPadding: AppDialogField.dropdownPadding),
+                items: [
                   DropdownMenuItem<String?>(
-                    value: category.id,
-                    child: Text(category.name),
+                    value: null,
+                    child: Text(localizations.templatesNoCategoryLabel),
                   ),
-              ],
-              onChanged: (value) => setState(() => _categoryId = value),
+                  for (final category in widget.categories)
+                    DropdownMenuItem<String?>(
+                      value: category.id,
+                      child: Text(category.name),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _categoryId = value),
+              ),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: () => Navigator.pop(context),
           child: Text(localizations.cancelButton),
         ),
@@ -691,33 +737,42 @@ class _TemplateItemDialogState extends State<_TemplateItemDialog> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     return AlertDialog(
-      title: Text(localizations.templatesItemDialogTitle),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            key: const Key('templateItemNameField'),
-            controller: _nameController,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: localizations.templatesItemNameLabel,
+      titlePadding: EdgeInsets.zero,
+      title: AppDialogTitle(localizations.templatesItemDialogTitle),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppDialogField(
+              label: localizations.templatesItemNameLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('templateItemNameField'),
+                controller: _nameController,
+                autofocus: true,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            key: const Key('templateItemQuantityField'),
-            controller: _quantityController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: localizations.templatesItemQuantityLabel,
-              errorText:
-                  _valid ? null : localizations.templatesInvalidInputMessage,
+            const SizedBox(height: 12),
+            AppDialogField(
+              label: localizations.templatesItemQuantityLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('templateItemQuantityField'),
+                controller: _quantityController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  errorText: _valid
+                      ? null
+                      : localizations.templatesInvalidInputMessage,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: () => Navigator.pop(context),
           child: Text(localizations.cancelButton),
         ),

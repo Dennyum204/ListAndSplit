@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
@@ -61,6 +62,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       : profileMessageText(localizations, state.message!),
             ),
             TextField(
+              style: AppPalette.inputTextStyle(context),
               key: const Key('onboardingUsername'),
               controller: _username,
               enabled: !isBusy,
@@ -79,6 +81,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
             const SizedBox(height: 16),
             TextField(
+              style: AppPalette.inputTextStyle(context),
               key: const Key('onboardingDisplayName'),
               controller: _displayName,
               enabled: !isBusy,

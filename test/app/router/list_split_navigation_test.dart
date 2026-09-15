@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/core/presentation/app_bottom_navigation_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/app/app.dart';
@@ -60,7 +61,9 @@ void main() {
         AppRoutes.listChat(splitListId));
     expect(find.byType(AuthenticatedShell), findsOneWidget);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       0,
     );
     expect(chat.requestedListIds, everyElement(splitListId));
@@ -94,7 +97,9 @@ void main() {
     expect(screen.listId, splitListId);
     expect(find.byType(AuthenticatedShell), findsOneWidget);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       0,
     );
     expect(split.getCalls, 1);
@@ -115,7 +120,9 @@ void main() {
     expect(find.byType(SettlementFormDialog), findsNothing);
     expect(find.byType(ListSplitScreen), findsOneWidget);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       0,
     );
 
@@ -324,7 +331,8 @@ Future<void> _scrollSplitUntilVisible(
     300,
     scrollable: find.descendant(
       of: find.byKey(const Key('splitOverview')),
-      matching: find.byType(Scrollable),
+      matching: find.byWidgetPredicate((widget) =>
+          widget is Scrollable && widget.axisDirection == AxisDirection.down),
     ),
     maxScrolls: 20,
   );

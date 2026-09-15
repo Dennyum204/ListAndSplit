@@ -242,8 +242,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: AppRoutes.community,
-                builder: (context, state) => const CommunityScreen(),
+                builder: (context, state) =>
+                    const FriendPublicTemplateFeedScreen(isCommunityHome: true),
                 routes: [
+                  GoRoute(
+                    path: 'friends',
+                    builder: (context, state) => const CommunityScreen(),
+                  ),
                   GoRoute(
                     path: 'friends-templates',
                     builder: (context, state) =>

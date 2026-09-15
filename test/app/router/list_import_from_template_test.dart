@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/core/presentation/app_bottom_navigation_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:list_and_split/app/app.dart';
@@ -142,6 +143,10 @@ void main() {
 
     await tester.tap(find.byKey(const Key('allTemplatesFilter')));
     await tester.pumpAndSettle();
+    await Scrollable.ensureVisible(
+        tester.element(find.byKey(Key('template-${blank.id}'))),
+        alignment: .5);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(Key('template-${blank.id}')));
     await tester.pumpAndSettle();
     expect(find.text('0 of 0 selected'), findsOneWidget);
@@ -278,7 +283,9 @@ void main() {
     expect(notifications.listCalls, isEmpty);
     expect(notifications.markCalls, isEmpty);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester
+          .widget<AppBottomNavigationBar>(find.byType(AppBottomNavigationBar))
+          .selectedIndex,
       0,
     );
 

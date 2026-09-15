@@ -24,7 +24,7 @@ application data.
 The participant-count foundation adds current owner-plus-accepted-member counts
 through additive v2 list reads and strict Dart repository parsing. Pending
 invitations and former participants do not count; ownership transfer preserves
-the total. Card presentation belongs to the separate Figma UI PR. The migration
+the total. PR #33 presents these counts in the reference-driven UI. The migration
 must be deployed to a separately authorized environment before distributing a
 client that uses the new reads. No hosted deployment is part of this foundation.
 Private templates support independent list snapshots and atomic selected-item list
@@ -117,7 +117,9 @@ Delivery proceeds in this order:
    P-059/A-073 select participant counts as a backend/domain PR followed by a
    separate Figma UI PR preserving existing behavior. Category icons, avatars,
    list covers, template images, and other additions remain unselected.
-8. Refactor the stable UI through a Figma design system, screen by screen.
+8. Refactor the stable UI through the approved design references, screen by screen.
+   PR #33 uses Fernando's supplied light-theme PDF and dark-theme screenshots;
+   a live Figma subscription is not required.
 9. Finalize branding and adaptive, monochrome, and Play launcher icons.
 10. Revalidate current official requirements and implement Android release
    infrastructure, Play setup/signing, protected CI, signed AABs, symbols,
@@ -279,6 +281,85 @@ enforce it separately with the local-only values reported by `supabase status`:
 flutter test test/local/private_broadcast_transport_smoke_test.dart --dart-define=RUN_LOCAL_REALTIME_SMOKE=true --dart-define=LOCAL_SUPABASE_URL=<local-api-url> --dart-define=LOCAL_SUPABASE_PUBLISHABLE_KEY=<local-publishable-key> --dart-define=LOCAL_SUPABASE_SECRET_KEY=<local-secret-key>
 ```
 
+### Reference-driven UI review and manual QA
+
+PR #33 continues on `codex/figma-ui-redesign`, using Fernando's supplied
+`UI refactor .pdf` for light mode and eight screenshots for dark mode. Rounded
+navy/charcoal headers, cream inputs, orange actions, blue/charcoal cards and
+identity initials share Material 3 tokens. No live Figma access, downloaded mock
+photos, new font package or temporary asset URL is required. Existing loading,
+empty, error, archived, stale and inaccessible states remain supported.
+
+The follow-up references refine the selected navigation pill to include both its
+icon and label. Overview cards show the title, current participant count, compact
+completion progress and chevron; owner/date details remain in the screen-reader
+description instead of adding visible rows. Dialog fields use persistent plain
+captions above the cream input, with no floating caption background.
+
+Use **Profile > Appearance > System / Light / Dark** to choose a theme. System
+follows the device; an explicit choice persists locally across app restarts and
+sign-out. Switching themes does not save profile edits or change account data.
+
+The approved `Things to change.docx` follow-up adds inline list quick-add,
+compact unassigned rows, stable checkbox updates, refreshed Split/Chat/Community
+layouts and persistent dropdown captions. Use **Profile > Language** near
+Appearance to select **System / English / Português**. Language changes apply
+immediately, persist locally across restart and sign-out, and preserve navigation
+and unsaved forms. System follows the device with the existing English fallback;
+storage failures display localized recovery feedback.
+
+See [PR #33 follow-up coverage](docs/PR33_UI_FOLLOWUP.md) for each document item's
+delivery. Profile photographs stay in existing PR #34; template-image selection,
+preview and image-bearing Community cards are the next separate feature PR after
+the recorded product and lifecycle decisions are resolved.
+
+Community's initial page is now the existing friends-only template feed. Its
+Friends action opens exact-username discovery; friendship/block management and
+public-profile/template paths remain available. List, Chat and Split controls
+reuse the existing routes, with Chat unmounted when leaving it. Existing business
+operations, permissions, repositories and Realtime transport remain unchanged.
+
+Before accepting this UI for distribution, separately verify the participant-count
+migration rollout below, then use two authorized Dev clients and disposable QA
+content. Physical QA has **not** been completed for PR #33:
+
+1. Compare sign-in/register, Lists, list detail/members, Chat/Split, Templates and
+   categories, Shared Templates, Community, notifications, Profile and public
+   profiles against the supplied light/dark references.
+2. Repeat in EN/light and PT/dark at normal and approximately 200% text; inspect
+   keyboard insets, scroll reachability, screen-reader names, focus, touch targets
+   and contrast. Safety copy and accessible spacing intentionally exceed the
+   static mockups where needed.
+   Exercise Profile's Appearance selector, check all tabs update, restart to
+   confirm the saved choice, and return to System to follow device brightness.
+   Repeat with Language, including an unsaved Profile draft, sign-out and System
+   following the device language. Confirm Portuguese uses the existing PT locale.
+   Check that the selected navigation pill encloses its icon and full translated
+   label, and that compact list cards retain meaningful screen-reader summaries.
+3. Exercise category/template create, rename, cancellation, normalized duplicates,
+   blank-template Add item, selected-item capacity, copy/send/accept/decline, and
+   stale report rejection. Confirm each guarded dialog closes or recovers once.
+   Check that field captions stay above their inputs without a dark rectangle
+   before/after focus, when filled, and when displaying validation errors.
+4. Check active/archive transitions, participant-count changes, General Note,
+   assignments, Chat pagination/unread/reconnect and Split expenses/settlements
+   on both clients. Leave Chat for Split, send from the other client, and verify
+   the hidden Chat did not mark the unseen message read. Repeat access removal
+   with an editor open and verify one safe exit/message.
+   Toggle a scrolled list item and confirm its row does not jump. Quick-add with
+   both + and the keyboard; confirm quantity 1 and no unit/assignee, edit details,
+   retry an offline submission, and type a new draft while a request is pending.
+   Inspect balances, debtor-to-creditor direction, beneficiaries and payer;
+   record and reverse only disposable bookkeeping settlements.
+5. Scroll to a later notification, cause a rejected/offline action, and confirm
+   visible recoverable feedback. Verify Community search/feed and template filters
+   survive tab/back navigation and duplicate names still open exact IDs.
+
+Local optional widget captures use `UI_PREVIEW_DIRECTORY` outside the repository
+and `UI_PREVIEW_FONT_DIRECTORY` pointing to the local Flutter SDK's
+`bin/cache/artifacts/material_fonts`. These PNGs contain fake fixtures only and
+are not committed golden files or substitutes for physical-device QA.
+
 ### Participant-count rollout and manual QA
 
 P-059/A-073 add `list_active_lists_v2` and `get_active_list_v2` while preserving
@@ -288,8 +369,9 @@ their empty search paths and authenticated-only execution grants add no new
 privileged boundary. There is no stored counter, new table, Storage bucket, or
 new Realtime channel. The Dart repository requires an integer count from 1 to 20
 for v2 reads and leaves the count unknown in unchanged legacy mutation results.
-The separate UI PR presents counts and applies the Figma design to existing
-behavior; it does not add image uploads, category icons, or Chat media.
+The separate UI PR presents counts and applies the supplied light-theme PDF and
+dark-theme screenshots to existing behavior; it does not add image uploads,
+category icons, or Chat media.
 
 This backend/domain PR does not deploy its migration. Before distribution,
 separately authorize an environment rollout, compare migration histories, apply

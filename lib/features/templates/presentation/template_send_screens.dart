@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/features/templates/domain/template_send.dart';
 import 'package:list_and_split/features/templates/presentation/template_send_providers.dart';
 import 'package:list_and_split/features/templates/presentation/template_sends_controller.dart';
+import 'package:list_and_split/features/templates/presentation/template_item_tile.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class TemplateSendPreviewItem {
@@ -77,7 +80,7 @@ class _SharedTemplateSendsScreenState
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        appBar: AppBar(
+        appBar: AppPageHeader(
           title: Text(localizations.templateSendsTitle),
           actions: [
             IconButton(
@@ -92,15 +95,36 @@ class _SharedTemplateSendsScreenState
             ),
             const NotificationBell(),
           ],
-          bottom: TabBar(
-            tabs: [
-              Tab(
-                text: localizations.templateSendsReceivedTab,
+          bottom: PreferredSize(
+            preferredSize: Size.fromHeight(
+                40 + MediaQuery.textScalerOf(context).scale(16)),
+            child: Container(
+              margin: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardTheme.color,
+                borderRadius: BorderRadius.circular(16),
               ),
-              Tab(
-                text: localizations.templateSendsSentTab,
+              child: TabBar(
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  color: AppPalette.orange,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                labelColor: AppPalette.navy,
+                unselectedLabelColor: Theme.of(context).colorScheme.onSurface,
+                tabs: [
+                  Tab(
+                    height: 32 + MediaQuery.textScalerOf(context).scale(16),
+                    text: localizations.templateSendsReceivedTab,
+                  ),
+                  Tab(
+                    height: 32 + MediaQuery.textScalerOf(context).scale(16),
+                    text: localizations.templateSendsSentTab,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
         body: SafeArea(
@@ -189,7 +213,7 @@ class ReceivedTemplateSendScreen extends ConsumerWidget {
     });
     final detail = state.detail.valueOrNull;
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         title: Text(
           detail?.summary.snapshotName ??
               localizations.templateSendReceivedDetailTitle,
@@ -232,15 +256,10 @@ class ReceivedTemplateSendScreen extends ConsumerWidget {
                       )
                     else
                       for (final item in loaded.items)
-                        Card(
+                        TemplateItemTile(
                           key: ValueKey('templateSendItem-${item.position}'),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              child: Text('${item.position}'),
-                            ),
-                            title: Text(item.name),
-                            subtitle: Text(item.quantity.format()),
-                          ),
+                          name: item.name,
+                          quantity: item.quantity.format(),
                         ),
                   ],
                 ),
@@ -273,10 +292,11 @@ class ReceivedTemplateSendScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.templateSendDeclineDialogTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.templateSendDeclineDialogTitle),
         content: Text(localizations.templateSendDeclineDialogDescription),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(localizations.cancelButton),
           ),
@@ -324,7 +344,8 @@ class _TemplateSendDialogState extends ConsumerState<_TemplateSendDialog> {
       _recipientId = null;
     }
     return AlertDialog(
-      title: Text(localizations.templateSendDialogTitle),
+      titlePadding: EdgeInsets.zero,
+      title: AppDialogTitle(localizations.templateSendDialogTitle),
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
@@ -354,31 +375,35 @@ class _TemplateSendDialogState extends ConsumerState<_TemplateSendDialog> {
                 ),
                 data: (loaded) => loaded.isEmpty
                     ? Text(localizations.templateSendNoEligibleFriends)
-                    : InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: localizations.templateSendRecipientLabel,
-                        ),
-                        isEmpty: _recipientId == null,
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            key: const Key('templateSendRecipientField'),
-                            value: _recipientId,
-                            isExpanded: true,
-                            items: [
-                              for (final recipient in loaded)
-                                DropdownMenuItem(
-                                  value: recipient.id,
-                                  child: Text(
-                                    '${recipient.displayName} '
-                                    '(@${recipient.username})',
-                                    overflow: TextOverflow.ellipsis,
+                    : AppDialogField(
+                        label: localizations.templateSendRecipientLabel,
+                        child: InputDecorator(
+                          decoration: const InputDecoration(),
+                          isEmpty: _recipientId == null,
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              style: AppPalette.inputTextStyle(context),
+                              dropdownColor: AppPalette.inputCream,
+                              iconEnabledColor: AppPalette.navy,
+                              key: const Key('templateSendRecipientField'),
+                              value: _recipientId,
+                              isExpanded: true,
+                              items: [
+                                for (final recipient in loaded)
+                                  DropdownMenuItem(
+                                    value: recipient.id,
+                                    child: Text(
+                                      '${recipient.displayName} '
+                                      '(@${recipient.username})',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
-                            ],
-                            onChanged: state.isSending
-                                ? null
-                                : (value) =>
-                                    setState(() => _recipientId = value),
+                              ],
+                              onChanged: state.isSending
+                                  ? null
+                                  : (value) =>
+                                      setState(() => _recipientId = value),
+                            ),
                           ),
                         ),
                       ),
@@ -418,12 +443,9 @@ class _TemplateSendDialogState extends ConsumerState<_TemplateSendDialog> {
                     itemCount: widget.preview.items.length,
                     itemBuilder: (context, index) {
                       final item = widget.preview.items[index];
-                      return ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: Text('${index + 1}.'),
-                        title: Text(item.name),
-                        trailing: Text(item.quantity.format()),
+                      return TemplateItemTile(
+                        name: item.name,
+                        quantity: item.quantity.format(),
                       );
                     },
                   ),
@@ -446,7 +468,7 @@ class _TemplateSendDialogState extends ConsumerState<_TemplateSendDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: state.isSending ? null : () => Navigator.pop(context),
           child: Text(localizations.cancelButton),
         ),
@@ -601,7 +623,8 @@ class _SentSendsView extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.templateSendRevokeDialogTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.templateSendRevokeDialogTitle),
         content: Text(
           localizations.templateSendRevokeDialogDescription(
             summary.snapshotName,
@@ -609,7 +632,7 @@ class _SentSendsView extends ConsumerWidget {
           ),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(localizations.cancelButton),
           ),
@@ -758,10 +781,11 @@ class _TemplateSendCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     return Card(
+      color: Theme.of(context).colorScheme.secondaryContainer,
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         minVerticalPadding: 12,
-        leading: const Icon(Icons.send_and_archive_outlined),
+        leading: IdentityBadge(label: profile.displayName),
         title: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -794,7 +818,8 @@ class _TemplateSendCard extends StatelessWidget {
                     key: Key('revokeTemplateSend-$id'),
                     onPressed: onRevoke,
                     tooltip: localizations.templateSendRevokeButton,
-                    icon: const Icon(Icons.undo_rounded),
+                    icon: Icon(Icons.cancel_outlined,
+                        color: Theme.of(context).colorScheme.error),
                   ),
         onTap: onTap,
       ),
@@ -851,14 +876,23 @@ class _ReceivedHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     return Card(
+      color: Theme.of(context).colorScheme.secondaryContainer,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              detail.summary.snapshotName,
-              style: Theme.of(context).textTheme.headlineSmall,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                IdentityBadge(label: detail.summary.sender.displayName),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Text(
+                  detail.summary.snapshotName,
+                  style: Theme.of(context).textTheme.titleMedium,
+                )),
+              ],
             ),
             const SizedBox(height: 8),
             Text(

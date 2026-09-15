@@ -5,11 +5,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_chat.dart';
 import 'package:list_and_split/features/lists/domain/active_list_chat_repository.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
+import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_chat_providers.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_chat_screen.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
@@ -20,8 +22,124 @@ import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fake_active_list_chat_repository.dart';
 import '../../helpers/fakes.dart';
+import '../../support/ui_preview_capture.dart';
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
+  for (final dark in [false, true]) {
+    for (final scale in [1.0, 2.0]) {
+      testWidgets(
+          'list detail redesign keeps all item controls dark=$dark scale=$scale',
+          (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final now = DateTime.utc(2026, 7, 29);
+        final lists = _listsRepository()
+          ..itemsByList['list-1'] = [
+            for (var index = 0; index < 2; index++)
+              ActiveListItem(
+                id: 'item-$index',
+                name: index == 0 ? 'Sunglasses' : 'Towels',
+                quantity: ListQuantity.fromThousandths((index + 1) * 1000),
+                unit: ListUnit.piece,
+                position: index + 1,
+                version: 1,
+                completedAt: index == 0 ? now : null,
+                completedBy: index == 0 ? 'current-profile' : null,
+                createdAt: now,
+                updatedAt: now,
+              ),
+          ];
+        await _pump(tester,
+            lists: lists,
+            chat: FakeActiveListChatRepository(),
+            initialLocation: '/lists/list-1',
+            dark: dark,
+            textScale: scale);
+        expect(find.byKey(const Key('listSectionNavigation')), findsOneWidget);
+        expect(find.text('Sunglasses'), findsOneWidget);
+        expect(find.text('Towels'), findsOneWidget);
+        expect(find.byKey(const Key('addItemButton')).hitTestable(),
+            findsOneWidget);
+        await captureUiPreview(tester,
+            'list-detail-${dark ? 'dark' : 'light'}-${scale == 2 ? 'large' : 'standard'}');
+        final note = find.byKey(const Key('editGeneralNoteButton'));
+        await tester.scrollUntilVisible(note, 180,
+            scrollable: find.descendant(
+              of: find.byKey(const Key('activeListItems')),
+              matching: find.byType(Scrollable),
+            ));
+        await tester.pumpAndSettle();
+        expect(note.hitTestable(), findsOneWidget);
+        expect(lists.createCalls, 0);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets(
+      'rapid Split section taps push once and return to the same detail',
+      (tester) async {
+    final harness = await _pump(tester,
+        lists: _listsRepository(),
+        chat: FakeActiveListChatRepository(),
+        initialLocation: '/lists/list-1');
+    final section = find.byKey(const Key('listSection-split'));
+    await tester.tap(section);
+    await tester.tap(section);
+    await tester.pumpAndSettle();
+    expect(find.text('Split route fixture'), findsOneWidget);
+    harness.router.pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(ActiveListDetailScreen), findsOneWidget);
+    expect(find.text('Split route fixture'), findsNothing);
+    expect(tester.widget<TextButton>(section).onPressed, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final locale in [const Locale('en'), const Locale('pt')]) {
+    for (final dark in [false, true]) {
+      for (final scale in [1.0, 2.0]) {
+        testWidgets(
+            'Chat redesign supports narrow scale=$scale ${locale.languageCode} dark=$dark',
+            (tester) async {
+          tester.view.physicalSize = const Size(390, 844);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final chat = FakeActiveListChatRepository()
+            ..messages = [
+              activeListChatTestMessage(
+                  sequence: 1, body: 'Ready for the trip?'),
+              activeListChatTestMessage(
+                  sequence: 2, body: 'Sim, vamos! 😀', isMine: true),
+            ];
+          await _pump(tester,
+              lists: _listsRepository(),
+              chat: chat,
+              initialLocation: '/lists/list-1/chat',
+              locale: locale,
+              dark: dark,
+              textScale: scale);
+          expect(
+              find.byKey(const Key('listSectionNavigation')), findsOneWidget);
+          await captureUiPreview(tester,
+              'chat-${locale.languageCode}-${dark ? 'dark' : 'light'}-${scale == 2 ? 'large' : 'standard'}');
+          final composer = find.byKey(const Key('listChatComposer'));
+          await tester.enterText(composer, 'Olá!');
+          await tester.pump();
+          final send = find.byKey(const Key('listChatSendButton'));
+          expect(send.hitTestable(), findsOneWidget);
+          expect(tester.getSize(send).height, greaterThanOrEqualTo(48));
+          expect(chat.sendCalls, 0);
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
+  }
+
   testWidgets(
       'detail Chat action opens the exact list route and returns safely',
       (tester) async {
@@ -48,6 +166,61 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ActiveListDetailScreen), findsOneWidget);
     expect(find.byType(ActiveListChatScreen), findsNothing);
+  });
+
+  testWidgets(
+      'Chat to Split removes the hidden read marker and clears its draft',
+      (tester) async {
+    final lists = _listsRepository();
+    final chat = FakeActiveListChatRepository()
+      ..messages = [activeListChatTestMessage(sequence: 1, body: 'Visible')];
+    final harness = await _pump(tester,
+        lists: lists, chat: chat, initialLocation: '/lists/list-1/chat');
+    await tester.enterText(find.byKey(const Key('listChatComposer')), 'Unsent');
+    await tester.pump();
+    final originalReadIds = List<String>.of(chat.markedMessageIds);
+    await tester.tap(find.byKey(const Key('listSection-split')));
+    await tester.pumpAndSettle();
+    expect(
+        find.byType(ActiveListChatScreen, skipOffstage: false), findsNothing);
+    expect(find.text('Split route fixture'), findsOneWidget);
+    final incoming =
+        activeListChatTestMessage(sequence: 2, body: 'Still unread');
+    chat.messages.add(incoming);
+    chat.unread = const ActiveListChatUnreadCount(count: 1, isCapped: false);
+    await harness.container
+        .read(reconciliationRegistryProvider)
+        .reconcile(scope: ReconciliationScope.chat);
+    await tester.pumpAndSettle();
+    expect(chat.markedMessageIds, originalReadIds);
+    expect(chat.markedMessageIds, isNot(contains(incoming.id)));
+    expect(find.text('Unsent', skipOffstage: false), findsNothing);
+    expect(chat.sendCalls, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'access loss after Chat to Split has one navigation and message owner',
+      (tester) async {
+    final lists = _listsRepository();
+    final harness = await _pump(tester,
+        lists: lists,
+        chat: FakeActiveListChatRepository(),
+        initialLocation: '/lists/list-1/chat');
+    await tester.tap(find.byKey(const Key('listSection-split')));
+    await tester.pumpAndSettle();
+    lists.failure = const ActiveListFailure(ActiveListFailureCode.unavailable);
+    final registry = harness.container.read(reconciliationRegistryProvider);
+    await registry.reconcile();
+    await tester.pumpAndSettle();
+    await registry.reconcile();
+    await tester.pump();
+    expect(find.text('Lists landing'), findsOneWidget);
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(
+        find.byType(ActiveListChatScreen, skipOffstage: false), findsNothing);
+    expect(find.textContaining('list chat.'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('initial loading resolves to the empty recoverable conversation',
@@ -117,6 +290,11 @@ void main() {
       find.bySemanticsLabel('Open list chat'),
       findsOneWidget,
     );
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Open list chat')).rect.size,
+      tester.getSize(find.byKey(const Key('listChatButton'))),
+      reason: 'Chat accessibility focus must cover only its own button',
+    );
   });
 
   testWidgets('ordinary unread count is displayed exactly', (tester) async {
@@ -153,7 +331,13 @@ void main() {
       initialLocation: '/lists/list-1',
     );
 
-    expect(find.text('1'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('listChatButton')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.bySemanticsLabel('Open list chat, 1 unread message'),
       findsOneWidget,
@@ -361,20 +545,34 @@ void main() {
       initialLocation: '/lists/list-1/chat',
     );
 
-    expect(find.text('You'), findsOneWidget);
-    expect(find.text('Friend User (@friend_user)'), findsNWidgets(3));
-    expect(find.text('Message deleted by its sender'), findsOneWidget);
-    expect(find.text('Message deleted by the list owner'), findsOneWidget);
-    expect(find.text('Deleted account'), findsOneWidget);
-    expect(find.text('Message removed after account deletion'), findsOneWidget);
-    expect(
-        find.byKey(const Key(
-            'delete-chat-message-10000000-0000-4000-8000-000000000001')),
-        findsOneWidget);
-    expect(
-        find.byKey(const Key(
-            'delete-chat-message-10000000-0000-4000-8000-000000000002')),
-        findsOneWidget);
+    final scrollable = find.descendant(
+      of: find.byKey(const Key('listChatMessages')),
+      matching: find.byType(Scrollable),
+    );
+    tester.state<ScrollableState>(scrollable).position.jumpTo(0);
+    await tester.pump();
+    final labels = [
+      ('You', 'Mine'),
+      ('Friend User (@friend_user)', 'Theirs'),
+      ('Friend User (@friend_user)', 'Message deleted by its sender'),
+      ('Friend User (@friend_user)', 'Message deleted by the list owner'),
+      ('Deleted account', 'Message removed after account deletion'),
+    ];
+    for (var index = 0; index < chat.messages.length; index++) {
+      final message = chat.messages[index];
+      final card = find.byKey(Key('chat-message-${message.id}'));
+      await tester.scrollUntilVisible(card, 150, scrollable: scrollable);
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: card, matching: find.text(labels[index].$1)),
+          findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text(labels[index].$2)),
+          findsOneWidget);
+      expect(
+          find.descendant(
+              of: card,
+              matching: find.byKey(Key('delete-chat-message-${message.id}'))),
+          index < 2 ? findsOneWidget : findsNothing);
+    }
   });
 
   testWidgets('archived chat remains readable and removes mutation controls',
@@ -843,6 +1041,11 @@ Future<_Harness> _pump(
             ),
             routes: [
               GoRoute(
+                path: 'split',
+                builder: (_, __) =>
+                    const Scaffold(body: Text('Split route fixture')),
+              ),
+              GoRoute(
                 path: 'chat',
                 builder: (_, state) => ActiveListChatScreen(
                   listId: state.pathParameters['listId']!,
@@ -876,7 +1079,7 @@ Future<_Harness> _pump(
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(textScale),
           ),
-          child: child!,
+          child: uiPreviewBoundary(child!),
         ),
       ),
     ),

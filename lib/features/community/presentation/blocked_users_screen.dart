@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/community/domain/community_profile.dart';
 import 'package:list_and_split/features/community/presentation/blocked_users_controller.dart';
@@ -17,9 +18,11 @@ class BlockedUsersScreen extends ConsumerWidget {
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(blockedUsersControllerProvider);
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         leading: IconButton(
-          onPressed: () => context.go(AppRoutes.community),
+          onPressed: () => context.canPop()
+              ? context.pop()
+              : context.go(AppRoutes.community),
           icon: const Icon(Icons.arrow_back_rounded),
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
         ),
@@ -31,24 +34,15 @@ class BlockedUsersScreen extends ConsumerWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 680),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    localizations.blockedUsersDescription,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                  const SizedBox(height: 16),
                   FormMessageBanner(
                     message: state.message == null
                         ? null
                         : blockedUsersMessageText(
-                            localizations,
-                            state.message!,
-                          ),
+                            localizations, state.message!),
                   ),
                   Expanded(
                     child: state.profiles.when(
@@ -129,24 +123,23 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.person_off_outlined, size: 48),
-          const SizedBox(height: 12),
-          Text(
-            localizations.blockedUsersEmptyTitle,
-            style: Theme.of(context).textTheme.titleMedium,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            localizations.blockedUsersEmptyDescription,
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+    return ListView(
+      children: [
+        const _BlockedPrivacyHeader(),
+        const SizedBox(height: 24),
+        const Icon(Icons.person_off_outlined, size: 48),
+        const SizedBox(height: 12),
+        Text(
+          localizations.blockedUsersEmptyTitle,
+          style: Theme.of(context).textTheme.titleMedium,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          localizations.blockedUsersEmptyDescription,
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }
@@ -164,10 +157,11 @@ class _BlockedProfileList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return ListView.separated(
       key: const Key('blockedUsersList'),
-      itemCount: profiles.length,
+      itemCount: profiles.length + 1,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
-        final profile = profiles[index];
+        if (index == 0) return const _BlockedPrivacyHeader();
+        final profile = profiles[index - 1];
         final isUnblocking = unblockingProfileId == profile.id;
         return _BlockedProfileCard(
           profile: profile,
@@ -210,6 +204,23 @@ class _BlockedProfileList extends ConsumerWidget {
   }
 }
 
+class _BlockedPrivacyHeader extends StatelessWidget {
+  const _BlockedPrivacyHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(localizations.blockedUsersDescription,
+            style: Theme.of(context).textTheme.bodyMedium),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+}
+
 class _BlockedProfileCard extends StatelessWidget {
   const _BlockedProfileCard({
     required this.profile,
@@ -227,19 +238,29 @@ class _BlockedProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     return Card(
+      color: Theme.of(context).colorScheme.secondaryContainer,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              profile.displayName,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+            Row(
+              children: [
+                IdentityBadge(label: profile.displayName),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(profile.displayName,
+                          style: Theme.of(context).textTheme.titleMedium),
+                      Text('@${profile.username}',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
                   ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text('@${profile.username}'),
             const SizedBox(height: 12),
             Align(
               alignment: AlignmentDirectional.centerEnd,

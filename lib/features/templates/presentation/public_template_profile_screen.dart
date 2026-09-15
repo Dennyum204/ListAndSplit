@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/templates/domain/public_template.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_providers.dart';
@@ -46,7 +47,7 @@ class _PublicTemplateProfileScreenState
     });
     final page = state.page.valueOrNull;
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         leading: IconButton(
           onPressed: _goBack,
           icon: const Icon(Icons.arrow_back_rounded),
@@ -93,24 +94,35 @@ class _PublicTemplateProfileScreenState
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                   children: [
-                    Semantics(
-                      header: true,
-                      child: Text(
-                        loaded.profile.displayName,
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '@${loaded.profile.username}',
-                      key: const Key('publicProfileUsername'),
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
+                    Row(
+                      children: [
+                        IdentityBadge(
+                          label: loaded.profile.displayName,
+                          size: 72,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Semantics(
+                                header: true,
+                                child: Text(
+                                  loaded.profile.displayName,
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '@${loaded.profile.username}',
+                                key: const Key('publicProfileUsername'),
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
                           ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(localizations.publicTemplatesProfileDescription),
                     const SizedBox(height: 24),
                     Semantics(
                       header: true,
@@ -120,6 +132,8 @@ class _PublicTemplateProfileScreenState
                       ),
                     ),
                     const SizedBox(height: 8),
+                    Text(localizations.publicTemplatesProfileDescription),
+                    const SizedBox(height: 16),
                     if (loaded.templates.isEmpty)
                       _PublicTemplateEmptyState(
                         title: localizations.publicTemplatesEmptyTitle,
@@ -258,10 +272,10 @@ class _PublicTemplateCard extends StatelessWidget {
       ),
       child: Card(
         key: Key('publicTemplate-${template.id}'),
+        color: Theme.of(context).colorScheme.secondaryContainer,
         child: ListTile(
           minVerticalPadding: 12,
-          leading: const Icon(Icons.public_rounded),
-          title: Text(template.name, maxLines: 2),
+          title: Text(template.name),
           subtitle: Text(
             '${localizations.templatesItemCount(template.itemCount)}\n'
             '${localizations.publicTemplatesPublishedAt(publishedDate)}',

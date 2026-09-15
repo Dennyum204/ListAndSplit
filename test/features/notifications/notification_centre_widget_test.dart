@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/theme/app_theme.dart';
 import 'package:list_and_split/features/community/presentation/friendship_providers.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_providers.dart';
@@ -14,8 +15,76 @@ import 'package:list_and_split/features/profile/presentation/profile_providers.d
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fakes.dart';
+import '../../support/ui_preview_capture.dart';
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
+  testWidgets('a failed action on a scrolled notification remains visible once',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final notifications = FakeNotificationRepository()
+      ..notifications =
+          List.generate(12, (index) => notification(id: 'n-$index'));
+    final friendships = FakeFriendshipRepository()
+      ..mutationFailure = StateError('isolated failure');
+    await pumpCentre(tester,
+        notifications: notifications, friendships: friendships);
+    final action = find.byKey(const Key('acceptNotification-n-11'));
+    await tester.scrollUntilVisible(action, 400);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(action);
+    await tester.pumpAndSettle();
+    expect(action.hitTestable(), findsOneWidget);
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+    expect(friendships.mutationCalls, hasLength(1));
+    expect(friendships.mutationCalls.single.operation, 'accept');
+    final localizations = AppLocalizations.of(
+        tester.element(find.byType(NotificationCentreScreen)));
+    final feedback = find.text(localizations.operationFailedMessage);
+    expect(feedback, findsOneWidget);
+    expect(tester.getRect(feedback).top, greaterThanOrEqualTo(0));
+    expect(tester.getRect(feedback).bottom, lessThan(844));
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    await tester.pump();
+    expect(feedback, findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  for (final configuration in [
+    (locale: const Locale('en'), mode: ThemeMode.light),
+    (locale: const Locale('pt'), mode: ThemeMode.dark),
+  ]) {
+    testWidgets(
+        'notification cards preserve actions on narrow 200-percent '
+        '${configuration.locale.languageCode}', (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final notifications = FakeNotificationRepository()
+        ..notifications = [notification()];
+      await pumpCentre(tester,
+          notifications: notifications,
+          locale: configuration.locale,
+          themeMode: configuration.mode,
+          textScale: 2);
+      expect(find.byType(AppPageHeader), findsOneWidget);
+      expect(find.byType(IdentityBadge), findsOneWidget);
+      expect(find.byType(Image), findsNothing);
+      await captureUiPreview(tester,
+          'notifications-large-${configuration.mode == ThemeMode.dark ? 'dark' : 'light'}');
+      final accept = find.byKey(const Key('acceptNotification-n-1'));
+      await tester.ensureVisible(accept);
+      expect(tester.getSize(accept).height, greaterThanOrEqualTo(48));
+      final decline = find.byKey(const Key('declineNotification-n-1'));
+      await tester.ensureVisible(decline);
+      expect(tester.getSize(decline).height, greaterThanOrEqualTo(48));
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final themeMode in [ThemeMode.light, ThemeMode.dark]) {
     testWidgets('renders actionable content in ${themeMode.name} theme',
         (tester) async {
@@ -324,6 +393,7 @@ Future<void> pumpCentre(
   ThemeMode themeMode = ThemeMode.light,
   Locale? locale,
   bool settle = true,
+  double textScale = 1,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -337,6 +407,11 @@ Future<void> pumpCentre(
           activeListRepositoryProvider.overrideWithValue(activeLists),
       ],
       child: MaterialApp(
+        builder: (context, child) => uiPreviewBoundary(MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        )),
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: themeMode,
@@ -351,11 +426,12 @@ Future<void> pumpCentre(
 }
 
 InAppNotification notification({
+  String id = 'n-1',
   NotificationActionStatus actionStatus = NotificationActionStatus.actionable,
   int? expectedVersion = 4,
 }) {
   return InAppNotification(
-    id: 'n-1',
+    id: id,
     type: InAppNotificationType.friendRequest,
     createdAt: DateTime.utc(2026, 7, 19, 8),
     isRead: false,

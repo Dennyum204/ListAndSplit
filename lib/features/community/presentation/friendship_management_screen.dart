@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:list_and_split/features/community/presentation/community_ui.dart';
@@ -17,9 +18,11 @@ class FriendshipManagementScreen extends ConsumerWidget {
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(friendshipManagementControllerProvider);
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         leading: IconButton(
-          onPressed: () => context.go(AppRoutes.community),
+          onPressed: () => context.canPop()
+              ? context.pop()
+              : context.go(AppRoutes.community),
           icon: const Icon(Icons.arrow_back_rounded),
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
         ),
@@ -41,24 +44,15 @@ class FriendshipManagementScreen extends ConsumerWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 760),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    localizations.friendshipsDescription,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                  const SizedBox(height: 16),
                   FormMessageBanner(
                     message: state.message == null
                         ? null
                         : friendshipManagementMessageText(
-                            localizations,
-                            state.message!,
-                          ),
+                            localizations, state.message!),
                   ),
                   Expanded(
                     child: state.relationships.when(
@@ -147,6 +141,11 @@ class _RelationshipList extends ConsumerWidget {
         key: const Key('friendshipManagementList'),
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
+          Text(
+            localizations.friendshipsDescription,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
           if (isCompletelyEmpty) ...[
             const SizedBox(height: 36),
             Icon(
@@ -212,7 +211,10 @@ class _RelationshipSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
+        Semantics(
+          header: true,
+          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+        ),
         const SizedBox(height: 8),
         if (relationships.isEmpty)
           Padding(
@@ -251,19 +253,29 @@ class _RelationshipCard extends ConsumerWidget {
     final localizations = AppLocalizations.of(context);
     return Card(
       key: Key('friendship-${relationship.id}'),
+      color: Theme.of(context).colorScheme.secondaryContainer,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              relationship.displayName,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+            Row(
+              children: [
+                IdentityBadge(label: relationship.displayName),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(relationship.displayName,
+                          style: Theme.of(context).textTheme.titleMedium),
+                      Text('@${relationship.username}',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
                   ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text('@${relationship.username}'),
             const SizedBox(height: 12),
             Wrap(
               alignment: WrapAlignment.end,

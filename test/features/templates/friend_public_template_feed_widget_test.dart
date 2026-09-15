@@ -6,7 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/realtime/reconciliation_registry.dart';
+import 'package:list_and_split/core/theme/app_theme.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/templates/domain/public_template.dart';
 import 'package:list_and_split/features/templates/domain/public_template_repository.dart';
@@ -15,8 +18,70 @@ import 'package:list_and_split/features/templates/presentation/public_template_p
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fake_friend_public_template_feed_repository.dart';
+import '../../helpers/fakes.dart';
+import '../../support/ui_preview_capture.dart';
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
+  for (final configuration in [
+    (locale: const Locale('en'), dark: false),
+    (locale: const Locale('pt'), dark: true),
+  ]) {
+    testWidgets(
+        'Community opens the feed and preserves it under friend search '
+        '${configuration.locale.languageCode}', (tester) async {
+      final repository = FakeFriendPublicTemplateFeedRepository()
+        ..outcomes.add(_page([_entry()]));
+      await _pump(tester, repository,
+          locale: configuration.locale,
+          dark: configuration.dark,
+          size: const Size(390, 844),
+          textScale: 1,
+          isCommunityHome: true);
+      expect(
+          find.byKey(const Key('openCommunityFriendsButton')), findsOneWidget);
+      await captureUiPreview(
+          tester, 'community-feed-${configuration.dark ? 'dark' : 'light'}');
+      await tester.tap(find.byKey(const Key('openCommunityFriendsButton')));
+      await tester.pumpAndSettle();
+      expect(find.text('Search friends probe'), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('friendTemplateCard-$_firstTemplateId')),
+          findsOneWidget);
+      expect(repository.calls, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  for (final configuration in [
+    (locale: const Locale('en'), dark: false),
+    (locale: const Locale('pt'), dark: true),
+  ]) {
+    testWidgets(
+        'redesigned feed cards wrap on a 360px phone at 200 percent '
+        '${configuration.locale.languageCode}', (tester) async {
+      final repository = FakeFriendPublicTemplateFeedRepository()
+        ..outcomes.add(_page([_entry()]));
+      await _pump(tester, repository,
+          locale: configuration.locale,
+          dark: configuration.dark,
+          size: const Size(360, 800));
+      final owner =
+          find.byKey(const Key('openFriendTemplateOwner-$_firstProfileId'));
+      final template =
+          find.byKey(const Key('openFriendTemplate-$_firstTemplateId'));
+      await tester.ensureVisible(owner);
+      expect(tester.getSize(owner).height, greaterThanOrEqualTo(48));
+      expect(tester.getTopLeft(owner).dy,
+          lessThan(tester.getTopLeft(template).dy));
+      expect(find.byType(IdentityBadge), findsOneWidget);
+      expect(find.byType(Image), findsNothing);
+      expect(find.byType(AppSectionCard), findsOneWidget);
+      await captureUiPreview(tester,
+          'community-feed-large-${configuration.dark ? 'dark' : 'light'}');
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final configuration in [
     (locale: const Locale('en'), dark: false),
     (locale: const Locale('pt'), dark: true),
@@ -274,8 +339,11 @@ Future<ProviderContainer> _pump(
   FakeFriendPublicTemplateFeedRepository repository, {
   Locale locale = const Locale('en'),
   bool dark = false,
+  Size size = const Size(900, 1200),
+  double textScale = 2,
+  bool isCommunityHome = false,
 }) async {
-  tester.view.physicalSize = const Size(900, 1200);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -284,17 +352,26 @@ Future<ProviderContainer> _pump(
     overrides: [
       verifiedUserIdProvider.overrideWithValue(_viewerId),
       friendPublicTemplateFeedRepositoryProvider.overrideWithValue(repository),
+      notificationRepositoryProvider
+          .overrideWithValue(FakeNotificationRepository()),
     ],
   );
   addTearDown(container.dispose);
   final router = GoRouter(
-    initialLocation: AppRoutes.friendTemplates,
+    initialLocation:
+        isCommunityHome ? AppRoutes.community : AppRoutes.friendTemplates,
     routes: [
       GoRoute(
         path: AppRoutes.community,
-        builder: (context, state) =>
-            const Scaffold(body: Text('Community root')),
+        builder: (context, state) => isCommunityHome
+            ? const FriendPublicTemplateFeedScreen(isCommunityHome: true)
+            : const Scaffold(body: Text('Community root')),
         routes: [
+          GoRoute(
+            path: 'friends',
+            builder: (context, state) =>
+                const Scaffold(body: Text('Search friends probe')),
+          ),
           GoRoute(
             path: 'friends-templates',
             builder: (context, state) => const FriendPublicTemplateFeedScreen(),
@@ -332,26 +409,16 @@ Future<ProviderContainer> _pump(
           GlobalCupertinoLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.teal,
-            brightness: Brightness.light,
-          ),
-        ),
-        darkTheme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.teal,
-            brightness: Brightness.dark,
-          ),
-        ),
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
         themeMode: dark ? ThemeMode.dark : ThemeMode.light,
         routerConfig: router,
-        builder: (context, child) => MediaQuery(
+        builder: (context, child) => uiPreviewBoundary(MediaQuery(
           data: MediaQuery.of(context).copyWith(
-            textScaler: const TextScaler.linear(2),
+            textScaler: TextScaler.linear(textScale),
           ),
           child: child!,
-        ),
+        )),
       ),
     ),
   );

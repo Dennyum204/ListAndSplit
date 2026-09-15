@@ -26,6 +26,62 @@ the roadmap.
 | Offline direction | Local SQLite cache, introduced in a later phase |
 | Package policy | Current stable compatible releases; no prerelease packages |
 
+## Visual presentation boundary
+
+PR #33 uses Fernando's light-theme `UI refactor .pdf` and eight dark-theme
+screenshots as approved visual references; live Figma access is not required.
+`core/theme/app_palette.dart` owns the cream, navy, orange, blue-card and charcoal
+tokens, while `AppTheme` maps them to Material 3 light/dark component themes.
+`core/presentation/design_widgets.dart` supplies inset rounded page headers,
+section cards, decorative identity initials and dialog title strips. Native
+system bars, existing Material icons and platform typography remain in use; no
+sample portrait, list cover, template image or temporary asset URL is shipped.
+
+`AppBottomNavigationBar` renders each icon and localized label inside the same
+selected pill; the stateful router remains the selection authority. Its height
+grows with text scaling. Compact list cards retain owner/date/count metadata in
+their single accessible summary. `AppDialogField` places an unfilled persistent
+caption above the input and supplies its semantic label once, without taking
+ownership of editing controllers, focus, validation, or submission state.
+
+Feature widgets compose these primitives around existing Riverpod state and
+repository intents. Immutable-ID routes, guarded dialogs, authoritatively loaded
+data, stale-access exits, idempotent submissions and private Realtime contracts
+remain functional requirements. The four-destination stateful shell is retained;
+Community's initial page is the existing friends-only public-template feed, with
+exact-username discovery at `/community/friends`. Existing profile, feed,
+friendship and blocking paths remain supported. Sibling Chat navigation must
+unmount Chat when leaving it, so hidden pages never mark unseen messages read.
+
+Reference density is adapted for accessible touch targets, scrollable dialogs,
+keyboard insets, translated copy and 200% text. Destructive warnings and complete
+error/loading/read-only states take priority over omissions in static references.
+Optional local widget PNG captures are written outside the repository only; they
+are review aids, not physical-device QA or committed golden baselines.
+
+Device-local appearance is owned by `features/settings`: a repository wraps the
+existing SharedPreferences dependency and an app-scoped Riverpod controller
+restores/serializes the System/Light/Dark preference. `MaterialApp.router` watches
+the selected mode without recreating the router or account state. Profile renders
+the localized selector; widgets never access storage directly. No backend field,
+export contract, dependency, or cross-device synchronization is introduced.
+
+The follow-up Language preference follows the same device-local settings boundary
+(P-061/A-075). The app watches its locale without replacing its router. Failed
+writes reload the preference cache and reconcile the displayed choice from storage;
+read failures leave startup usable and expose a localized retry. It does not add
+an account field or cross-device synchronization.
+
+Quick-add is a stateful presentation widget using the existing active-list
+controller's createItem and ListQuantity.one contract. A submitted draft revision
+prevents success from clearing subsequent input. It adds no transport/API. Routine
+completion confirmation is the authoritative checkbox state, without inserting a
+success banner above keyed list rows; recovery/error paths remain visible.
+
+Template-image architecture is deliberately unresolved in O-P19/O-A17 and outside
+this source change. PR #34 independently owns avatar infrastructure and must be
+integrated against this updated base only in a later task.
+
 ## Client composition
 
 The application composition path is intentionally small:

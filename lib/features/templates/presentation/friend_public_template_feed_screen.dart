@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
+import 'package:list_and_split/features/notifications/presentation/notification_bell.dart';
 import 'package:list_and_split/features/templates/domain/public_template.dart';
 import 'package:list_and_split/features/templates/presentation/friend_public_template_feed_controller.dart';
 import 'package:list_and_split/features/templates/presentation/public_template_providers.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class FriendPublicTemplateFeedScreen extends ConsumerWidget {
-  const FriendPublicTemplateFeedScreen({super.key});
+  const FriendPublicTemplateFeedScreen({
+    this.isCommunityHome = false,
+    super.key,
+  });
+
+  final bool isCommunityHome;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -30,14 +38,26 @@ class FriendPublicTemplateFeedScreen extends ConsumerWidget {
       },
     );
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => _goBack(context),
-          icon: const Icon(Icons.arrow_back_rounded),
-          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-        ),
-        title: Text(localizations.friendTemplatesTitle),
+      appBar: AppPageHeader(
+        automaticallyImplyLeading: false,
+        leading: isCommunityHome
+            ? null
+            : IconButton(
+                onPressed: () => _goBack(context),
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              ),
+        title: Text(isCommunityHome
+            ? localizations.shellCommunityTab
+            : localizations.friendTemplatesTitle),
         actions: [
+          if (isCommunityHome)
+            IconButton(
+              key: const Key('openCommunityFriendsButton'),
+              onPressed: () => context.push(AppRoutes.communityFriends),
+              icon: const Icon(Icons.people_outline_rounded),
+              tooltip: localizations.communitySearchButton,
+            ),
           IconButton(
             key: const Key('refreshFriendTemplatesButton'),
             onPressed: state.isBusy
@@ -48,6 +68,7 @@ class FriendPublicTemplateFeedScreen extends ConsumerWidget {
             icon: const Icon(Icons.refresh_rounded),
             tooltip: localizations.friendTemplatesRefreshTooltip,
           ),
+          if (isCommunityHome) const NotificationBell(),
         ],
       ),
       body: SafeArea(
@@ -158,12 +179,79 @@ class _FriendTemplateCard extends StatelessWidget {
     final profile = entry.profile;
     final publishedDate = MaterialLocalizations.of(context)
         .formatMediumDate(template.publishedAt.toLocal());
-    return Card(
+    return AppSectionCard(
       key: Key('friendTemplateCard-${template.id}'),
-      clipBehavior: Clip.antiAlias,
+      padding: EdgeInsets.zero,
+      color: Theme.of(context).brightness == Brightness.dark
+          ? AppPalette.darkCard
+          : AppPalette.inputCream,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Theme.of(context).dividerColor
+                : AppPalette.orange),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Semantics(
+            button: true,
+            label: localizations.friendTemplatesOwnerSemantics(
+              profile.displayName,
+              profile.username,
+            ),
+            child: InkWell(
+              key: Key('openFriendTemplateOwner-${profile.id}'),
+              onTap: () => context.push(AppRoutes.publicProfile(profile.id)),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                  child: Row(
+                    children: [
+                      IdentityBadge(
+                          backgroundColor:
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? AppPalette.inputCream
+                                  : AppPalette.cardBlue,
+                          label: profile.displayName,
+                          size: 32),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(profile.displayName,
+                                style: Theme.of(context).textTheme.labelLarge),
+                            Text('@${profile.username}',
+                                style: Theme.of(context).textTheme.bodySmall),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Container(
+                          constraints: const BoxConstraints(minHeight: 48),
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppPalette.orange),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                              localizations.publicTemplatesViewProfileButton,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.labelLarge),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
           Semantics(
             button: true,
             label: localizations.friendTemplatesCardSemantics(
@@ -179,70 +267,38 @@ class _FriendTemplateCard extends StatelessWidget {
                 AppRoutes.publicTemplate(profile.id, template.id),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(Icons.public_rounded),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            template.name,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            localizations.templatesItemCount(
-                              template.itemCount,
-                            ),
-                          ),
-                          Text(
-                            localizations.publicTemplatesPublishedAt(
-                              publishedDate,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.chevron_right_rounded),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const Divider(height: 1),
-          Semantics(
-            button: true,
-            label: localizations.friendTemplatesOwnerSemantics(
-              profile.displayName,
-              profile.username,
-            ),
-            child: InkWell(
-              key: Key('openFriendTemplateOwner-${profile.id}'),
-              onTap: () => context.push(AppRoutes.publicProfile(profile.id)),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 48),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.person_outline_rounded, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '${profile.displayName} (@${profile.username})',
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(template.name,
+                              style: Theme.of(context).textTheme.titleMedium),
                         ),
-                      ),
-                      Text(localizations.publicTemplatesViewProfileButton),
-                    ],
-                  ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right_rounded),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      spacing: 16,
+                      runSpacing: 4,
+                      children: [
+                        Text(
+                          localizations
+                              .publicTemplatesPublishedAt(publishedDate),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        Text(
+                          localizations.templatesItemCount(template.itemCount),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),

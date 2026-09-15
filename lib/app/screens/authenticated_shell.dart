@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:list_and_split/core/presentation/app_bottom_navigation_bar.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 class AuthenticatedShell extends StatelessWidget {
@@ -12,7 +13,7 @@ class AuthenticatedShell extends StatelessWidget {
     final localizations = AppLocalizations.of(context);
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: AppBottomNavigationBar(
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: (index) {
           navigationShell.goBranch(

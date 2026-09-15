@@ -33,6 +33,21 @@ beta distribution, and Production release remain separate evidence states.
 - English and Portuguese are supported UI languages, while code and content
   structure remain ready for additional locales.
 
+The approved UI refactor uses the supplied light-theme PDF and dark-theme
+screenshots (A-074). The reference palette, rounded controls, four destinations
+and decorative identity initials do not authorize new capabilities. Community
+opens the existing friends-only public-template feed, and its Friends action
+opens exact-username discovery; names never become routing identifiers. Existing
+validation, consent, destructive warnings, error recovery and accessible large-text
+layouts take precedence over simplified static frames. Avatars, content images,
+category icons, Chat media and an Enable Chat setting remain outside this slice.
+
+The selected bottom-navigation background encloses both icon and translated
+label. List overview cards prioritize name, current participants and completion
+progress; accessible descriptions retain the owner/date context. Dialog field
+captions remain plainly visible above inputs, including while focused or filled,
+without a separate background behind the caption.
+
 ## Functional requirements
 
 ### Authentication and profile onboarding
@@ -216,6 +231,18 @@ beta distribution, and Production release remain separate evidence states.
   not a claim of complete legal or regulatory compliance. Hosted deletion QA uses
   separately authorized disposable accounts and must never delete or modify
   Fernando or Susana.
+
+### Fast active-list item entry
+
+Inline quick-add accepts an item name and submits through either + or the keyboard.
+It uses quantity 1, leaves unit and assignments unset, and retains the detailed
+item editor for later changes. Existing name normalization, duplicate-name support,
+limits, capacity, committed creation order, permissions and request-id recovery
+remain authoritative. Guard repeated submissions, preserve all failed/uncertain
+drafts, clear only an unchanged successfully submitted draft, and keep focus ready
+for the next item. Unassigned rows omit the visible icon/text and unused space;
+assigned identities and meaningful screen-reader context remain available.
+Completion/reopen must not shift the viewport to announce routine success.
 
 ### Active and shared lists
 
@@ -998,6 +1025,18 @@ Notification links and later feature deep-link contracts remain open.
 ### Accessibility and localization
 
 - Material 3 light and dark themes are part of the application foundation.
+- Profile includes a Language dropdown near Appearance: System (default), English
+  and Português (European Portuguese). It updates the whole app immediately while
+  preserving navigation, authentication, selected tab and unsaved forms. System
+  follows device locale changes with the existing English/Portuguese fallback.
+  The choice persists locally across restart/sign-out, is not account/export data,
+  and has recoverable localized storage-failure feedback. No phone setting changes
+  or restart are required.
+- Profile includes an Appearance selector for System (default), Light and Dark.
+  The choice applies immediately across the app and is saved only on this device,
+  surviving app restarts and sign-out without modifying the account or export.
+  An unavailable saved preference falls back to System; failed saves restore the
+  previous selection and show a localized, retryable error.
 - User-facing strings are supplied in English and Portuguese and remain structured
   for additional locales.
 - New flows should support semantic labels, scalable text, adequate contrast, and
@@ -1070,3 +1109,21 @@ choose them:
 - The exact terms-acceptance, in-app Chat content/user reporting, moderator
   workflow, evidence, appeal, and operational-response contract required before
   public distribution.
+
+### Approved reference follow-up allocation
+
+The “Things to change.docx” references guide compact balance strips, directional
+suggested-payment cards, transaction rows with existing payer/beneficiary identity,
+Chat bubble alignment/colours and composer, persistent plain dropdown captions,
+and compact text-only Community cards with author/profile action/title/publication
+and item count. Existing text colours, integer money, settlement confirmation and
+reversal, text Chat/unread rules and access restrictions remain authoritative.
+“Record payment” records bookkeeping; it never transfers funds. Many participants
+and large text must remain reachable through responsive layout and scrolling.
+Initials remain in PR #33; actual avatar editing/rendering belongs to PR #34.
+
+Template images are planned as the next separate feature PR, including optional
+image selection/preview in publishing and image-bearing Community cards. No image
+upload, fake placeholder or Add image control belongs to this delivery. Visibility,
+limits, replacement/removal, copying/sending, unpublishing/deletion, account
+export/deletion and moderation decisions must be resolved first (O-P19/O-A17).

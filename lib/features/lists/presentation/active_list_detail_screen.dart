@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:list_and_split/app/router/route_decision.dart';
+import 'package:list_and_split/core/presentation/design_widgets.dart';
 import 'package:list_and_split/core/presentation/form_widgets.dart';
+import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/general_note.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
@@ -66,18 +68,14 @@ class ActiveListDetailScreen extends ConsumerWidget {
       },
     );
     return Scaffold(
-      appBar: AppBar(
+      appBar: AppPageHeader(
         title: Text(detail?.summary.title ?? localizations.listsTitle),
         actions: [
-          if (detail != null)
-            _ListChatButton(
-              listId: listId,
-              enabled: !state.isMutating,
-            ),
           const NotificationBell(),
           if (detail != null)
             IconButton(
               key: const Key('listMembersButton'),
+              disabledColor: AppPalette.lightText,
               onPressed: state.isMutating
                   ? null
                   : () => context.push(
@@ -86,11 +84,21 @@ class ActiveListDetailScreen extends ConsumerWidget {
               tooltip: detail.summary.isOwner
                   ? localizations.listManageMembersButton
                   : localizations.listViewMembersButton,
-              icon: const Icon(Icons.group_outlined),
+              icon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('${detail.participants.length}',
+                      style: const TextStyle(fontSize: 12)),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.group_outlined),
+                ],
+              ),
             ),
           if (detail != null && detail.summary.isOwner)
             PopupMenuButton<_ListAction>(
               key: const Key('listActionsButton'),
+              icon: const Icon(Icons.settings_outlined,
+                  color: AppPalette.lightText),
               enabled: !state.isMutating,
               onSelected: (action) => _handleAction(context, ref, action),
               itemBuilder: (context) => [
@@ -132,6 +140,8 @@ class ActiveListDetailScreen extends ConsumerWidget {
           if (detail != null && !detail.summary.isOwner)
             PopupMenuButton<_ListAction>(
               key: const Key('memberListActionsButton'),
+              icon: const Icon(Icons.settings_outlined,
+                  color: AppPalette.lightText),
               enabled: !state.isMutating,
               onSelected: (action) => _handleAction(context, ref, action),
               itemBuilder: (_) => [
@@ -158,19 +168,8 @@ class ActiveListDetailScreen extends ConsumerWidget {
             ),
         ],
       ),
-      floatingActionButton: detail != null && !archived
-          ? FloatingActionButton.extended(
-              key: const Key('addItemButton'),
-              onPressed: state.isMutating ||
-                      detail.items.length >= activeListItemCapacity
-                  ? null
-                  : () => _showItemDialog(context, ref),
-              tooltip: detail.items.length >= activeListItemCapacity
-                  ? localizations.listItemCapacityReachedMessage
-                  : localizations.itemAddButton,
-              icon: const Icon(Icons.add_rounded),
-              label: Text(localizations.itemAddButton),
-            )
+      bottomNavigationBar: detail != null && !archived
+          ? _QuickAddItem(key: ValueKey('quickAdd-$listId'), listId: listId)
           : null,
       body: SafeArea(
         child: Center(
@@ -261,7 +260,8 @@ class ActiveListDetailScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.listLeaveTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.listLeaveTitle),
         content: Text(localizations.listLeaveDescription),
         actions: [
           TextButton(
@@ -301,21 +301,27 @@ class ActiveListDetailScreen extends ConsumerWidget {
               dialogRef.watch(activeListDetailControllerProvider(listId));
           final localizations = AppLocalizations.of(context);
           return AlertDialog(
-            title: Text(localizations.listRenameTitle),
-            content: TextFormField(
-              key: const Key('renameListTitle'),
-              initialValue: title,
-              autofocus: true,
-              enabled: !state.isMutating,
-              maxLength: 80,
-              decoration: InputDecoration(
-                labelText: localizations.listsTitleLabel,
-                helperText: localizations.listsTitleHelper,
+            scrollable: true,
+            titlePadding: EdgeInsets.zero,
+            title: AppDialogTitle(localizations.listRenameTitle),
+            content: SingleChildScrollView(
+                child: AppDialogField(
+              label: localizations.listsTitleLabel,
+              child: TextFormField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('renameListTitle'),
+                initialValue: title,
+                autofocus: true,
+                enabled: !state.isMutating,
+                maxLength: 80,
+                decoration: InputDecoration(
+                  helperText: localizations.listsTitleHelper,
+                ),
+                onChanged: (value) => title = value,
               ),
-              onChanged: (value) => title = value,
-            ),
+            )),
             actions: [
-              TextButton(
+              OutlinedButton(
                 onPressed: state.isMutating
                     ? null
                     : () => Navigator.of(dialogContext).pop(),
@@ -355,7 +361,8 @@ class ActiveListDetailScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.listDeleteTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.listDeleteTitle),
         content: Text(localizations.listDeleteDescription),
         actions: [
           TextButton(
@@ -378,15 +385,105 @@ class ActiveListDetailScreen extends ConsumerWidget {
       context.pop();
     }
   }
+}
 
-  Future<void> _showItemDialog(
-    BuildContext context,
-    WidgetRef ref, {
-    ActiveListItem? item,
-  }) {
-    return showDialog<void>(
-      context: context,
-      builder: (_) => _ItemDialog(listId: listId, item: item),
+enum ListDetailSection { items, split, chat }
+
+/// Presentation-only navigation over the existing list routes. Chat keeps its
+/// route-owned provider lifetime; no conversation is embedded into another tab.
+class ListSectionNavigation extends StatefulWidget {
+  const ListSectionNavigation({
+    required this.listId,
+    required this.selected,
+    this.enabled = true,
+    super.key,
+  });
+
+  final String listId;
+  final ListDetailSection selected;
+  final bool enabled;
+
+  @override
+  State<ListSectionNavigation> createState() => _ListSectionNavigationState();
+}
+
+class _ListSectionNavigationState extends State<ListSectionNavigation> {
+  bool _openingSplit = false;
+
+  Future<void> _openSplit() async {
+    if (_openingSplit || !widget.enabled) return;
+    setState(() => _openingSplit = true);
+    try {
+      if (widget.selected == ListDetailSection.chat) {
+        // Chat must leave the route tree, not remain mounted under Split: its
+        // bottom-anchored read marker applies only to a visible conversation.
+        context.go(AppRoutes.listSplit(widget.listId));
+      } else {
+        await context.push<void>(AppRoutes.listSplit(widget.listId));
+      }
+    } finally {
+      if (mounted) setState(() => _openingSplit = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final colors = Theme.of(context).colorScheme;
+    final selected = widget.selected;
+    final enabled = widget.enabled && !_openingSplit;
+    final listId = widget.listId;
+    Widget section(ListDetailSection value, String label, VoidCallback onTap) {
+      final isSelected = selected == value;
+      return Expanded(
+        child: Semantics(
+          selected: isSelected,
+          child: TextButton(
+            key: Key('listSection-${value.name}'),
+            onPressed: enabled && !isSelected ? onTap : null,
+            style: TextButton.styleFrom(
+              backgroundColor:
+                  isSelected ? AppPalette.orange : Colors.transparent,
+              foregroundColor: isSelected ? AppPalette.navy : colors.onSurface,
+              disabledForegroundColor:
+                  isSelected ? AppPalette.navy : colors.onSurfaceVariant,
+              minimumSize: const Size(0, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            ),
+            child: Text(label, textAlign: TextAlign.center),
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      key: const Key('listSectionNavigation'),
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          children: [
+            section(
+              ListDetailSection.items,
+              localizations.listSectionLabel,
+              () => context.go(AppRoutes.listDetail(listId)),
+            ),
+            section(
+              ListDetailSection.split,
+              localizations.splitTitle,
+              _openSplit,
+            ),
+            Expanded(
+              child: _ListChatButton(
+                listId: listId,
+                enabled: enabled,
+                selected: selected == ListDetailSection.chat,
+                showUnread: selected == ListDetailSection.items,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -395,37 +492,53 @@ class _ListChatButton extends ConsumerWidget {
   const _ListChatButton({
     required this.listId,
     required this.enabled,
+    this.selected = false,
+    this.showUnread = true,
   });
 
   final String listId;
   final bool enabled;
+  final bool selected;
+  final bool showUnread;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final localizations = AppLocalizations.of(context);
-    final unread =
-        ref.watch(activeListChatUnreadControllerProvider(listId)).valueOrNull;
+    final unread = !showUnread || selected
+        ? null
+        : ref.watch(activeListChatUnreadControllerProvider(listId)).valueOrNull;
     final label = unread == null || unread.count == 0
         ? localizations.listChatOpenButton
         : unread.count == 1
             ? localizations.listChatOpenOneUnreadLabel
             : localizations.listChatOpenUnreadLabel(unread.compactLabel);
-    final onOpen =
-        enabled ? () => context.go(AppRoutes.listChat(listId)) : null;
+    final onOpen = enabled && !selected
+        ? () => context.go(AppRoutes.listChat(listId))
+        : null;
     return Semantics(
+      container: true,
       button: true,
+      selected: selected,
       enabled: onOpen != null,
       excludeSemantics: true,
       label: label,
       onTap: onOpen,
-      child: IconButton(
+      child: TextButton(
         key: const Key('listChatButton'),
         onPressed: onOpen,
-        tooltip: localizations.listChatOpenButton,
-        icon: Stack(
+        style: TextButton.styleFrom(
+          minimumSize: const Size(0, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          backgroundColor: selected ? AppPalette.orange : Colors.transparent,
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
+          disabledForegroundColor: selected
+              ? AppPalette.navy
+              : Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+        child: Stack(
           clipBehavior: Clip.none,
           children: [
-            const Icon(Icons.forum_outlined),
+            Text(localizations.listChatSectionLabel),
             if (unread != null && unread.count > 0)
               PositionedDirectional(
                 end: -9,
@@ -459,6 +572,134 @@ class _ListChatButton extends ConsumerWidget {
   }
 }
 
+class _QuickAddItem extends ConsumerStatefulWidget {
+  const _QuickAddItem({required this.listId, super.key});
+  final String listId;
+
+  @override
+  ConsumerState<_QuickAddItem> createState() => _QuickAddItemState();
+}
+
+class _QuickAddItemState extends ConsumerState<_QuickAddItem> {
+  final _name = TextEditingController();
+  final _focus = FocusNode();
+  bool _submitting = false;
+  int _draftRevision = 0;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final state = ref.read(activeListDetailControllerProvider(widget.listId));
+    final detail = state.detail.valueOrNull;
+    final draft = _name.text;
+    if (_submitting ||
+        state.isMutating ||
+        detail == null ||
+        detail.summary.status != ActiveListStatus.active ||
+        detail.items.length >= activeListItemCapacity ||
+        draft.trim().isEmpty ||
+        draft.trim().length > 120) {
+      return;
+    }
+    final revision = _draftRevision;
+    setState(() => _submitting = true);
+    final result = await ref
+        .read(activeListDetailControllerProvider(widget.listId).notifier)
+        .createItem(draft,
+            quantity: ListQuantity.one,
+            unit: null,
+            assigneeProfileIds: const {});
+    if (!mounted) return;
+    setState(() {
+      _submitting = false;
+      if (result == ActiveListMutationOutcome.succeeded &&
+          revision == _draftRevision &&
+          _name.text == draft) {
+        _name.clear();
+      }
+    });
+    if (result == ActiveListMutationOutcome.succeeded) _focus.requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    final state = ref.watch(activeListDetailControllerProvider(widget.listId));
+    final detail = state.detail.valueOrNull;
+    final atCapacity = (detail?.items.length ?? 0) >= activeListItemCapacity;
+    final valid =
+        _name.text.trim().isNotEmpty && _name.text.trim().length <= 120;
+    final enabled = !_submitting && !state.isMutating && !atCapacity && valid;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('quickAddItemName'),
+                  style: AppPalette.inputTextStyle(context),
+                  controller: _name,
+                  focusNode: _focus,
+                  textInputAction: TextInputAction.done,
+                  onChanged: (_) => setState(() => _draftRevision++),
+                  onSubmitted: (_) => _submit(),
+                  decoration: InputDecoration(
+                    hintText: strings.itemQuickAddHint,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(32),
+                        borderSide: const BorderSide(
+                            color: AppPalette.orange, width: 1.5)),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(32),
+                        borderSide: const BorderSide(
+                            color: AppPalette.orange, width: 1.5)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(32),
+                        borderSide:
+                            const BorderSide(color: AppPalette.navy, width: 2)),
+                    errorText: _name.text.trim().length > 120
+                        ? strings.listInvalidInputMessage
+                        : null,
+                    helperText: atCapacity
+                        ? strings.listItemCapacityReachedMessage
+                        : null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                key: const Key('addItemButton'),
+                tooltip: strings.itemAddButton,
+                onPressed: enabled ? _submit : null,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(48, 48),
+                  backgroundColor: AppPalette.inputCream,
+                  foregroundColor: AppPalette.navy,
+                  disabledBackgroundColor:
+                      valid && !atCapacity ? AppPalette.inputCream : null,
+                  disabledForegroundColor:
+                      valid && !atCapacity ? AppPalette.navy : null,
+                ),
+                icon: const Icon(Icons.add_rounded, size: 30),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DetailBody extends ConsumerWidget {
   const _DetailBody({
     required this.listId,
@@ -478,6 +719,12 @@ class _DetailBody extends ConsumerWidget {
     final header = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        ListSectionNavigation(
+          listId: listId,
+          selected: ListDetailSection.items,
+          enabled: !state.isMutating,
+        ),
+        const SizedBox(height: 12),
         if (archived)
           Semantics(
             liveRegion: true,
@@ -517,13 +764,6 @@ class _DetailBody extends ConsumerWidget {
               ),
             ),
           ),
-        _GeneralNoteCard(
-          listId: listId,
-          detail: detail,
-          readOnly: archived,
-          isBusy: state.isMutating,
-        ),
-        const SizedBox(height: 12),
         Text(
           localizations.listProgress(completed, detail.items.length),
           style: Theme.of(context).textTheme.titleMedium,
@@ -542,11 +782,29 @@ class _DetailBody extends ConsumerWidget {
       child: detail.items.isEmpty
           ? ListView(
               padding: const EdgeInsets.only(bottom: 96),
-              children: [header, _ItemsEmpty(archived: archived)],
+              children: [
+                header,
+                _ItemsEmpty(archived: archived),
+                _GeneralNoteCard(
+                  listId: listId,
+                  detail: detail,
+                  readOnly: archived,
+                  isBusy: state.isMutating,
+                ),
+              ],
             )
           : ReorderableListView.builder(
               key: const Key('activeListItems'),
               header: header,
+              footer: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: _GeneralNoteCard(
+                  listId: listId,
+                  detail: detail,
+                  readOnly: archived,
+                  isBusy: state.isMutating,
+                ),
+              ),
               buildDefaultDragHandles: false,
               padding: const EdgeInsets.only(bottom: 96),
               itemCount: detail.items.length,
@@ -580,8 +838,11 @@ class _DetailBody extends ConsumerWidget {
       ActiveListDetailMessage.archived => localizations.listArchivedMessage,
       ActiveListDetailMessage.restored => localizations.listRestoredMessage,
       ActiveListDetailMessage.remotelyArchived => null,
-      ActiveListDetailMessage.itemCreated => localizations.itemCreatedMessage,
-      ActiveListDetailMessage.itemUpdated => localizations.itemUpdatedMessage,
+      ActiveListDetailMessage.itemCreated => null,
+      // The checked state is the completion confirmation. Inserting a success
+      // banner here moved every row by 60px after each toggle, then back on
+      // the next mutation. Failures/recovery remain visible below.
+      ActiveListDetailMessage.itemUpdated => null,
       ActiveListDetailMessage.itemDeleted => localizations.itemDeletedMessage,
       ActiveListDetailMessage.noteSaved =>
         localizations.generalNoteSavedMessage,
@@ -632,69 +893,82 @@ class _GeneralNoteCard extends StatelessWidget {
     return Card(
       key: const Key('generalNoteCard'),
       margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.sticky_note_2_outlined),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    localizations.generalNoteTitle,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                if (readOnly)
-                  Semantics(
-                    container: true,
-                    label: localizations.generalNoteReadOnlyLabel,
-                    child: const Icon(Icons.lock_outline_rounded, size: 20),
-                  ),
-              ],
-            ),
-            if (!readOnly)
-              Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: TextButton.icon(
-                  key: const Key('editGeneralNoteButton'),
-                  onPressed: isBusy
-                      ? null
-                      : () => showDialog<void>(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (_) => _GeneralNoteDialog(
-                              listId: listId,
-                              initialNote: note,
-                            ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            color: AppPalette.orange,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: IconTheme(
+              data: const IconThemeData(color: AppPalette.navy),
+              child: Row(
+                children: [
+                  const Icon(Icons.sticky_note_2_outlined),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      localizations.generalNoteTitle,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: AppPalette.navy,
+                            fontWeight: FontWeight.w700,
                           ),
-                  icon: const Icon(Icons.edit_outlined),
-                  label: Text(localizations.generalNoteEditButton),
-                ),
-              ),
-            const SizedBox(height: 8),
-            if (text == null)
-              Text(
-                readOnly
-                    ? localizations.generalNoteEmptyArchivedMessage
-                    : localizations.generalNoteEmptyMessage,
-                key: const Key('generalNoteEmpty'),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 180),
-                child: SingleChildScrollView(
-                  key: const Key('generalNoteScroll'),
-                  child: _ResolvedGeneralNoteText(note: note),
-                ),
+                  ),
+                  if (readOnly)
+                    Semantics(
+                      container: true,
+                      label: localizations.generalNoteReadOnlyLabel,
+                      child: const Icon(Icons.lock_outline_rounded, size: 20),
+                    ),
+                ],
               ),
-          ],
-        ),
+            ),
+          ),
+          if (!readOnly)
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton.icon(
+                key: const Key('editGeneralNoteButton'),
+                style: TextButton.styleFrom(
+                  disabledForegroundColor:
+                      Theme.of(context).colorScheme.primary,
+                ),
+                onPressed: isBusy
+                    ? null
+                    : () => showDialog<void>(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) => _GeneralNoteDialog(
+                            listId: listId,
+                            initialNote: note,
+                          ),
+                        ),
+                icon: const Icon(Icons.edit_outlined),
+                label: Text(localizations.generalNoteEditButton),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: text == null
+                ? Text(
+                    readOnly
+                        ? localizations.generalNoteEmptyArchivedMessage
+                        : localizations.generalNoteEmptyMessage,
+                    key: const Key('generalNoteEmpty'),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  )
+                : ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    child: SingleChildScrollView(
+                      key: const Key('generalNoteScroll'),
+                      child: _ResolvedGeneralNoteText(note: note),
+                    ),
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -833,7 +1107,8 @@ class _GeneralNoteDialogState extends ConsumerState<_GeneralNoteDialog> {
         !_conflict &&
         !recoveryInProgress;
     return AlertDialog(
-      title: Text(localizations.generalNoteEditorTitle),
+      titlePadding: EdgeInsets.zero,
+      title: AppDialogTitle(localizations.generalNoteEditorTitle),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
         child: SingleChildScrollView(
@@ -898,23 +1173,26 @@ class _GeneralNoteDialogState extends ConsumerState<_GeneralNoteDialog> {
                 ),
                 const SizedBox(height: 12),
               ],
-              TextField(
-                key: const Key('generalNoteField'),
-                controller: _text,
-                focusNode: _focusNode,
-                autofocus: true,
-                enabled: formEnabled,
-                minLines: 6,
-                maxLines: 12,
-                textCapitalization: TextCapitalization.sentences,
-                keyboardType: TextInputType.multiline,
-                inputFormatters: const [_GeneralNoteCodePointFormatter()],
-                decoration: InputDecoration(
-                  labelText: localizations.generalNoteFieldLabel,
-                  helperText: localizations.generalNoteFieldHelper,
-                  errorText: (_showValidation || overLimit) && overLimit
-                      ? localizations.generalNoteCharacterLimitError
-                      : null,
+              AppDialogField(
+                label: localizations.generalNoteFieldLabel,
+                child: TextField(
+                  style: AppPalette.inputTextStyle(context),
+                  key: const Key('generalNoteField'),
+                  controller: _text,
+                  focusNode: _focusNode,
+                  autofocus: true,
+                  enabled: formEnabled,
+                  minLines: 6,
+                  maxLines: 12,
+                  textCapitalization: TextCapitalization.sentences,
+                  keyboardType: TextInputType.multiline,
+                  inputFormatters: const [_GeneralNoteCodePointFormatter()],
+                  decoration: InputDecoration(
+                    helperText: localizations.generalNoteFieldHelper,
+                    errorText: (_showValidation || overLimit) && overLimit
+                        ? localizations.generalNoteCharacterLimitError
+                        : null,
+                  ),
                 ),
               ),
               const SizedBox(height: 4),
@@ -1055,7 +1333,7 @@ class _GeneralNoteDialogState extends ConsumerState<_GeneralNoteDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           key: const Key('cancelGeneralNoteButton'),
           onPressed:
               state.isMutating || _submitted || _closing ? null : _closeNow,
@@ -1368,6 +1646,11 @@ class _ItemCard extends ConsumerWidget {
         '${item.unit == null ? '' : ' ${_unitLabel(localizations, item.unit!)}'}';
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
+      color: item.isCompleted
+          ? Color.lerp(Theme.of(context).cardTheme.color,
+              Theme.of(context).colorScheme.onSurface, .09)
+          : null,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         contentPadding: const EdgeInsetsDirectional.fromSTEB(8, 4, 4, 4),
         leading: Semantics(
@@ -1378,6 +1661,52 @@ class _ItemCard extends ConsumerWidget {
           child: Checkbox(
             key: Key('completeItem-${item.id}'),
             value: item.isCompleted,
+            checkColor:
+                readOnly ? null : Theme.of(context).colorScheme.onPrimary,
+            // Disabling the mutation callback must not dim unchecked outlines.
+            // Archived controls still use the normal disabled appearance.
+            side: readOnly
+                ? null
+                // Retain the Flutter 3.19 floor.
+                // ignore: deprecated_member_use
+                : MaterialStateBorderSide.resolveWith((states) {
+                    // ignore: deprecated_member_use
+                    if (states.contains(MaterialState.selected)) {
+                      return const BorderSide(
+                          width: 0, color: Colors.transparent);
+                    }
+                    final colors = Theme.of(context).colorScheme;
+                    // ignore: deprecated_member_use
+                    if (states.contains(MaterialState.error)) {
+                      return BorderSide(color: colors.error, width: 2);
+                    }
+                    final interactive =
+                        // ignore: deprecated_member_use
+                        states.contains(MaterialState.pressed) ||
+                            // ignore: deprecated_member_use
+                            states.contains(MaterialState.hovered) ||
+                            // ignore: deprecated_member_use
+                            states.contains(MaterialState.focused);
+                    return BorderSide(
+                      color: interactive
+                          ? colors.onSurface
+                          : colors.onSurfaceVariant,
+                      width: 2,
+                    );
+                  }),
+            // A pending mutation disables interaction without flashing every
+            // checkbox into the disabled palette and back.
+            fillColor: readOnly
+                ? null
+                // Retain the Flutter 3.19 floor; renamed WidgetState APIs
+                // are unavailable there.
+                // ignore: deprecated_member_use
+                : MaterialStateProperty.resolveWith(
+                    // ignore: deprecated_member_use
+                    (states) => states.contains(MaterialState.selected)
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.transparent,
+                  ),
             onChanged: readOnly || isBusy
                 ? null
                 : (value) => controller.setItemCompleted(item, value ?? false),
@@ -1385,16 +1714,25 @@ class _ItemCard extends ConsumerWidget {
         ),
         title: Text(
           item.name,
-          style: item.isCompleted
-              ? const TextStyle(decoration: TextDecoration.lineThrough)
-              : null,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            decoration: item.isCompleted ? TextDecoration.lineThrough : null,
+          ),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(quantity),
-            const SizedBox(height: 2),
-            _AssigneeSummary(item: item),
+            if (item.assignees.isEmpty)
+              Semantics(
+                key: Key('itemAssignees-${item.id}'),
+                label: localizations.itemUnassignedSemanticLabel(item.name),
+                child: Text(quantity),
+              )
+            else ...[
+              Text(quantity),
+              const SizedBox(height: 2),
+              _AssigneeSummary(item: item),
+            ],
           ],
         ),
         trailing: Row(
@@ -1403,6 +1741,8 @@ class _ItemCard extends ConsumerWidget {
             if (!readOnly)
               PopupMenuButton<String>(
                 key: Key('itemActions-${item.id}'),
+                icon: Icon(Icons.more_vert,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
                 enabled: !isBusy,
                 onSelected: (action) {
                   if (action == 'edit') {
@@ -1452,7 +1792,8 @@ class _ItemCard extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(localizations.itemDeleteTitle),
+        titlePadding: EdgeInsets.zero,
+        title: AppDialogTitle(localizations.itemDeleteTitle),
         content: Text(localizations.itemDeleteDescription),
         actions: [
           TextButton(
@@ -1531,7 +1872,8 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
         _name.text.trim().isNotEmpty && _name.text.trim().length <= 120;
     final formEnabled = !state.isMutating && !_submitted && !_dialogClosing;
     return AlertDialog(
-      title: Text(
+      titlePadding: EdgeInsets.zero,
+      title: AppDialogTitle(
         widget.item == null
             ? localizations.itemAddTitle
             : localizations.itemEditTitle,
@@ -1540,60 +1882,76 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              key: const Key('itemNameField'),
-              controller: _name,
-              autofocus: true,
-              enabled: formEnabled,
-              maxLength: 120,
-              textCapitalization: TextCapitalization.sentences,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: localizations.itemNameLabel,
-                helperText: localizations.itemNameHelper,
-                errorText: _showValidation && !nameValid
-                    ? localizations.listInvalidInputMessage
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              key: const Key('itemQuantityField'),
-              controller: _quantity,
-              enabled: formEnabled,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: localizations.itemQuantityLabel,
-                helperText: localizations.itemQuantityHelper,
-                errorText: _showValidation && quantity == null
-                    ? localizations.listInvalidInputMessage
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<ListUnit?>(
-              key: const Key('itemUnitField'),
-              // Keep the initializer supported by the Flutter 3.19 floor.
-              // ignore: deprecated_member_use
-              value: _unit,
-              decoration:
-                  InputDecoration(labelText: localizations.itemUnitLabel),
-              items: [
-                DropdownMenuItem(
-                  value: null,
-                  child: Text(localizations.itemNoUnit),
+            AppDialogField(
+              label: localizations.itemNameLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('itemNameField'),
+                controller: _name,
+                autofocus: true,
+                enabled: formEnabled,
+                maxLength: 120,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  helperText: localizations.itemNameHelper,
+                  errorText: _showValidation && !nameValid
+                      ? localizations.listInvalidInputMessage
+                      : null,
                 ),
-                ...ListUnit.values.map(
-                  (unit) => DropdownMenuItem(
-                    value: unit,
-                    child: Text(_unitLabel(localizations, unit)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            AppDialogField(
+              label: localizations.itemQuantityLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('itemQuantityField'),
+                controller: _quantity,
+                enabled: formEnabled,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  helperText: localizations.itemQuantityHelper,
+                  errorText: _showValidation && quantity == null
+                      ? localizations.listInvalidInputMessage
+                      : null,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            AppDialogField(
+              label: localizations.itemUnitLabel,
+              child: DropdownButtonFormField<ListUnit?>(
+                isExpanded: true,
+                isDense: false,
+                iconEnabledColor: AppPalette.navy,
+                style: AppPalette.inputTextStyle(context),
+                dropdownColor: AppPalette.inputCream,
+                key: const Key('itemUnitField'),
+                // Keep the initializer supported by the Flutter 3.19 floor.
+                // ignore: deprecated_member_use
+                value: _unit,
+                decoration: const InputDecoration(
+                  contentPadding: AppDialogField.dropdownPadding,
+                ),
+                items: [
+                  DropdownMenuItem(
+                    value: null,
+                    child: Text(localizations.itemNoUnit),
                   ),
-                ),
-              ],
-              onChanged:
-                  formEnabled ? (value) => setState(() => _unit = value) : null,
+                  ...ListUnit.values.map(
+                    (unit) => DropdownMenuItem(
+                      value: unit,
+                      child: Text(_unitLabel(localizations, unit)),
+                    ),
+                  ),
+                ],
+                onChanged: formEnabled
+                    ? (value) => setState(() => _unit = value)
+                    : null,
+              ),
             ),
             const SizedBox(height: 12),
             Align(
@@ -1657,7 +2015,7 @@ class _ItemDialogState extends ConsumerState<_ItemDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: formEnabled ? _closeNow : null,
           child: Text(localizations.cancelButton),
         ),
@@ -1971,7 +2329,8 @@ class _SaveTemplateDialogState extends State<_SaveTemplateDialog> {
         _selectedIds.isNotEmpty &&
         _selectedIds.length <= privateTemplateItemCapacity;
     return AlertDialog(
-      title: Text(localizations.templatesSaveListTitle),
+      titlePadding: EdgeInsets.zero,
+      title: AppDialogTitle(localizations.templatesSaveListTitle),
       content: SizedBox(
         width: 520,
         child: Column(
@@ -1979,33 +2338,43 @@ class _SaveTemplateDialogState extends State<_SaveTemplateDialog> {
           children: [
             Text(localizations.templatesSaveListDescription),
             const SizedBox(height: 12),
-            TextField(
-              key: const Key('saveListTemplateNameField'),
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: localizations.templatesNameLabel,
+            AppDialogField(
+              label: localizations.templatesNameLabel,
+              child: TextField(
+                style: AppPalette.inputTextStyle(context),
+                key: const Key('saveListTemplateNameField'),
+                controller: _nameController,
+                decoration: const InputDecoration(),
+                onChanged: (_) => setState(() {}),
               ),
-              onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String?>(
-              // ignore: deprecated_member_use
-              value: _categoryId,
-              decoration: InputDecoration(
-                labelText: localizations.templatesCategoryLabel,
-              ),
-              items: [
-                DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text(localizations.templatesNoCategoryLabel),
+            AppDialogField(
+              label: localizations.templatesCategoryLabel,
+              child: DropdownButtonFormField<String?>(
+                isExpanded: true,
+                isDense: false,
+                iconEnabledColor: AppPalette.navy,
+                style: AppPalette.inputTextStyle(context),
+                dropdownColor: AppPalette.inputCream,
+                // ignore: deprecated_member_use
+                value: _categoryId,
+                decoration: const InputDecoration(
+                  contentPadding: AppDialogField.dropdownPadding,
                 ),
-                for (final category in widget.categories)
+                items: [
                   DropdownMenuItem<String?>(
-                    value: category.id,
-                    child: Text(category.name),
+                    value: null,
+                    child: Text(localizations.templatesNoCategoryLabel),
                   ),
-              ],
-              onChanged: (value) => setState(() => _categoryId = value),
+                  for (final category in widget.categories)
+                    DropdownMenuItem<String?>(
+                      value: category.id,
+                      child: Text(category.name),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _categoryId = value),
+              ),
             ),
             const SizedBox(height: 8),
             Row(
@@ -2064,7 +2433,7 @@ class _SaveTemplateDialogState extends State<_SaveTemplateDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: () => Navigator.pop(context),
           child: Text(localizations.cancelButton),
         ),

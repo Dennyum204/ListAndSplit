@@ -15,8 +15,60 @@ import 'package:list_and_split/features/templates/presentation/template_send_scr
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
 
 import '../../helpers/fakes.dart';
+import '../../support/ui_preview_capture.dart';
 
 void main() {
+  setUpAll(prepareUiPreviewFonts);
+  for (final configuration in [
+    (locale: const Locale('en'), theme: ThemeMode.light),
+    (locale: const Locale('pt'), theme: ThemeMode.dark),
+  ]) {
+    testWidgets(
+        'shared reference cards and tabs at 200 percent '
+        '${configuration.locale.languageCode}', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await _pump(tester,
+          repository: _WidgetTemplateSendRepository(),
+          child: const SharedTemplateSendsScreen(),
+          locale: configuration.locale,
+          themeMode: configuration.theme,
+          textScaleFactor: 2);
+      expect(find.text('Beach trip'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await captureUiPreview(tester,
+          'templates-received-${configuration.locale.languageCode}-${configuration.theme.name}-200');
+      final strings = AppLocalizations.of(tester.element(find.byType(TabBar)));
+      await tester.tap(find.text(strings.templateSendsSentTab));
+      await tester.pumpAndSettle();
+      expect(find.text('Cabin list'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets(
+        'received reference actions and snapshot at 200 percent '
+        '${configuration.locale.languageCode}', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await _pump(tester,
+          repository: _WidgetTemplateSendRepository()
+            ..detail = _receivedDetailWithItems(2),
+          child: const ReceivedTemplateSendScreen(templateSendId: _receivedId),
+          locale: configuration.locale,
+          themeMode: configuration.theme,
+          textScaleFactor: 2);
+      expect(find.byKey(const Key('acceptTemplateSendButton')), findsOneWidget);
+      expect(
+          find.byKey(const Key('declineTemplateSendButton')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await captureUiPreview(tester,
+          'templates-snapshot-${configuration.locale.languageCode}-${configuration.theme.name}-200');
+    });
+  }
+
   testWidgets('Received and Sent render privacy-safe persistent projections',
       (tester) async {
     final repository = _WidgetTemplateSendRepository();
@@ -222,6 +274,7 @@ Future<void> _pump(
   required Widget child,
   ThemeMode themeMode = ThemeMode.light,
   double textScaleFactor = 1,
+  Locale locale = const Locale('en'),
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -233,6 +286,7 @@ Future<void> _pump(
         ),
       ],
       child: MaterialApp(
+        locale: locale,
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: themeMode,
@@ -247,7 +301,7 @@ Future<void> _pump(
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(textScaleFactor),
           ),
-          child: widget!,
+          child: uiPreviewBoundary(widget!),
         ),
         home: child,
       ),
