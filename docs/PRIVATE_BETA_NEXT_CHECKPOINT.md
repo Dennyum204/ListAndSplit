@@ -9,14 +9,14 @@ Never use or repair the damaged ProjectListsApp checkout.
 ## Three draft deliveries
 
 - [PR #37](https://github.com/Dennyum204/ListAndSplit/pull/37),
-  `codex/chat-login-stability`, `1d75bf8`: stable bubble action geometry,
+  `codex/chat-login-stability`, `6e6651d`: stable bubble action geometry,
   fixed-origin history, smooth tail following, history-position preservation and
   accessible Login hints without floating labels. Existing confirmed-only,
   request-bound retry/reconciliation remains authoritative. CI passed at that
   head (34930574900). 42 focused widget checks include identity/geometry,
   pagination anchors, viewport changes and EN/PT light/dark filled-field semantics.
 - [PR #38](https://github.com/Dennyum204/ListAndSplit/pull/38),
-  `codex/launcher-welcome`, `4ec3649`, stacked on #37: original gold/charcoal
+  `codex/launcher-welcome`, `c4ead25`, stacked on #37: original gold/charcoal
   shared-list mark, adaptive/legacy/monochrome sources and a concurrent cold-start
   cover. 45 startup/application checks cover restored signed-out/signed-in/recovery
   routes, urgent/reduced-motion bypass, no resume replay and EN/PT at 200%.
@@ -62,10 +62,11 @@ The user permits a clearly labelled interim configured Dev APK. Until real FCM
 setup and end-to-end acceptance pass, omit all four Firebase public settings:
 Profile reports push unavailable, no registration RPC/permission is attempted,
 and the existing 30-migration Dev backend remains compatible. Retain package
-`com.ferbatech.listandsplit.dev` and the exact distributed v3 signer. VersionCode 5
-is the corrected release: version 4 was installed only for QA and is withheld. APK, checksum,
+`com.ferbatech.listandsplit.dev` and the exact distributed v3 signer. VersionCode 6
+is the corrected release. Versions 4 and 5 were installed only for QA and are
+withheld: v4 exposed startup scope handling; v5 exposed dark placeholder contrast. APK, checksum,
 signer verification and installation notes belong outside Git in a unique
-`C:/Work/QA/ListAndSplit/private-beta-20260915-v5` release folder.
+`C:/Work/QA/ListAndSplit/private-beta-20260915-v6` release folder.
 
 Final device checks are pending at this source checkpoint; never infer spoken
 TalkBack or physical delivery from widget/semantics tests. Emulator is connected;
@@ -86,3 +87,30 @@ places the welcome and configured application in independent sibling root
 scopes. A delayed-initialization regression proves the configured dependency
 and mounted destination survive cover dismissal. This fix is merged normally
 into #39; repeat integrated Flutter/build/device gates for the corrected source.
+
+## Latest device evidence and final packaging
+
+Actual v5 emulator update retained the original signed-in account, current lists
+and avatar. The configured route, live Chat read and background/resume passed;
+no welcome replay, sign-out, uninstall or data clearing. New Profile controls fit
+EN/PT and light/dark; Portuguese 200% text remains operable (existing narrow tab
+labels wrap awkwardly). System language/theme and font scale were restored.
+A separate fresh QA emulator verifies signed-out Login without touching either
+real account. Actual English TalkBack spoke Email, Password/edit box and Show
+password. This is bounded emulator evidence, not complete Samsung acceptance.
+
+The fresh Login inspection found custom hint widgets inheriting white text in
+dark mode. PR #37 now explicitly uses the input hint style, with rendered-text
+contrast checks >=4.5:1 in EN/PT and both themes. Both child branches integrate
+this normally; no rebase/force push. The final integrated 993-test Flutter suite,
+analysis and formatting pass. Previous head ce8d86f passed both Flutter and
+Supabase CI; resulting-head CI remains a required check before sharing v6.
+
+The shareable artifact and final-head/device result notes are recorded outside
+Git at `C:/Work/QA/ListAndSplit/private-beta-20260915-v6/README.md` and
+`manifest.json`; those notes supersede intermediate pending statuses above.
+Never share v4 or v5. Samsung remains disconnected and dedicated Firebase login
+is still missing. Actual Google push delivery and hosted rollout remain blocked;
+the optional feature is explicitly unavailable in the interim build. No hosted
+Dev/Firebase/SMTP/billing changes were made. New local fixtures were removed and
+only the owned local stack was stopped, retaining its data for diagnosis.
