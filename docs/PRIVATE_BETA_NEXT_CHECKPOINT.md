@@ -20,6 +20,13 @@ is required on the final combined source and by each applicable CI gate.
 
 ## Following branches
 
+`codex/launcher-welcome` follows the Chat/Login branch. It replaces Flutter's
+launcher resources with an original shared-list mark and adds a concurrent cold
+start cover. 45 startup/application checks pass, including restored signed-out,
+signed-in and recovery routes, early destination/reduced-motion bypass, no resume
+replay, failure recovery and EN/PT at 200% text. Dev debug APK compilation passed. Final device checks and the integrated suite
+remain pending at this checkpoint. PR #37 CI passed at 1d75bf8.
+
 Launcher/welcome and Android push are separate new draft PRs, stacked as needed.
 Firebase CLI 15.30.1 is installed locally; dedicated Spark project setup awaits
 the owner's local Firebase login. No Firebase project or hosted push migration
@@ -30,3 +37,10 @@ Final packaging must use the existing `.dev` certificate and a versionCode above
 every distributed APK (currently 3). Do not label push complete without actual
 end-to-end delivery or distribute an unconfigured client. Keep all new PRs draft,
 unmerged and with auto-merge disabled.
+
+Device startup correction: the welcome owns its own sibling ProviderScope; the
+initialized configured app is a separate root scope. This prevents ordinary
+router/repository providers from inheriting an unconfigured welcome ancestor.
+A delayed-initialization regression verifies the configured dependent provider
+and mounted destination survive cover dismissal. The first integrated v4 QA
+artifact exposed this bug and is withheld from sharing; use the corrected build.

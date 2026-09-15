@@ -84,6 +84,15 @@ integrated against this updated base only in a later task.
 
 ## Client composition
 
+`StartupHost` starts configuration/Supabase initialization immediately while a
+localized charcoal brand cover animates. Once ready, the real application mounts
+behind that cover, so restoration and routing proceed during the three-second
+normal-launch window. Removing the cover retains the same app/router element.
+Reduced motion and native incoming destinations bypass the remaining window;
+resume has no new timer. The native bridge reports only destination presence,
+never callback tokens or notification content. Existing Auth/router handlers keep
+ownership of the destination. Startup failure has a localized explicit retry.
+
 Chat presentation keeps delete-control space during reconciliation and disables
 the existing action instead of removing it and rewrapping the bubble. A centered
 sliver keeps the initial history origin fixed while older pages grow upwards;

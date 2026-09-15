@@ -1505,5 +1505,8 @@
   "languageSaveFailed": "We couldn't save your language. Try again.",
   "languageReadFailed": "Your saved language could not be read. Try again to restore it.",
   "showPasswordButton": "Show password",
-  "hidePasswordButton": "Hide password"
+  "hidePasswordButton": "Hide password",
+  "welcomeMessage": "Good to have you here.",
+  "welcomeRetryMessage": "We could not finish starting. Please try again.",
+  "welcomeRetryButton": "Try again"
 }
