@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:list_and_split/features/auth/domain/auth_repository.dart';
 import 'package:list_and_split/features/auth/domain/auth_validation.dart';
 import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
+import 'package:list_and_split/core/supabase/supabase_client_provider.dart';
+import 'package:list_and_split/features/push/presentation/push_providers.dart';
 
 enum AuthField { email, password, passwordConfirmation }
 
@@ -53,15 +55,18 @@ class AuthActionsController extends StateNotifier<AuthActionState> {
     required void Function(String email) onVerificationPending,
     required void Function() onRecoveryCompleted,
     required void Function() onSignedOut,
+    Future<void> Function()? beforeSignOut,
   })  : _onVerificationPending = onVerificationPending,
         _onRecoveryCompleted = onRecoveryCompleted,
         _onSignedOut = onSignedOut,
+        _beforeSignOut = beforeSignOut,
         super(const AuthActionState());
 
   final AuthRepository _repository;
   final void Function(String email) _onVerificationPending;
   final void Function() _onRecoveryCompleted;
   final void Function() _onSignedOut;
+  final Future<void> Function()? _beforeSignOut;
 
   void clearMessage() => state = state.copyWith(clearMessage: true);
 
@@ -196,6 +201,7 @@ class AuthActionsController extends StateNotifier<AuthActionState> {
     if (state.isSubmitting) return false;
     state = const AuthActionState(isSubmitting: true);
     try {
+      await _beforeSignOut?.call();
       await _repository.signOut();
       if (mounted) {
         _onSignedOut();
@@ -289,6 +295,11 @@ final authActionsControllerProvider = StateNotifierProvider.autoDispose
     onSignedOut: () {
       ref.read(pendingVerificationEmailProvider.notifier).state = null;
       ref.read(completedPasswordRecoveryAttemptProvider.notifier).state = null;
+    },
+    beforeSignOut: () async {
+      if (ref.read(supabaseRuntimeReadyProvider)) {
+        await ref.read(pushControllerProvider.notifier).stopBeforeSignOut();
+      }
     },
   );
 });

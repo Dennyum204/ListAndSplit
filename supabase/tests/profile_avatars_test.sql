@@ -9,7 +9,7 @@ select ok(not has_table_privilege('authenticated','private.profile_avatars','SEL
   and not has_table_privilege('service_role','private.profile_avatar_files','DELETE'), 'no direct client or admin Data API tables');
 select ok((select not public and file_size_limit=327680 and allowed_mime_types=array['image/png']
   from storage.buckets where id='profile-avatars'),'bounded private PNG bucket');
-select is((select count(*) from cron.job),4::bigint,'no new scheduled job');
+select is((select count(*) from cron.job where jobname <> 'list-and-split-push-minute'),4::bigint,'avatar does not alter the four existing retention jobs');
 select ok((select bool_and(proowner='postgres'::regrole and prosecdef and proconfig @> array['search_path=""']
   and not has_function_privilege('anon',oid,'EXECUTE') and not has_function_privilege('public',oid,'EXECUTE'))
   from pg_proc where pronamespace='public'::regnamespace and proname like '%profile_avatar%'),'new RPC security catalog');

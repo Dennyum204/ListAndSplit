@@ -32,14 +32,20 @@ if (!$PackagingOnly) {
         ((Get-Content android/production.properties | Where-Object { $_ -match '^projectRef=' }) -replace '^projectRef=','').Trim()
     }
     if ($ref -notmatch '^[a-z]{20}$' -or ($Environment -eq 'prod' -and $ref -eq 'lzwsgxziqxpxwyalkfuy') -or $config.SUPABASE_URL -ne "https://$ref.supabase.co") { throw 'Client target does not match the approved native environment pin.' }
-    if (@($config.PSObject.Properties.Name | Where-Object { $_ -notin 'APP_ENV','SUPABASE_URL','SUPABASE_PUBLISHABLE_KEY' }).Count) { throw 'Unexpected configuration fields; only the three public client settings are allowed.' }
+    $firebaseFields = @('FIREBASE_PROJECT_ID','FIREBASE_APP_ID','FIREBASE_SENDER_ID','FIREBASE_API_KEY')
+    if (@($config.PSObject.Properties.Name | Where-Object { $_ -notin (@('APP_ENV','SUPABASE_URL','SUPABASE_PUBLISHABLE_KEY') + $firebaseFields) }).Count) { throw 'Unexpected configuration fields; only reviewed public client settings are allowed.' }
+    $firebaseCount = @($firebaseFields | Where-Object { $config.PSObject.Properties[$_] -and $config.$_ }).Count
+    if ($firebaseCount -ne 0 -and $firebaseCount -ne 4) { throw 'Supply all four public Firebase settings or omit push configuration entirely.' }
+    if ($firebaseCount -eq 4 -and ($Environment -ne 'dev' -or $config.FIREBASE_PROJECT_ID -notmatch '^list-and-split-[a-z0-9-]+$' -or
+        $config.FIREBASE_SENDER_ID -notmatch '^[0-9]+$' -or $config.FIREBASE_APP_ID -notmatch "^1:$($config.FIREBASE_SENDER_ID):android:[a-f0-9]+$" -or
+        $config.FIREBASE_API_KEY -notmatch '^AIza[A-Za-z0-9_-]{35}$')) { throw 'Invalid dedicated Dev Firebase client settings; values withheld.' }
 }
 New-Item -ItemType Directory -Path $out | Out-Null
 $temporaryConfig = Join-Path $out 'build-config.tmp.json'
 if ($PackagingOnly) { @{APP_ENV='prod'} | ConvertTo-Json | Set-Content -LiteralPath $temporaryConfig }
 else { Copy-Item -LiteralPath $ConfigurationFile -Destination $temporaryConfig }
 $redactions = @($env:LIST_AND_SPLIT_RELEASE_STORE_PASSWORD,$env:LIST_AND_SPLIT_RELEASE_KEY_PASSWORD)
-if (!$PackagingOnly) { $redactions += $config.SUPABASE_PUBLISHABLE_KEY }
+if (!$PackagingOnly) { $redactions += $config.SUPABASE_PUBLISHABLE_KEY; $redactions += $config.FIREBASE_API_KEY }
 try {
     flutter pub get --enforce-lockfile *> (Join-Path $out 'dependencies.log')
     if ($LASTEXITCODE -ne 0) { throw 'Locked dependency resolution failed.' }
@@ -57,7 +63,7 @@ try {
     if (Test-Path "build/app/outputs/mapping/${Environment}Release") { Copy-Item "build/app/outputs/mapping/${Environment}Release" "$out/android-symbols" -Recurse }
     $package = if ($Environment -eq 'dev') { 'com.ferbatech.listandsplit.dev' } else { 'com.ferbatech.listandsplit' }
     $verification = & (Join-Path $PSScriptRoot 'Test-AndroidArtifacts.ps1') -Apk "$out/list-and-split.apk" -Aab "$out/list-and-split.aab" -Package $package -VersionName $VersionName -VersionCode $VersionCode -PrivateBeta:$PrivateBeta
-    $manifest = [ordered]@{Source=$ExpectedHead;Environment=$Environment;Configured=(!$PackagingOnly);Distributable=$false;DistributionGate='Backend smoke tests, signer continuity and owner authorization still required';VersionName=$VersionName;VersionCode=$VersionCode;Flutter=$pin.flutter;Verification=$verification;Artifacts=@()}
+    $manifest = [ordered]@{Source=$ExpectedHead;Environment=$Environment;Configured=(!$PackagingOnly);PushConfigured=(!$PackagingOnly -and $firebaseCount -eq 4);Distributable=$false;DistributionGate='Backend smoke tests, signer continuity and owner authorization still required';VersionName=$VersionName;VersionCode=$VersionCode;Flutter=$pin.flutter;Verification=$verification;Artifacts=@()}
     foreach ($file in 'list-and-split.apk','list-and-split.aab') { $manifest.Artifacts += @{Name=$file;Sha256=(Get-FileHash "$out/$file").Hash.ToLowerInvariant()} }
     $manifest | ConvertTo-Json -Depth 8 | Set-Content "$out/manifest.json"
     if (git status --porcelain) { throw 'Build modified tracked source or lockfiles; review before distribution.' }

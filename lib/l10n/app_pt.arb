@@ -778,5 +778,12 @@
   "hidePasswordButton": "Ocultar palavra-passe",
   "welcomeMessage": "Que bom ter-te por aqui.",
   "welcomeRetryMessage": "Não foi possível iniciar. Tenta novamente.",
-  "welcomeRetryButton": "Tentar novamente"
+  "welcomeRetryButton": "Tentar novamente",
+  "pushTitle": "Notificações push",
+  "pushExplanation": "Recebe avisos privados de convites, atualizações e Chat. Os avisos no ecrã bloqueado não incluem nomes, mensagens nem valores. O Android pede autorização quando os ativares.",
+  "pushEnable": "Ativar neste telemóvel",
+  "pushUnavailable": "As notificações push não estão configuradas nesta versão. As notificações na aplicação e o Chat continuam a funcionar.",
+  "pushFailed": "Não foi possível atualizar as notificações. Tenta novamente com ligação à Internet.",
+  "pushPermissionDenied": "As notificações do Android estão desativadas. Podes autorizá-las nas definições do Android.",
+  "pushOpenSettings": "Abrir definições de notificações do Android"
 }

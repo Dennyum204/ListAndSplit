@@ -21,7 +21,10 @@ if ($LASTEXITCODE -ne 0 -or $certificate -notmatch 'Signer #1 certificate SHA-25
 $badging = (& "$buildTools/aapt.exe" dump badging $Apk) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $badging -notmatch "package: name='$([regex]::Escape($Package))' versionCode='$VersionCode' versionName='$([regex]::Escape($VersionName))'" -or $badging -match 'application-debuggable' -or $badging -notmatch "sdkVersion:'24'" -or $badging -notmatch "targetSdkVersion:'36'") { throw 'Package, version, SDK or release-mode verification failed.' }
 $permissions = @([regex]::Matches($badging, "uses-permission: name='([^']+)'") | ForEach-Object { $_.Groups[1].Value })
-if (@($permissions | Where-Object { $_ -notin 'android.permission.INTERNET',"$Package.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" }).Count) { throw 'Unexpected permission: review the merged manifest.' }
+$allowedPermissions = @('android.permission.INTERNET',"$Package.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+    'android.permission.POST_NOTIFICATIONS','android.permission.ACCESS_NETWORK_STATE',
+    'android.permission.WAKE_LOCK','com.google.android.c2dm.permission.RECEIVE')
+if (@($permissions | Where-Object { $_ -notin $allowedPermissions }).Count) { throw 'Unexpected permission: review the merged manifest.' }
 $manifest = (& "$buildTools/aapt.exe" dump xmltree $Apk AndroidManifest.xml) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $manifest -notmatch 'android:allowBackup.*0x0' -or $manifest -notmatch 'android:usesCleartextTraffic.*0x0' -or $manifest -notmatch "android:scheme.*`"$([regex]::Escape($Package))`"") { throw 'Backup, TLS or authentication callback verification failed.' }
 & "$buildTools/zipalign.exe" -c -P 16 4 $Apk | Out-Null

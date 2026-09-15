@@ -50,6 +50,11 @@ jobs:
       - name: Test profile avatar function
         run: deno task --config supabase/functions/profile-avatar/deno.json --frozen test
 
+      - name: Check and test push dispatcher
+        run: |
+          deno task --config supabase/functions/push-dispatch/deno.json --frozen check
+          deno task --config supabase/functions/push-dispatch/deno.json --frozen test
+
       - name: Start isolated local database, Auth and Storage
         run: |
           # Credentials printed by start belong only to this disposable runner.
@@ -93,3 +98,4 @@ jobs:
           trap 'unset AVATAR_LOCAL_URL AVATAR_LOCAL_ANON AVATAR_LOCAL_SERVICE' EXIT
           deno test --config supabase/functions/profile-avatar/deno.json --frozen --allow-read --allow-net=127.0.0.1:54321,localhost:54321 --allow-env=AVATAR_LOCAL_URL,AVATAR_LOCAL_ANON,AVATAR_LOCAL_SERVICE supabase/functions/profile-avatar/avatar.local.test.ts
           deno test --config supabase/functions/profile-avatar/deno.json --frozen --allow-read --allow-net=127.0.0.1:54321,localhost:54321 --allow-env=AVATAR_LOCAL_URL,AVATAR_LOCAL_ANON,AVATAR_LOCAL_SERVICE supabase/tests/business_conflicts.local.test.ts
+          deno test --config supabase/functions/push-dispatch/deno.json --frozen --allow-read --allow-net=127.0.0.1:54321,localhost:54321 --allow-env=AVATAR_LOCAL_URL,AVATAR_LOCAL_ANON,AVATAR_LOCAL_SERVICE supabase/tests/push_delivery.local.test.ts

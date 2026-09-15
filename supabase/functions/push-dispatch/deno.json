@@ -1,0 +1,11 @@
+{
+  "imports": {
+    "@supabase/server": "npm:@supabase/server@1.4.0",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.110.7"
+  },
+  "compilerOptions": { "strict": true },
+  "tasks": {
+    "check": "deno check index.ts handler.ts fcm.ts",
+    "test": "deno test push.test.ts"
+  }
+}

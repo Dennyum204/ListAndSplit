@@ -21,6 +21,7 @@ import 'package:list_and_split/features/profile/presentation/profile_ui.dart';
 import 'package:list_and_split/features/settings/presentation/theme_preference_selector.dart';
 import 'package:list_and_split/features/settings/presentation/language_preference_selector.dart';
 import 'package:list_and_split/l10n/generated/app_localizations.dart';
+import 'package:list_and_split/features/push/presentation/push_settings_card.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -210,6 +211,8 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                   const ThemePreferenceSelector(),
                   const SizedBox(height: 16),
                   const LanguagePreferenceSelector(),
+                  const SizedBox(height: 16),
+                  const PushSettingsCard(),
                   const SizedBox(height: 20),
                   TextButton.icon(
                     key: const Key('profileSignOutButton'),

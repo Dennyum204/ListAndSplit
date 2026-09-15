@@ -33,6 +33,25 @@ def signingNames = ['STORE_FILE', 'STORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD']
 def releaseSigning = signingNames.collectEntries { [it, System.getenv("LIST_AND_SPLIT_RELEASE_${it}")] }
 def hasReleaseSigning = releaseSigning.values().every { it != null && !it.isEmpty() }
 
+// Public Firebase client settings arrive through the same local build input as
+// Supabase. No server credential, analytics, second Auth system or paid service.
+def clientDefines = [:]
+if (project.hasProperty('dart-defines')) {
+    project.property('dart-defines').split(',').each { encoded ->
+        def pair = new String(encoded.decodeBase64(), 'UTF-8').split('=', 2)
+        if (pair.length == 2) clientDefines[pair[0]] = pair[1]
+    }
+}
+def firebaseProject = clientDefines['FIREBASE_PROJECT_ID'] ?: ''
+def firebaseFields = ['FIREBASE_PROJECT_ID','FIREBASE_APP_ID','FIREBASE_SENDER_ID','FIREBASE_API_KEY']
+def firebaseCount = firebaseFields.count { clientDefines[it] }
+if (firebaseCount != 0 && firebaseCount != 4) {
+    throw new GradleException('Firebase configuration must be complete or absent.')
+}
+if (firebaseProject && !(firebaseProject ==~ /list-and-split-[a-z0-9-]+/)) {
+    throw new GradleException('Firebase must use the dedicated List & Split project.')
+}
+
 android {
     namespace "com.ferbatech.listandsplit"
     compileSdk 36
@@ -70,6 +89,11 @@ android {
             applicationIdSuffix ".dev"
             buildConfigField 'String', 'PRODUCTION_PROJECT_REF', '""'
             resValue "string", "app_name", "List & Split Dev"
+            resValue "string", "google_app_id", clientDefines['FIREBASE_APP_ID'] ?: ''
+            resValue "string", "gcm_defaultSenderId", clientDefines['FIREBASE_SENDER_ID'] ?: ''
+            resValue "string", "google_api_key", clientDefines['FIREBASE_API_KEY'] ?: ''
+            resValue "string", "project_id", firebaseProject
+            resValue "string", "push_supabase_key", clientDefines['SUPABASE_PUBLISHABLE_KEY'] ?: ''
             manifestPlaceholders = [
                 authRedirectScheme: "com.ferbatech.listandsplit.dev",
             ]
@@ -107,7 +131,10 @@ flutter {
     source '../..'
 }
 
-dependencies {}
+dependencies {
+    implementation 'com.google.firebase:firebase-messaging:25.1.3'
+    testImplementation 'junit:junit:4.13.2'
+}
 
 gradle.taskGraph.whenReady { graph ->
     if (graph.allTasks.any { it.project == project && it.name.toLowerCase().contains('release') } &&

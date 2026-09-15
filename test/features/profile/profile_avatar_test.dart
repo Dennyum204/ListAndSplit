@@ -16,6 +16,8 @@ import 'package:list_and_split/features/profile/presentation/avatar_controller.d
 import 'package:list_and_split/features/profile/presentation/profile_avatar.dart';
 import 'package:list_and_split/features/profile/presentation/profile_providers.dart';
 import 'package:list_and_split/features/profile/presentation/profile_screen.dart';
+import 'package:list_and_split/features/push/domain/push_repository.dart';
+import 'package:list_and_split/features/push/presentation/push_providers.dart';
 import 'package:list_and_split/features/profile/domain/user_profile.dart';
 import 'package:list_and_split/features/auth/presentation/auth_providers.dart';
 import 'package:list_and_split/features/account/presentation/account_data_export_providers.dart';
@@ -47,6 +49,20 @@ Session fixtureSession([String id = '11111111-1111-4111-8111-111111111111']) =>
             userMetadata: const {},
             aud: 'authenticated',
             createdAt: '2026-01-01T00:00:00Z'));
+
+// The native push bridge is unavailable in these widget fixtures. Any attempt
+// to register or route through the backend would be a regression.
+class UnavailablePushRepository implements PushRepository {
+  @override
+  Future<void> register(String account, PushBinding binding) async =>
+      throw StateError('Unavailable push must not register');
+  @override
+  Future<void> unregister(String account, PushBinding binding) async =>
+      throw StateError('Unavailable push must not unregister');
+  @override
+  Future<PushDestination?> resolve(PushTap tap) async =>
+      throw StateError('Unavailable push must not resolve a tap');
+}
 
 class Gallery implements AvatarGallery {
   Uint8List? bytes = Uint8List(100);
@@ -438,6 +454,8 @@ void main() {
         await tester.pumpWidget(ProviderScope(
             overrides: [
               supabaseRuntimeReadyProvider.overrideWithValue(true),
+              pushRepositoryProvider
+                  .overrideWithValue(UnavailablePushRepository()),
               verifiedUserIdProvider.overrideWithValue('viewer'),
               profileAvatarRepositoryProvider.overrideWithValue(repo),
               avatarGalleryProvider.overrideWithValue(Gallery()),

@@ -392,6 +392,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/profile-avatar/index.ts"
 
+[functions.push-dispatch]
+# The handler verifies its dedicated Vault scheduler credential before any work.
+verify_jwt = false
+entrypoint = "./functions/push-dispatch/index.ts"
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
