@@ -15,6 +15,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Project discovery failed.' }
 $target = @($projects | Where-Object { $_.id -eq $ProjectRef -and $_.name -eq 'List & Split Production' })
 if ($target.Count -ne 1) { throw 'Exact Production identity was not verified.' }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
+$nativeRef = ((Get-Content "$root/android/production.properties" | Where-Object { $_ -match '^projectRef=' }) -replace '^projectRef=','').Trim()
+if ($nativeRef -ne $ProjectRef) { throw 'Production reference must be approved and pinned in this reviewed source first.' }
 $out = [IO.Path]::GetFullPath($EvidenceDirectory)
 if ($out -eq $root -or $out.StartsWith($root + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $out)) { throw 'Use a new evidence directory outside the source checkout.' }
 New-Item -ItemType Directory -Path "$out/supabase" | Out-Null
