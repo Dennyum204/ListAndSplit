@@ -65,8 +65,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   autocorrect: false,
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.person_outline_rounded),
-                    hint:
-                        ExcludeSemantics(child: Text(localizations.emailLabel)),
+                    hint: ExcludeSemantics(
+                        child: Text(localizations.emailLabel,
+                            style: Theme.of(context)
+                                .inputDecorationTheme
+                                .hintStyle)),
                     errorText: _errorText(
                       localizations,
                       state.fieldErrors[AuthField.email],
@@ -103,7 +106,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                           : Icons.visibility_off_outlined),
                     ),
                     hint: ExcludeSemantics(
-                        child: Text(localizations.passwordLabel)),
+                        child: Text(localizations.passwordLabel,
+                            style: Theme.of(context)
+                                .inputDecorationTheme
+                                .hintStyle)),
                     errorText: _errorText(
                       localizations,
                       state.fieldErrors[AuthField.password],
