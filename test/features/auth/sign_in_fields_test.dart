@@ -43,6 +43,21 @@ void main() {
             tester.widget<TextField>(password).decoration!.labelText, isNull);
         expect(find.text(l10n.emailLabel), findsOneWidget);
         expect(find.text(l10n.passwordLabel), findsOneWidget);
+        for (final label in [l10n.emailLabel, l10n.passwordLabel]) {
+          final painted = tester.widget<RichText>(find
+              .descendant(of: find.text(label), matching: find.byType(RichText))
+              .first);
+          final foreground = painted.text.style!.color!.computeLuminance();
+          final background = Theme.of(tester.element(email))
+              .inputDecorationTheme
+              .fillColor!
+              .computeLuminance();
+          final contrast = foreground > background
+              ? (foreground + .05) / (background + .05)
+              : (background + .05) / (foreground + .05);
+          expect(contrast, greaterThanOrEqualTo(4.5),
+              reason: 'Rendered Login hint must remain readable on its fill');
+        }
         expect(tester.widget<TextField>(email).keyboardType,
             TextInputType.emailAddress);
         expect(tester.widget<TextField>(email).autofillHints,
