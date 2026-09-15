@@ -1,3 +1,4 @@
+import 'package:list_and_split/core/supabase/business_conflict.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/templates/domain/private_template.dart';
 import 'package:list_and_split/features/templates/domain/private_template_repository.dart';
@@ -540,7 +541,9 @@ class SupabasePrivateTemplateRepository implements PrivateTemplateRepository {
           '42501' => moderationAware
               ? PrivateTemplateFailureCode.moderated
               : PrivateTemplateFailureCode.unavailable,
-          '40001' => PrivateTemplateFailureCode.stale,
+          'PT409' ||
+          '40001' when isBusinessConflict(error.code, error.message) =>
+            PrivateTemplateFailureCode.stale,
           '23505' => PrivateTemplateFailureCode.retryConflict,
           '55000' => PrivateTemplateFailureCode.archived,
           '54000' => PrivateTemplateFailureCode.capacity,

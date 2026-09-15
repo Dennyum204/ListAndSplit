@@ -890,7 +890,7 @@ select throws_ok(
     '{}'::uuid[],
     1
   )$$,
-  '40001',
+  'PT409',
   'list changed',
   'payload-different stale write uses established serialization failure'
 );

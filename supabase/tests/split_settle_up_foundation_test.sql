@@ -761,7 +761,7 @@ select throws_ok(
     (select value_id from settle_test_values where label='owner-participant'),
     1,null,'83000000-0000-4000-8000-000000000014',2
   )$$,
-  '40001',
+  'PT409',
   'split changed',
   'serialized concurrent settlement loser is rejected by stale aggregate version'
 );
@@ -866,7 +866,7 @@ select throws_ok(
     '83000000-0000-4000-8000-000000000016',
     3
   )$$,
-  '40001',
+  'PT409',
   'split changed',
   'serialized concurrent reversal loser is rejected by stale aggregate version'
 );
@@ -924,7 +924,7 @@ select throws_ok(
     '83000000-0000-4000-8000-000000000006',
     4
   )$$,
-  '40001',
+  'PT409',
   'settlement changed',
   'non-recorder member receives stale reconciliation rather than access loss'
 );
@@ -1073,7 +1073,7 @@ select throws_ok(
     '83000000-0000-4000-8000-000000000008',
     5
   )$$,
-  '40001',
+  'PT409',
   'settlement changed',
   'one settlement can be reversed only once'
 );

@@ -981,7 +981,7 @@ select extensions.dblink_exec(
 );
 
 -- Both same-version writers reach the same held parent lock. Releasing it
--- deterministically permits one write and forces the other through 40001.
+-- deterministically permits one write and forces the other through PT409.
 select extensions.dblink_exec('note_race_hold', 'begin');
 select extensions.dblink_exec(
   'note_race_hold',
@@ -1096,11 +1096,11 @@ select is(
 select extensions.dblink_exec('note_race_second', 'commit');
 select is(
   (
-    select pg_catalog.array_agg(result order by result)
+    select pg_catalog.array_agg(result order by result collate "C")
     from note_race_results
   ),
-  array['40001', 'ok']::text[],
-  'exactly one same-version note writer succeeds and one returns 40001'
+  array['PT409', 'ok']::text[],
+  'exactly one same-version note writer succeeds and one returns PT409'
 );
 select ok(
   (
@@ -2139,7 +2139,7 @@ select ok(
 
 -- Reverse order: Auth-root deletion completes its statement while retaining
 -- profile/list/child locks. A note that preflighted the old mention waits on
--- the profile, then observes cleanup and returns 40001 with no partial write.
+-- the profile, then observes cleanup and returns PT409 with no partial write.
 truncate note_race_results;
 select extensions.dblink_exec('note_race_second', 'begin');
 select extensions.dblink_exec(
@@ -2234,8 +2234,8 @@ select is(
     select pg_catalog.array_agg(result order by label)
     from note_race_results
   ),
-  array['ok', '40001']::text[],
-  'delete-first succeeds and the stale queued note receives 40001'
+  array['ok', 'PT409']::text[],
+  'delete-first succeeds and the stale queued note receives PT409'
 );
 select ok(
   (

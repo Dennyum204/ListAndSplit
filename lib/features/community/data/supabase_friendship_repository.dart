@@ -1,3 +1,4 @@
+import 'package:list_and_split/core/supabase/business_conflict.dart';
 import 'package:list_and_split/features/community/domain/friendship_repository.dart';
 import 'package:list_and_split/features/community/domain/friendship_summary.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -132,7 +133,7 @@ class SupabaseFriendshipRepository implements FriendshipRepository {
         },
       );
     } on PostgrestException catch (error) {
-      if (error.code == '40001') {
+      if (isBusinessConflict(error.code, error.message)) {
         throw const FriendshipFailure(FriendshipFailureCode.stale);
       }
       if (error.code == '22023') {

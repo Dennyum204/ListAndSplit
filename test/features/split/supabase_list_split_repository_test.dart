@@ -467,7 +467,7 @@ void main() {
       '22023': ListSplitFailureCode.invalid,
       'P0002': ListSplitFailureCode.unavailable,
       '42501': ListSplitFailureCode.unavailable,
-      '40001': ListSplitFailureCode.stale,
+      'PT409': ListSplitFailureCode.stale,
       '55000': ListSplitFailureCode.archived,
       '54000': ListSplitFailureCode.capacity,
       'XX000': ListSplitFailureCode.generic,

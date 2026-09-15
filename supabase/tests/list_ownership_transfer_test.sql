@@ -621,14 +621,14 @@ select throws_ok(
     '52000000-0000-4000-8000-000000000002',
     '51000000-0000-4000-8000-000000000003', 3, 3
   )$$,
-  '40001', 'list changed', 'stale list version is rejected'
+  'PT409', 'list changed', 'stale list version is rejected'
 );
 select throws_ok(
   $$select * from public.transfer_active_list_ownership(
     '52000000-0000-4000-8000-000000000002',
     '51000000-0000-4000-8000-000000000003', 4, 2
   )$$,
-  '40001', 'list access changed', 'stale accepted-access version is rejected'
+  'PT409', 'list access changed', 'stale accepted-access version is rejected'
 );
 reset role;
 

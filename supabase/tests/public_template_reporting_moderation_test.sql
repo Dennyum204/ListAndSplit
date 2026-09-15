@@ -453,7 +453,7 @@ select throws_ok(
       'spam_scam_deceptive',
       null
     )$$,
-  '40001',
+  'PT409',
   'template changed',
   'a stale public revision cannot be reported'
 );

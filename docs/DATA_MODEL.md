@@ -487,7 +487,7 @@ item version. A real assignment-set change also increments both list and item
 versions; a combined item-field/assignment update still increments each only once.
 Real state changes update the corresponding server timestamps once; idempotent
 no-op retries update neither. Expected versions prevent stale overwrite with a
-stable `40001` conflict. Creation request UUIDs are checked against their payload
+stable `PT409` conflict. Creation request UUIDs are checked against their payload
 for retry safety and never grant ownership.
 
 A list has a hard addition capacity of 200 current item rows. Completed and
@@ -585,7 +585,7 @@ eligible and cannot affect a mention.
 
 A real text or desired-link change advances `general_note_version` and the parent
 list version once. No-op and payload-equivalent completed retry change nothing;
-payload-different stale work returns `40001` without partial state. Removal,
+payload-different stale work returns `PT409` without partial state. Removal,
 leave, block separation, or account deletion removes only the affected link and
 preserves literal text. Reinvitation, unblocking, or later reuse of the old
 username does not restore it; only a new explicit selection/edit can create a

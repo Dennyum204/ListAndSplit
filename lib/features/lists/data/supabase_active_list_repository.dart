@@ -1,3 +1,4 @@
+import 'package:list_and_split/core/supabase/business_conflict.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_repository.dart';
 import 'package:list_and_split/features/lists/domain/general_note.dart';
@@ -783,7 +784,9 @@ class SupabaseActiveListRepository implements ActiveListRepository {
         switch (error.code) {
           '22023' => ActiveListFailureCode.invalid,
           'P0002' => ActiveListFailureCode.unavailable,
-          '40001' => ActiveListFailureCode.stale,
+          'PT409' ||
+          '40001' when isBusinessConflict(error.code, error.message) =>
+            ActiveListFailureCode.stale,
           '23505' => ActiveListFailureCode.retryConflict,
           '55000' => ActiveListFailureCode.archived,
           '54000' => ActiveListFailureCode.capacity,

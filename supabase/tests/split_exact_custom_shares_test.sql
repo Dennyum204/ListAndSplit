@@ -953,7 +953,7 @@ select throws_ok(
       where label = 'before-custom-update'),
     1
   )$$,
-  '40001',
+  'PT409',
   'expense changed',
   'serialized concurrent custom update with stale versions loses safely'
 );

@@ -170,7 +170,7 @@ void main() {
     );
 
     for (final entry in const {
-      '40001': PublicTemplateFailureCode.stale,
+      'PT409': PublicTemplateFailureCode.stale,
       'P0002': PublicTemplateFailureCode.unavailable,
       '42501': PublicTemplateFailureCode.unavailable,
     }.entries) {
@@ -334,7 +334,7 @@ void main() {
   test('maps SQLSTATEs while suppressing backend details', () async {
     for (final entry in const {
       'P0002': PublicTemplateFailureCode.unavailable,
-      '40001': PublicTemplateFailureCode.stale,
+      'PT409': PublicTemplateFailureCode.stale,
       '23505': PublicTemplateFailureCode.retryConflict,
       '54000': PublicTemplateFailureCode.capacity,
     }.entries) {

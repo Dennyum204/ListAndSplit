@@ -289,7 +289,7 @@ void main() {
       '22023': TemplateSendFailureCode.invalid,
       'P0002': TemplateSendFailureCode.unavailable,
       '42501': TemplateSendFailureCode.unavailable,
-      '40001': TemplateSendFailureCode.stale,
+      'PT409': TemplateSendFailureCode.stale,
       '23505': TemplateSendFailureCode.retryConflict,
       '54000': TemplateSendFailureCode.capacity,
       '55000': TemplateSendFailureCode.noLongerPending,

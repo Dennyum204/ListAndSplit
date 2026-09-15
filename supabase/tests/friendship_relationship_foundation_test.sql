@@ -898,14 +898,14 @@ select lives_ok(
 
 select throws_ok(
   $$select public.send_friend_request('11111111-1111-4111-8111-111111111111', 0)$$,
-  '40001',
+  'PT409',
   'relationship changed',
   'a first-send pending row does not invent a prior dormant version'
 );
 
 select throws_ok(
   $$select public.send_friend_request('11111111-1111-4111-8111-111111111111', 99)$$,
-  '40001',
+  'PT409',
   'relationship changed',
   'a duplicate sender with the wrong non-null version receives a stale conflict'
 );
@@ -1043,7 +1043,7 @@ set local "request.jwt.claim.sub" = '11111111-1111-4111-8111-111111111111';
 
 select throws_ok(
   $$select public.end_friendship('22222222-2222-4222-8222-222222222222', 1)$$,
-  '40001',
+  'PT409',
   'relationship changed',
   'a stale end fails with the stable conflict discriminator'
 );
@@ -1357,7 +1357,7 @@ set local "request.jwt.claim.sub" = '66666666-6666-4666-8666-666666666666';
 
 select throws_ok(
   $$select public.send_friend_request('55555555-5555-4555-8555-555555555555', 1)$$,
-  '40001',
+  'PT409',
   'relationship changed',
   'the eligible decliner must still present the exact current version'
 );
@@ -1663,7 +1663,7 @@ select lives_ok(
 
 select throws_ok(
   $$select public.send_friend_request('22222222-2222-4222-8222-222222222222', 1)$$,
-  '40001',
+  'PT409',
   'relationship changed',
   'a materially older reopened-send version remains stale'
 );

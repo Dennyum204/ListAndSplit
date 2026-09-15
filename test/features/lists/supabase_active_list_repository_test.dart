@@ -736,7 +736,7 @@ void main() {
     const cases = {
       '22023': ActiveListFailureCode.invalid,
       'P0002': ActiveListFailureCode.unavailable,
-      '40001': ActiveListFailureCode.stale,
+      'PT409': ActiveListFailureCode.stale,
       '23505': ActiveListFailureCode.retryConflict,
       '55000': ActiveListFailureCode.archived,
       '54000': ActiveListFailureCode.capacity,

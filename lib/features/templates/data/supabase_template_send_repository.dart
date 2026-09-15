@@ -1,3 +1,4 @@
+import 'package:list_and_split/core/supabase/business_conflict.dart';
 import 'package:list_and_split/features/lists/domain/list_quantity.dart';
 import 'package:list_and_split/features/templates/domain/template_send.dart';
 import 'package:list_and_split/features/templates/domain/template_send_repository.dart';
@@ -523,7 +524,9 @@ class SupabaseTemplateSendRepository implements TemplateSendRepository {
         switch (error.code) {
           '22023' => TemplateSendFailureCode.invalid,
           'P0002' || '42501' => TemplateSendFailureCode.unavailable,
-          '40001' => TemplateSendFailureCode.stale,
+          'PT409' ||
+          '40001' when isBusinessConflict(error.code, error.message) =>
+            TemplateSendFailureCode.stale,
           '23505'
               when error.message == 'pending template send already exists' =>
             TemplateSendFailureCode.duplicatePending,
