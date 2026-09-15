@@ -37,3 +37,10 @@ Final packaging must use the existing `.dev` certificate and a versionCode above
 every distributed APK (currently 3). Do not label push complete without actual
 end-to-end delivery or distribute an unconfigured client. Keep all new PRs draft,
 unmerged and with auto-merge disabled.
+
+Device startup correction: the welcome owns its own sibling ProviderScope; the
+initialized configured app is a separate root scope. This prevents ordinary
+router/repository providers from inheriting an unconfigured welcome ancestor.
+A delayed-initialization regression verifies the configured dependent provider
+and mounted destination survive cover dismissal. The first integrated v4 QA
+artifact exposed this bug and is withheld from sharing; use the corrected build.
