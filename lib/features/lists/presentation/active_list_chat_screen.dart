@@ -10,6 +10,7 @@ import 'package:list_and_split/core/theme/app_palette.dart';
 import 'package:list_and_split/features/lists/domain/active_list.dart';
 import 'package:list_and_split/features/lists/domain/active_list_chat.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_chat_controller.dart';
+import 'package:list_and_split/features/lists/presentation/chat_scroll_controller.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_chat_providers.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_controller.dart';
 import 'package:list_and_split/features/lists/presentation/active_list_detail_screen.dart';
@@ -29,7 +30,9 @@ class ActiveListChatScreen extends ConsumerStatefulWidget {
 class _ActiveListChatScreenState extends ConsumerState<ActiveListChatScreen> {
   final _composer = TextEditingController();
   final _composerFocus = FocusNode();
-  final _scrollController = ScrollController();
+  final _scrollController = ChatScrollController();
+  final _timelineCenter = GlobalKey();
+  int? _originPosition;
   bool _showNewMessages = false;
   bool _didExit = false;
   int? _lastRenderedNewestPosition;
@@ -171,6 +174,15 @@ class _ActiveListChatScreenState extends ConsumerState<ActiveListChatScreen> {
         onNotification: (notification) {
           if (notification.metrics.axis == Axis.vertical) {
             final atBottom = notification.metrics.extentAfter <= 24;
+            if (!_scrollController.animating) {
+              _scrollController.followTail = atBottom;
+            }
+            if (notification is ScrollStartNotification &&
+                notification.dragDetails != null) {
+              ++_scrollGeneration;
+              _scrollController.animating = false;
+              _scrollController.followTail = false;
+            }
             if (atBottom) {
               if (_showNewMessages) {
                 setState(() => _showNewMessages = false);
@@ -213,35 +225,64 @@ class _ActiveListChatScreenState extends ConsumerState<ActiveListChatScreen> {
                   ),
                 ],
               )
-            : ListView.builder(
-                key: const Key('listChatMessages'),
-                controller: _scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                itemCount: messages.length + 1,
-                itemBuilder: (context, index) {
-                  if (index == 0) {
-                    return _OlderMessagesControl(
-                      state: state,
-                      onLoad: _loadOlderPreservingAnchor,
-                    );
-                  }
-                  final message = messages[index - 1];
-                  return _ChatMessageCard(
-                    key: Key('chat-message-${message.id}'),
-                    message: message,
-                    canDelete: canMutate &&
-                        !state.isSending &&
-                        (state.deletingMessageIds.isEmpty ||
-                            state.deletingMessageIds.contains(message.id)) &&
-                        !message.isDeleted &&
-                        (isOwner || message.isMine),
-                    isDeleting: state.deletingMessageIds.contains(message.id),
-                    onDelete: () => _confirmDelete(message, isOwner: isOwner),
-                  );
-                },
-              ),
+            : _timeline(state, messages,
+                isOwner: isOwner, canMutate: canMutate, archived: archived),
       ),
+    );
+  }
+
+  Widget _timeline(
+      ActiveListChatState state, List<ActiveListChatMessage> messages,
+      {required bool isOwner,
+      required bool canMutate,
+      required bool archived}) {
+    _originPosition ??= messages.first.messagePosition;
+    final older = messages
+        .where((m) => m.messagePosition < _originPosition!)
+        .toList()
+        .reversed
+        .toList();
+    final newer =
+        messages.where((m) => m.messagePosition >= _originPosition!).toList();
+    Widget row(ActiveListChatMessage message) => _ChatMessageCard(
+          key: ValueKey('chat-message-${message.id}'),
+          message: message,
+          showDelete:
+              !archived && !message.isDeleted && (isOwner || message.isMine),
+          canDelete: canMutate &&
+              !state.isSending &&
+              (state.deletingMessageIds.isEmpty ||
+                  state.deletingMessageIds.contains(message.id)) &&
+              !message.isDeleted &&
+              (isOwner || message.isMine),
+          isDeleting: state.deletingMessageIds.contains(message.id),
+          onDelete: () => _confirmDelete(message, isOwner: isOwner),
+        );
+    SliverChildBuilderDelegate rows(List<ActiveListChatMessage> items) =>
+        SliverChildBuilderDelegate((context, index) => row(items[index]),
+            childCount: items.length, findChildIndexCallback: (key) {
+          final index =
+              items.indexWhere((m) => ValueKey('chat-message-${m.id}') == key);
+          return index < 0 ? null : index;
+        });
+    return CustomScrollView(
+      key: const Key('listChatMessages'),
+      controller: _scrollController,
+      center: _timelineCenter,
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverToBoxAdapter(
+            child: _OlderMessagesControl(
+                state: state, onLoad: _loadOlderPreservingAnchor)),
+        SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            sliver: SliverList(delegate: rows(older))),
+        SliverPadding(
+            key: _timelineCenter,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            sliver: SliverList(delegate: rows(newer))),
+        const SliverToBoxAdapter(child: SizedBox(height: 16)),
+      ],
     );
   }
 
@@ -262,9 +303,14 @@ class _ActiveListChatScreenState extends ConsumerState<ActiveListChatScreen> {
       if (newest != null &&
           (previousNewest == null || newest > previousNewest)) {
         final wasAtBottom = _isAtBottom;
+        final ownSend = previous?.isSending == true &&
+            !next.isSending &&
+            nextMessages.last.isMine;
+        final reveal = previousNewest == null || wasAtBottom || ownSend;
+        if (reveal) _scrollController.animating = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          if (previousNewest == null || wasAtBottom) {
+          if (reveal) {
             _scrollToNewest();
           } else if (!_showNewMessages) {
             setState(() => _showNewMessages = true);
@@ -336,9 +382,6 @@ class _ActiveListChatScreenState extends ConsumerState<ActiveListChatScreen> {
         normalizeActiveListChatBody(_composer.text) == submitted) {
       _composer.clear();
     }
-    if (outcome == ActiveListChatSendOutcome.sent) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToNewest());
-    }
   }
 
   Future<void> _confirmDelete(
@@ -371,58 +414,38 @@ class _ActiveListChatScreenState extends ConsumerState<ActiveListChatScreen> {
   }
 
   Future<void> _loadOlderPreservingAnchor() async {
-    final beforePixels =
-        _scrollController.hasClients ? _scrollController.position.pixels : 0.0;
-    final beforeMax = _scrollController.hasClients
-        ? _scrollController.position.maxScrollExtent
-        : 0.0;
+    // The centered sliver grows older history upwards without changing the
+    // coordinate of any existing message, even with variable-height bubbles.
     await ref
         .read(activeListChatControllerProvider(widget.listId).notifier)
         .loadOlder();
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
-      final addedExtent =
-          _scrollController.position.maxScrollExtent - beforeMax;
-      _scrollController.jumpTo(
-        (beforePixels + addedExtent).clamp(
-          _scrollController.position.minScrollExtent,
-          _scrollController.position.maxScrollExtent,
-        ),
-      );
-    });
   }
 
   void _scrollToNewest() {
     if (!mounted || !_scrollController.hasClients) return;
     final generation = ++_scrollGeneration;
     if (_showNewMessages) setState(() => _showNewMessages = false);
-    unawaited(_performNewestScroll(generation, 0));
-  }
-
-  Future<void> _performNewestScroll(int generation, int attempt) async {
-    if (!mounted ||
-        generation != _scrollGeneration ||
-        !_scrollController.hasClients) {
+    _scrollController.followTail = true;
+    _scrollController.animating = true;
+    final target = _scrollController.position.maxScrollExtent;
+    final reduced = MediaQuery.disableAnimationsOf(context);
+    if (reduced) {
+      _scrollController.jumpTo(target);
+      _scrollController.animating = false;
+      _markNewestRead();
       return;
     }
-    await _scrollController.animateTo(
-      _scrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
-    if (!mounted ||
-        generation != _scrollGeneration ||
-        !_scrollController.hasClients) {
-      return;
-    }
-    if (_scrollController.position.extentAfter > 24 && attempt < 4) {
-      final nextFrame = Completer<void>();
-      WidgetsBinding.instance.addPostFrameCallback((_) => nextFrame.complete());
-      await nextFrame.future;
-      return _performNewestScroll(generation, attempt + 1);
-    }
-    _markNewestRead();
+    unawaited(_scrollController
+        .animateTo(target,
+            duration: const Duration(milliseconds: 220), curve: Curves.easeOut)
+        .then((_) {
+      if (!mounted || generation != _scrollGeneration) return;
+      _scrollController.animating = false;
+      if (_scrollController.hasClients && _scrollController.followTail) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _markNewestRead());
+    }));
   }
 
   bool get _isAtBottom =>
@@ -614,7 +637,7 @@ class _OlderMessagesControl extends StatelessWidget {
         ),
       );
     }
-    if (!state.hasMore) return const SizedBox(height: 8);
+    if (!state.hasMore) return const SizedBox(height: 56);
     final retry = state.notice == ActiveListChatNotice.olderPageFailed;
     return Center(
       child: TextButton.icon(
@@ -635,6 +658,7 @@ class _ChatMessageCard extends StatelessWidget {
   const _ChatMessageCard({
     required this.message,
     required this.canDelete,
+    required this.showDelete,
     required this.isDeleting,
     required this.onDelete,
     super.key,
@@ -642,6 +666,7 @@ class _ChatMessageCard extends StatelessWidget {
 
   final ActiveListChatMessage message;
   final bool canDelete;
+  final bool showDelete;
   final bool isDeleting;
   final VoidCallback onDelete;
 
@@ -752,10 +777,12 @@ class _ChatMessageCard extends StatelessWidget {
                                     : null,
                                 softWrap: true,
                               ))),
-                              if (canDelete)
+                              if (showDelete)
                                 IconButton(
                                   key: Key('delete-chat-message-${message.id}'),
-                                  onPressed: isDeleting ? null : onDelete,
+                                  onPressed: canDelete && !isDeleting
+                                      ? onDelete
+                                      : null,
                                   tooltip: localizations.listChatDeleteButton,
                                   icon: isDeleting
                                       ? const SizedBox.square(

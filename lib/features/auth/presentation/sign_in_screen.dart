@@ -18,6 +18,7 @@ class SignInScreen extends ConsumerStatefulWidget {
 class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
+  bool _hidePassword = true;
 
   @override
   void dispose() {
@@ -51,43 +52,64 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   ? null
                   : authMessageText(localizations, state.message!),
             ),
-            TextField(
-              style: AppPalette.inputTextStyle(context),
-              key: const Key('signInEmail'),
-              controller: _email,
-              enabled: !state.isSubmitting,
-              autofillHints: const [AutofillHints.email],
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.next,
-              autocorrect: false,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.person_outline_rounded),
-                labelText: localizations.emailLabel,
-                errorText: _errorText(
-                  localizations,
-                  state.fieldErrors[AuthField.email],
-                ),
-              ),
-            ),
+            Semantics(
+                label: localizations.emailLabel,
+                child: TextField(
+                  style: AppPalette.inputTextStyle(context),
+                  key: const Key('signInEmail'),
+                  controller: _email,
+                  enabled: !state.isSubmitting,
+                  autofillHints: const [AutofillHints.email],
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  autocorrect: false,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.person_outline_rounded),
+                    hint:
+                        ExcludeSemantics(child: Text(localizations.emailLabel)),
+                    errorText: _errorText(
+                      localizations,
+                      state.fieldErrors[AuthField.email],
+                    ),
+                  ),
+                )),
             const SizedBox(height: 16),
-            TextField(
-              style: AppPalette.inputTextStyle(context),
-              key: const Key('signInPassword'),
-              controller: _password,
-              enabled: !state.isSubmitting,
-              autofillHints: const [AutofillHints.password],
-              obscureText: true,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _submit(),
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.key_outlined),
-                labelText: localizations.passwordLabel,
-                errorText: _errorText(
-                  localizations,
-                  state.fieldErrors[AuthField.password],
-                ),
-              ),
-            ),
+            Semantics(
+                label: localizations.passwordLabel,
+                child: TextField(
+                  style: AppPalette.inputTextStyle(context),
+                  key: const Key('signInPassword'),
+                  controller: _password,
+                  enabled: !state.isSubmitting,
+                  autofillHints: const [AutofillHints.password],
+                  obscureText: _hidePassword,
+                  enableSuggestions: false,
+                  autocorrect: false,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submit(),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.key_outlined),
+                    suffixIcon: IconButton(
+                      key: const Key('signInPasswordVisibility'),
+                      tooltip: _hidePassword
+                          ? localizations.showPasswordButton
+                          : localizations.hidePasswordButton,
+                      onPressed: state.isSubmitting
+                          ? null
+                          : () =>
+                              setState(() => _hidePassword = !_hidePassword),
+                      icon: Icon(_hidePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined),
+                    ),
+                    hint: ExcludeSemantics(
+                        child: Text(localizations.passwordLabel)),
+                    errorText: _errorText(
+                      localizations,
+                      state.fieldErrors[AuthField.password],
+                    ),
+                  ),
+                )),
             const SizedBox(height: 16),
             TextButton(
               onPressed: state.isSubmitting

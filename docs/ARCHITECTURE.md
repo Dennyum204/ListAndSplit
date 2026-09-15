@@ -84,6 +84,19 @@ integrated against this updated base only in a later task.
 
 ## Client composition
 
+Chat presentation keeps delete-control space during reconciliation and disables
+the existing action instead of removing it and rewrapping the bubble. A centered
+sliver keeps the initial history origin fixed while older pages grow upwards;
+immutable message keys and index lookup retain element identity. Tail following
+uses viewport layout correction for keyboard/composer changes and one animation
+for new arrivals. A history reader stays at their offset until an explicit jump
+or their own confirmed send. The existing server-confirmed/request-bound send
+contract remains unchanged: there is no speculative bubble to replace.
+
+Login uses inside-field hints with separate persistent semantic names, excluding
+the visual hint from duplicate announcements. Its password visibility control,
+autofill and validation remain independent of the hint's visibility.
+
 The application composition path is intentionally small:
 
 ```text

@@ -773,5 +773,7 @@
   "languageSystem": "Sistema",
   "languageDeviceHelper": "Aplica-se apenas neste dispositivo. Sistema segue o idioma do dispositivo.",
   "languageSaveFailed": "Não foi possível guardar o idioma. Tenta novamente.",
-  "languageReadFailed": "Não foi possível ler o idioma guardado. Tenta novamente para o restaurar."
+  "languageReadFailed": "Não foi possível ler o idioma guardado. Tenta novamente para o restaurar.",
+  "showPasswordButton": "Mostrar palavra-passe",
+  "hidePasswordButton": "Ocultar palavra-passe"
 }
