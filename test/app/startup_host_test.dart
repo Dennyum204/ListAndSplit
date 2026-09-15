@@ -5,12 +5,44 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:list_and_split/app/startup/startup_host.dart';
+import 'package:list_and_split/core/config/configuration_provider.dart';
+import 'package:list_and_split/core/config/supabase_config.dart';
 import '../support/ui_preview_capture.dart';
 
 void main() {
   const channel = MethodChannel('com.ferbatech.listandsplit/startup');
   setUpAll(prepareUiPreviewFonts);
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  testWidgets('initialized app has a root scope independent of welcome',
+      (tester) async {
+    // Like the router, an ordinary unscoped dependent provider must resolve the
+    // configured app root, never a notLoaded ancestor belonging to the cover.
+    final dependent = Provider<bool>(
+        (ref) => ref.watch(appConfigurationProvider).isConfigured);
+    final ready = Completer<Widget>();
+    await tester.pumpWidget(StartupHost(initialize: () => ready.future));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    ready.complete(ProviderScope(
+        overrides: [
+          appConfigurationProvider
+              .overrideWithValue(const AppConfiguration.devConfigured()),
+        ],
+        child: Consumer(
+            builder: (context, ref, _) => MaterialApp(
+                  home: Text(ref.watch(dependent)
+                      ? 'Configured destination'
+                      : 'Wrong root'),
+                ))));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Configured destination'), findsOneWidget);
+    final element = tester.element(find.text('Configured destination'));
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.text('Wrong root'), findsNothing);
+    expect(tester.element(find.text('Configured destination')), same(element));
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
       'initialization is concurrent, destination widget survives cover and resume',
       (tester) async {

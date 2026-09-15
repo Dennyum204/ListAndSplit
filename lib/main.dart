@@ -7,7 +7,7 @@ import 'package:list_and_split/core/config/supabase_config.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(ProviderScope(child: StartupHost(initialize: () async {
+  runApp(StartupHost(initialize: () async {
     final configuration = await loadAppConfiguration();
     await initializeSupabase(configuration);
     return ProviderScope(
@@ -16,5 +16,5 @@ Future<void> main() async {
       ],
       child: const ListAndSplitApp(),
     );
-  })));
+  }));
 }

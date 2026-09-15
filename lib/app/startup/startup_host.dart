@@ -108,14 +108,15 @@ class _StartupHostState extends State<StartupHost> with WidgetsBindingObserver {
                 excluding: show,
                 child: IgnorePointer(ignoring: show, child: _app!)),
           if (show)
-            WelcomeApp(
-                key: const ValueKey('coldLaunchWelcome'),
-                reducedMotion: reduced,
-                failed: _failed,
-                onRetry: () {
-                  setState(() => _failed = false);
-                  unawaited(_initialize());
-                }),
+            ProviderScope(
+                child: WelcomeApp(
+                    key: const ValueKey('coldLaunchWelcome'),
+                    reducedMotion: reduced,
+                    failed: _failed,
+                    onRetry: () {
+                      setState(() => _failed = false);
+                      unawaited(_initialize());
+                    })),
         ]);
   }
 }
