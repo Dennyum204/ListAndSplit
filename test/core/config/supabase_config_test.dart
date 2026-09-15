@@ -5,7 +5,7 @@ import 'package:list_and_split/core/config/supabase_config.dart';
 
 void main() {
   const devUrl = 'https://${AppConfiguration.devProjectHost}';
-  const key = 'test-publishable-key';
+  const key = 'sb_publishable_test-only';
   const devIdentity = NativeAppIdentity.android(
     flavor: 'dev',
     applicationId: 'com.ferbatech.listandsplit.dev',
@@ -149,6 +149,46 @@ void main() {
       AppEnvironment.prod.authCallbackUri,
       'com.ferbatech.listandsplit://auth-callback',
     );
+  });
+
+  test(
+      'Production requires the native approved project, not matching Dart values',
+      () {
+    const approvedIdentity = NativeAppIdentity.android(
+      flavor: 'prod',
+      applicationId: 'com.ferbatech.listandsplit',
+      productionProjectRef: 'abcdefghijklmnopqrst',
+    );
+    final valid = resolve(
+        environment: 'prod',
+        identity: approvedIdentity,
+        url: 'https://abcdefghijklmnopqrst.supabase.co');
+    expect(valid.isConfigured, isTrue);
+    expect(valid.authCallbackUri, AppEnvironment.prod.authCallbackUri);
+    expect(
+        resolve(
+                environment: 'prod',
+                identity: approvedIdentity,
+                url: 'https://different.supabase.co')
+            .issue,
+        AppConfigurationIssue.productionProjectMismatch);
+    expect(resolve(environment: 'prod', identity: approvedIdentity).issue,
+        AppConfigurationIssue.productionDevProjectRejected);
+  });
+
+  test(
+      'privileged, legacy and malformed keys cannot enter a client configuration',
+      () {
+    for (final invalid in [
+      'sb_secret_do-not-ship',
+      'eyJhbGciOiJIUzI1NiJ9.payload.signature',
+      'service_role',
+      'sb_publishable_',
+      ' sb_publishable_test'
+    ]) {
+      expect(resolve(publishableKey: invalid).issue,
+          AppConfigurationIssue.publishableKeyInvalid);
+    }
   });
 
   test('keeps the current unsuffixed callback outside Android', () {

@@ -498,5 +498,7 @@ reporting/moderation workflow remain open.
 P-059/A-073 select participant counts as the next bounded addition before the UI
 refactor. Other ideas remain subject to the feature-freeze review and explicit
 selection; their presence in the backlog is not authorization to implement them.
-Play/signing/AAB/icon/store work is deferred by A-069, and Production remains
-separately authorized.
+A-077 now authorizes local Android signing, API36 APK/AAB and release runbook
+preparation. Final icon/Play publication remain gated by A-069; Production creation
+and rollout remain separately authorized. Optional backlog is frozen for this
+consolidated milestone.

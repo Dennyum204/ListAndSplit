@@ -42,3 +42,13 @@ migrate_working_dir/
 !.env.example
 /supabase/.branches/
 /supabase/.temp/
+
+# Signing material and local release configuration never belong in Git.
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.dpapi
+**/key.properties
+**/release-config.json
+/artifacts/

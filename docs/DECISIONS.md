@@ -154,6 +154,8 @@ below as `P-033a`, `P-034a`, `A-035a`, and `A-036a`.
 | A-075 | The approved Word follow-up extends PR #33's presentation and local-preference slice. Quick-add calls the existing detail controller/repository with unchanged defaults and request-id rules; language uses the existing settings repository/Riverpod/SharedPreferences architecture and MaterialApp locale. | Split uses authoritative participants, integer balances, suggestion direction, expense payer/beneficiaries and existing bookkeeping settlement dialogs/history/reversal. Chat retains its text-only, mounted-read and reconciliation contracts. Dropdown captions use AppDialogField. Text-only Community cards remain compact; no image placeholder or inert media/upload control is shipped. Source, tests, documentation and the existing PR #33 branch are in scope; SQL, migrations, Edge Functions, dependencies and hosted settings are not. |
 | A-076 | A private `profile-avatars` bucket stores at most one current and one staged/retired 256x256 PNG thumbnail per profile. The SDK-authenticated Edge boundary independently validates pixels/structure, resolves authorization through exact RPCs, rechecks after download, and returns no-store bytes without signed URLs. Private forced-RLS metadata and a restrictive file ledger are writable only through server-only RPCs. Payload-bound UUIDs, expected versions and 15-minute fenced leases serialize replace/remove/export/deletion without holding database locks across Storage calls. | Cleanup acknowledges Storage deletion before forgetting keys; failed/uncertain operations keep the fence and recover on a subsequent operation. No scheduled orphan cleanup is claimed. Avatar-aware account deletion removes binaries before Auth-root deletion. The additive migration also fixes the confirmed pre-existing owner-Split deletion bug by locking owned and surviving lists together before anonymizing Split identities; other owners' ledger rows remain unchanged. Export v13 composes unchanged v12 with the own thumbnail; v1-v12 remain compatible. Existing private account invalidation is reused. Migration and both Edge Functions require a separately authorized rollout before client distribution. |
 
+| A-077 | The 2026-09-15 consolidated Android milestone authorizes release infrastructure in a dependent branch while PR #33/#34 acceptance completes. Pin the supported API36 toolchain, explicit native Production project reference, public-only client settings, secure external signing, versioned APK/AAB and symbol verification. | This supersedes A-069's deferral of local release preparation, not its public-distribution gates. Production project creation, paid resources and deployment still require approval; unconfigured Production fails closed. Preserve the legacy unsuffixed installation and signing material. O-P18, final branding, Play distribution and iOS remain separate. |
+
 A-074's follow-up visual references require the selected navigation pill to
 enclose both icon and label, compact overview cards with accessible metadata, and
 plain persistent dialog captions outside filled inputs. This changes presentation
@@ -195,8 +197,8 @@ These items are part of the agreed direction but intentionally deferred:
 - Production backend/environment creation under a separate explicit authorization.
 - List Chat attachments, images/files, reactions, typing indicators, audio/video,
   push, and general private messages.
-- Play Console, signing/upload-key, AAB/symbol/versioning CI, final launcher
-  branding, store publication, and iOS/TestFlight work until the A-069 gates.
+- Play Console, final launcher branding, store publication, and iOS/TestFlight
+  until the A-069 gates; A-077 now permits local signing/AAB/versioning preparation.
 
 ## Open product decisions
 

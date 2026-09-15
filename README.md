@@ -1,5 +1,28 @@
 # List & Split
 
+## Android release checkpoint — 2026-09-15
+
+This is the single current release checkpoint. Optional template images, further
+cosmetic redesign, offline queues, push, extra languages and iOS release are deferred.
+
+| Gate | Current evidence / next action |
+| --- | --- |
+| PR #33 | `cab51df18059ddcedca0e8f60ea6b17336895e1f`, draft/open; actual-head Flutter CI passed (34909795029). Chat semantics now bound only its button. Spoken TalkBack acceptance remains incomplete; do not merge yet. |
+| PR #34 | `59fe0c530fe0440315aa9b144cfc68a554fa3e75`, draft/open, stacked on #33; actual-head Flutter/Supabase CI passed (34909885840/34909885866). Actual SDK MIME regression fixed. After #33 merges, normal main integration/retarget/recheck remains required. |
+| PR #35 | `ed8bbc3e023972e934d4936280e789e6cac2b49f`, draft, stacked on #34; Flutter/Supabase CI passed (34911142900/34911143000). Forward migration `20260914232057_recoverable_business_conflicts.sql` changes 77 pinned deliberate business raises in 51 functions to PT409, preserving genuine 40001. Not deployed; separate Dev authorization required. |
+| Backend evidence | 2,033 local SQL assertions, 68 Edge tests, bounded real HTTP conflicts and isolated avatar lifecycle pass; database lint passes. Earlier 49 disposable hosted avatar checks remain valid for unchanged functions. Dev profile-avatar v2 / delete-account v3; no Production mutation. |
+| Dev devices | Both run #34 `59fe0c5` in place. Gallery cancel/upload/replace/remove, cross-device refresh, account-switch isolation, blocked identity/access loss, quick-add/offline draft retry, settlement/reversal passed with synthetic content. PT/dark persistence verified; EN/light and large text inspected. Spoken TalkBack remains pending; general visual approval is not blanket acceptance. Evidence: local `C:/Work/QA/ListAndSplit/release-20260915/device-qa`. |
+| Protected user content | Preserve QA account A and user-created “Coisas para Casa 😁”; it is excluded from destructive cleanup. Device sessions currently use QA accounts, not the owner's original login. |
+| Release preparation | Dependent `codex/android-release-readiness` on #35. Native Production pin, API36 toolchain, external release signer, APK/AAB verifier and rollout scripts implemented. 964 Flutter tests pass (one opt-in skip), analyze/format pass and prod debug platform build passes. Signed packaging verification pending. |
+| Production | Discovery found Dev and an unrelated `Supabase Store`; neither is an approved Production target. Proposed distinct List & Split Production, region/budget/SMTP/ref and rollout await approval. No Dev data copying. |
+| Signing | Protected unsuffixed Samsung app is debug-signed, fingerprint `acee26ad210976eb7796bb3884a02f7e404cba688fa96a51eccb6f6cf07a7055`. New durable signer outside Git is pinned in `tools/release/release-signer.sha256`. Owner decision on package/signing continuity and independent encrypted key backup is required before installation. |
+| Public distribution | O-P18 Chat terms/reporting/moderation, owner/legal details, external deletion URL and approved launcher branding remain open. Drafts are not published commitments. |
+
+Next: verify signed packaging, finish remaining device/review evidence, and obtain
+one batched owner decision for the concrete rollout in [ANDROID_RELEASE.md](docs/ANDROID_RELEASE.md).
+Production scripts are prepared, not remotely executed or approved. Public material
+is drafted in [PUBLIC_RELEASE_DRAFTS.md](docs/PUBLIC_RELEASE_DRAFTS.md).
+
 List & Split is an Android and iOS app for collaborative active lists,
 reusable templates, a mutual-friend community, and an optional expense ledger.
 The repository provides the runnable Flutter application and current identity,

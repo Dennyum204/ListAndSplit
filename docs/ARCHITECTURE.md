@@ -1447,8 +1447,9 @@ supplied value in its error state.
 The Dev contract accepts only `lzwsgxziqxpxwyalkfuy.supabase.co`, paired with the
 native `dev` flavor and `com.ferbatech.listandsplit.dev`. Production rejects that
 project. Because no Production project has been approved, every otherwise valid
-Production configuration also fails closed until a later accepted contract adds
-the exact Production host. Matching caller-controlled Dart values alone can never
+Production configuration also fails closed. A-077 adds a native project-reference
+pin from `android/production.properties`; it remains empty until an approved
+Production reference is committed, and Dart configuration must match it exactly. Matching caller-controlled Dart values alone can never
 cross an Android environment.
 
 Distinct application IDs give Dev and Production isolated Android storage. The
@@ -1466,14 +1467,16 @@ Production readiness claim.
 Only a public anonymous/publishable client key may enter Flutter. A service-role
 key or any other privileged secret must never be included in a client binary.
 
-Android release infrastructure is deliberately deferred until selected
-functionality is stable, the Figma screen-by-screen refactor is complete, and
-final branding exists. There is currently no Play Console developer account or
-approved final launcher icon. Earlier toolchain recommendations are provisional
-research and must be revalidated against then-current official requirements before
-Play setup, upload signing, protected release CI, signed AABs, symbols, versioning,
-or publication are implemented. Production remains a separately authorized
-environment.
+A-077 authorizes local Android release preparation under the consolidated milestone.
+`tools/release/toolchain.json` pins the supported Flutter/API36 toolchain. Release
+builds require external signing configuration and never fall back to a debug key.
+The production artifact verifier checks identity, permissions, callback, disabled
+backup/cleartext, signatures and native/ZIP 16 KB alignment. Client debug logging
+is disabled. Only modern public publishable keys are accepted by the release
+configuration; privileged/legacy unknown key types fail closed. Operations,
+recovery and signing continuity are documented in `ANDROID_RELEASE.md`.
+There is no approved Production project, final launcher icon or Play distribution
+configuration. Public rollout and O-P18 remain separately gated.
 
 ### Server operation shape
 

@@ -1,0 +1,13 @@
+{
+  "flutter": "3.47.4",
+  "flutterRevision": "9584c6713b324636289d067944a46fd6b49df14b",
+  "javaMajor": 17,
+  "compileSdk": 36,
+  "targetSdk": 36,
+  "minSdk": 24,
+  "androidGradlePlugin": "8.11.1",
+  "gradle": "8.14.3",
+  "kotlin": "2.2.20",
+  "ndk": "28.2.13676358",
+  "supabaseCli": "2.109.1"
+}
